@@ -1,0 +1,639 @@
+// ============================================================================
+// DC & Vendor Material Management — Prisma schema (PostgreSQL)
+// All business quantities use Decimal (never Float). Soft-cancel; no hard deletes.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------- AUTH / RBAC ----------------------
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  active       Boolean  @default(true)
+  vendorId     String?
+  vendor       Vendor?  @relation(fields: [vendorId], references: [id])
+  roles        UserRole[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  auditLogs    AuditLog[]
+
+  @@index([email])
+  @@index([vendorId])
+}
+
+model Role {
+  id          String @id @default(uuid())
+  key         String @unique
+  name        String
+  description String?
+  isSystem    Boolean @default(false)
+  users       UserRole[]
+  permissions RolePermission[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Permission {
+  id          String @id @default(uuid())
+  key         String @unique
+  description String?
+  roles       RolePermission[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+// ---------------------- MASTERS ----------------------
+
+model Vendor {
+  id                String  @id @default(uuid())
+  vendorCode        String  @unique
+  vendorName        String
+  legalName         String?
+  gstNumber         String?
+  panNumber         String?
+  address           String?
+  city              String?
+  state             String?
+  country           String? @default("India")
+  pincode           String?
+  contactPerson     String?
+  phone             String?
+  email             String?
+  active            Boolean @default(true)
+  defaultReturnDays Int     @default(15)
+  notes             String?
+  contacts          VendorContact[]
+  deliveryChallans  DeliveryChallan[]
+  users             User[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([vendorCode])
+  @@index([active])
+}
+
+model VendorContact {
+  id        String  @id @default(uuid())
+  vendorId  String
+  vendor    Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  name      String
+  role      String?
+  phone     String?
+  email     String?
+  isPrimary Boolean @default(false)
+
+  @@index([vendorId])
+}
+
+model ItemCategory {
+  id    String @id @default(uuid())
+  key   String @unique
+  name  String
+  items Item[]
+}
+
+model UOM {
+  id       String  @id @default(uuid())
+  code     String  @unique
+  name     String
+  isWeight Boolean @default(false)
+}
+
+model Item {
+  id                 String        @id @default(uuid())
+  itemCode           String        @unique
+  itemName           String
+  description        String?
+  itemCategoryId     String?
+  itemCategory       ItemCategory? @relation(fields: [itemCategoryId], references: [id])
+  drawingNumber      String?
+  drawingRevision    String?
+  materialGrade      String?
+  defaultUOM         String        @default("NOS")
+  weightUOM          String        @default("KG")
+  standardUnitWeight Decimal?      @db.Decimal(18, 3)
+  active             Boolean       @default(true)
+  notes              String?
+  jobWorkStandards   JobWorkStandard[]
+  dcItems            DeliveryChallanItem[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([itemCode])
+  @@index([itemCategoryId])
+}
+
+model Process {
+  id               String  @id @default(uuid())
+  code             String  @unique
+  name             String
+  active           Boolean @default(true)
+  jobWorkStandards JobWorkStandard[]
+  deliveryChallans DeliveryChallan[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model JobWorkStandard {
+  id                           String          @id @default(uuid())
+  itemId                       String
+  item                         Item            @relation(fields: [itemId], references: [id])
+  processId                    String
+  process                      Process         @relation(fields: [processId], references: [id])
+  inputUOM                     String          @default("KG")
+  inputWeight                  Decimal         @db.Decimal(18, 3)
+  expectedOutputQty            Decimal?        @db.Decimal(18, 3)
+  expectedOutputWeight         Decimal         @db.Decimal(18, 3)
+  expectedScrapWeight          Decimal         @db.Decimal(18, 3)
+  expectedScrapPercentage      Decimal?        @db.Decimal(9, 4)
+  allowedProcessLoss           Decimal         @db.Decimal(18, 3)
+  allowedProcessLossPercentage Decimal?        @db.Decimal(9, 4)
+  tolerancePercentage          Decimal         @default(0) @db.Decimal(9, 4)
+  calculationType              CalculationType @default(PERCENTAGE)
+  effectiveFrom                DateTime
+  effectiveTo                  DateTime?
+  revision                     Int             @default(1)
+  approved                     Boolean         @default(false)
+  approvedBy                   String?
+  approvedAt                   DateTime?
+  revisions                    JobWorkStandardRevision[]
+  dcItems                      DeliveryChallanItem[]
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@unique([itemId, processId, revision])
+  @@index([itemId, processId, effectiveFrom])
+  @@index([approved])
+}
+
+model JobWorkStandardRevision {
+  id         String          @id @default(uuid())
+  standardId String
+  standard   JobWorkStandard @relation(fields: [standardId], references: [id])
+  revision   Int
+  snapshot   Json
+  createdBy  String?
+  createdAt  DateTime        @default(now())
+
+  @@index([standardId])
+}
+
+enum CalculationType {
+  FIXED
+  PERCENTAGE
+  INPUT_MINUS_OUTPUT
+  MANUAL
+}
+
+model ScrapType {
+  id                String  @id @default(uuid())
+  code              String  @unique
+  name              String
+  description       String?
+  unit              String  @default("KG")
+  active            Boolean @default(true)
+  scrapReceiptItems ScrapReceiptItem[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ---------------------- DELIVERY CHALLAN ----------------------
+
+enum DcStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  DISPATCHED
+  AT_VENDOR
+  PARTIALLY_RETURNED
+  MATERIAL_RETURNED
+  SCRAP_PENDING
+  RECONCILIATION
+  RECONCILED
+  CLOSED
+  CANCELLED
+}
+
+enum DcPurpose {
+  JOB_WORK
+  MACHINING
+  HEAT_TREATMENT
+  SURFACE_TREATMENT
+  REPAIR
+  SAMPLE
+  TRIAL
+  SUBCONTRACTING
+  OTHER
+}
+
+model DeliveryChallan {
+  id                 String    @id @default(uuid())
+  dcNumber           String    @unique
+  dcDate             DateTime
+  vendorId           String
+  vendor             Vendor    @relation(fields: [vendorId], references: [id])
+  purpose            DcPurpose
+  processId          String?
+  process            Process?  @relation(fields: [processId], references: [id])
+  jobWorkOrderNumber String?
+  expectedReturnDate DateTime?
+  transporter        String?
+  vehicleNumber      String?
+  ewayBillNumber     String?
+  referenceNumber    String?
+  remarks            String?
+  status             DcStatus  @default(DRAFT)
+  createdBy          String?
+  approvedBy         String?
+  approvedAt         DateTime?
+  dispatchedBy       String?
+  dispatchedAt       DateTime?
+  cancelledAt        DateTime?
+  cancelledBy        String?
+  cancellationReason String?
+  qrToken            String?   @unique
+  items              DeliveryChallanItem[]
+  dispatch           Dispatch?
+  receipts           MaterialReceipt[]
+  scrapReceipts      ScrapReceipt[]
+  reconciliation     Reconciliation?
+  exceptions         Exception[]
+  statusHistory      StatusHistory[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([dcNumber])
+  @@index([dcDate])
+  @@index([vendorId])
+  @@index([status])
+  @@index([expectedReturnDate])
+  @@index([vendorId, status])
+}
+
+model DeliveryChallanItem {
+  id                       String  @id @default(uuid())
+  dcId                     String
+  dc                       DeliveryChallan @relation(fields: [dcId], references: [id], onDelete: Cascade)
+  itemId                   String
+  item                     Item    @relation(fields: [itemId], references: [id])
+  batchNumber              String?
+  heatNumber               String?
+  drawingNumber            String?
+  drawingRevision          String?
+  quantity                 Decimal @db.Decimal(18, 3)
+  uom                      String  @default("NOS")
+  inputUnitWeight          Decimal? @db.Decimal(18, 3)
+  inputWeight              Decimal @db.Decimal(18, 3)
+  expectedFinishedQuantity Decimal? @db.Decimal(18, 3)
+  expectedFinishedWeight   Decimal @db.Decimal(18, 3)
+  expectedScrapWeight      Decimal @db.Decimal(18, 3)
+  expectedProcessLoss      Decimal @db.Decimal(18, 3)
+  tolerancePercentage      Decimal @default(0) @db.Decimal(9, 4)
+  jobWorkStandardId        String?
+  jobWorkStandard          JobWorkStandard? @relation(fields: [jobWorkStandardId], references: [id])
+  remarks                  String?
+
+  @@index([dcId])
+  @@index([itemId])
+  @@index([batchNumber])
+  @@index([heatNumber])
+}
+
+// ---------------------- DISPATCH ----------------------
+
+model Dispatch {
+  id               String   @id @default(uuid())
+  dcId             String   @unique
+  dc               DeliveryChallan @relation(fields: [dcId], references: [id])
+  dispatchedAt     DateTime
+  dispatchedBy     String
+  vehicleNumber    String?
+  transporter      String?
+  totalInputWeight Decimal  @db.Decimal(18, 3)
+  items            DispatchItem[]
+  createdAt        DateTime @default(now())
+
+  @@index([dcId])
+}
+
+model DispatchItem {
+  id         String   @id @default(uuid())
+  dispatchId String
+  dispatch   Dispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  itemId     String
+  quantity   Decimal  @db.Decimal(18, 3)
+  weight     Decimal  @db.Decimal(18, 3)
+
+  @@index([dispatchId])
+}
+
+// ---------------------- MATERIAL RECEIPT ----------------------
+
+model MaterialReceipt {
+  id                String   @id @default(uuid())
+  receiptNumber     String   @unique
+  receiptDate       DateTime
+  dcId              String
+  dc                DeliveryChallan @relation(fields: [dcId], references: [id])
+  vendorId          String
+  receivedBy        String
+  remarks           String?
+  documentReference String?
+  reversedAt        DateTime?
+  reversedBy        String?
+  reversalReason    String?
+  items             MaterialReceiptItem[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([dcId])
+  @@index([receiptDate])
+}
+
+model MaterialReceiptItem {
+  id               String  @id @default(uuid())
+  receiptId        String
+  receipt          MaterialReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  itemId           String
+  quantityReceived Decimal @db.Decimal(18, 3)
+  weightReceived   Decimal @db.Decimal(18, 3)
+  batchNumber      String?
+  heatNumber       String?
+  rejectedQuantity Decimal @default(0) @db.Decimal(18, 3)
+  rejectedWeight   Decimal @default(0) @db.Decimal(18, 3)
+  remarks          String?
+
+  @@index([receiptId])
+  @@index([itemId])
+}
+
+// ---------------------- SCRAP RECEIPT ----------------------
+
+model ScrapReceipt {
+  id                  String   @id @default(uuid())
+  scrapReceiptNumber  String   @unique
+  dcId                String
+  dc                  DeliveryChallan @relation(fields: [dcId], references: [id])
+  vendorId            String
+  receiptDate         DateTime
+  receivedBy          String
+  weighmentSlipNumber String?
+  remarks             String?
+  reversedAt          DateTime?
+  reversedBy          String?
+  reversalReason      String?
+  items               ScrapReceiptItem[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([dcId])
+  @@index([receiptDate])
+}
+
+model ScrapReceiptItem {
+  id                String  @id @default(uuid())
+  scrapReceiptId    String
+  scrapReceipt      ScrapReceipt @relation(fields: [scrapReceiptId], references: [id], onDelete: Cascade)
+  scrapTypeId       String
+  scrapType         ScrapType @relation(fields: [scrapTypeId], references: [id])
+  weight            Decimal @db.Decimal(18, 3)
+  quantity          Decimal? @db.Decimal(18, 3)
+  uom               String  @default("KG")
+  batchReference    String?
+  documentReference String?
+  remarks           String?
+
+  @@index([scrapReceiptId])
+  @@index([scrapTypeId])
+}
+
+// ---------------------- RECONCILIATION ----------------------
+
+enum ReconciliationStatus {
+  PENDING
+  BALANCED
+  EXCEPTION
+  RECONCILED
+  CLOSED
+}
+
+model Reconciliation {
+  id                   String   @id @default(uuid())
+  dcId                 String   @unique
+  dc                   DeliveryChallan @relation(fields: [dcId], references: [id])
+  status               ReconciliationStatus @default(PENDING)
+  totalInputWeight     Decimal  @db.Decimal(18, 3)
+  totalFinishedWeight  Decimal  @db.Decimal(18, 3)
+  totalScrapWeight     Decimal  @db.Decimal(18, 3)
+  totalRejectedWeight  Decimal  @default(0) @db.Decimal(18, 3)
+  approvedProcessLoss  Decimal  @db.Decimal(18, 3)
+  accountedWeight      Decimal  @db.Decimal(18, 3)
+  unaccountedWeight    Decimal  @db.Decimal(18, 3)
+  scrapRecoveryPercent Decimal? @db.Decimal(9, 4)
+  calculatedAt         DateTime @default(now())
+  calculatedBy         String?
+  closedAt             DateTime?
+  closedBy             String?
+  closureReason        String?
+  items                ReconciliationItem[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([dcId])
+  @@index([status])
+}
+
+model ReconciliationItem {
+  id                String  @id @default(uuid())
+  reconciliationId  String
+  reconciliation    Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  itemId            String
+  inputWeight       Decimal @db.Decimal(18, 3)
+  finishedWeight    Decimal @db.Decimal(18, 3)
+  scrapWeight       Decimal @db.Decimal(18, 3)
+  unaccountedWeight Decimal @db.Decimal(18, 3)
+
+  @@index([reconciliationId])
+}
+
+enum ExceptionType {
+  MATERIAL_SHORTAGE
+  SCRAP_SHORTAGE
+  EXCESS_SCRAP
+  PROCESS_LOSS_EXCEEDED
+  QUANTITY_MISMATCH
+  WEIGHT_MISMATCH
+  OVERDUE
+  QUALITY_REJECTION
+  OTHER
+}
+
+enum ExceptionStatus {
+  OPEN
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  RESOLVED
+  CLOSED
+}
+
+enum ExceptionSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Exception {
+  id            String   @id @default(uuid())
+  dcId          String
+  dc            DeliveryChallan @relation(fields: [dcId], references: [id])
+  type          ExceptionType
+  severity      ExceptionSeverity @default(MEDIUM)
+  description   String
+  expectedValue Decimal? @db.Decimal(18, 3)
+  actualValue   Decimal? @db.Decimal(18, 3)
+  variance      Decimal? @db.Decimal(18, 3)
+  status        ExceptionStatus @default(OPEN)
+  createdBy     String?
+  assignedTo    String?
+  resolution    String?
+  resolvedBy    String?
+  resolvedAt    DateTime?
+  approvals     ExceptionApproval[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([dcId])
+  @@index([status])
+  @@index([type])
+}
+
+model ExceptionApproval {
+  id          String    @id @default(uuid())
+  exceptionId String
+  exception   Exception @relation(fields: [exceptionId], references: [id], onDelete: Cascade)
+  approvedBy  String
+  reason      String
+  approved    Boolean
+  documentId  String?
+  createdAt   DateTime  @default(now())
+
+  @@index([exceptionId])
+}
+
+// ---------------------- DOCUMENTS ----------------------
+
+model Document {
+  id         String   @id @default(uuid())
+  entityType String
+  entityId   String
+  fileName   String
+  fileType   String
+  fileSize   Int
+  storageKey String
+  uploadedBy String?
+  uploadedAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+// ---------------------- NOTIFICATIONS ----------------------
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String?
+  type       String
+  title      String
+  body       String?
+  entityType String?
+  entityId   String?
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+// ---------------------- AUDIT & HISTORY ----------------------
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  module     String
+  entityType String
+  entityId   String
+  oldValue   Json?
+  newValue   Json?
+  reason     String?
+  requestId  String?
+  timestamp  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([timestamp])
+}
+
+model StatusHistory {
+  id         String   @id @default(uuid())
+  dcId       String
+  dc         DeliveryChallan @relation(fields: [dcId], references: [id], onDelete: Cascade)
+  fromStatus String?
+  toStatus   String
+  changedBy  String?
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  @@index([dcId])
+}
+
+// ---------------------- SETTINGS & NUMBERING ----------------------
+
+model SystemSetting {
+  id        String @id @default(uuid())
+  key       String @unique
+  value     String
+  group     String @default("general")
+  updatedAt DateTime @updatedAt
+}
+
+model NumberSequence {
+  id         String @id @default(uuid())
+  key        String
+  fiscalYear String
+  prefix     String
+  padding    Int    @default(6)
+  current    Int    @default(0)
+
+  @@unique([key, fiscalYear])
+}
