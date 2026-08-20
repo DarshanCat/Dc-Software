@@ -14,7 +14,7 @@ export const NAVIGATION: NavSection[] = [
   {
     label: "Dashboard",
     items: [
-      { label: "Overview", href: "/dashboard", permission: P.DASHBOARD_VIEW },
+      { label: "Overview", href: "/", permission: P.DASHBOARD_VIEW },
       { label: "Open DCs", href: "/dashboard/open", permission: P.DASHBOARD_VIEW },
       { label: "Overdue DCs", href: "/dashboard/overdue", permission: P.DASHBOARD_VIEW },
       { label: "Material Outside", href: "/dashboard/material-outside", permission: P.DASHBOARD_VIEW },
