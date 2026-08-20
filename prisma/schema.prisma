@@ -286,6 +286,7 @@ model DeliveryChallan {
   scrapReceipts      ScrapReceipt[]
   reconciliation     Reconciliation?
   exceptions         Exception[]
+  amendments         DcAmendment[]
   statusHistory      StatusHistory[]
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -296,6 +297,32 @@ model DeliveryChallan {
   @@index([status])
   @@index([expectedReturnDate])
   @@index([vendorId, status])
+}
+
+// Amendment flow (spec §52): once a DC is approved, quantity/weight changes
+// require a formal request -> approval -> applied-and-audited change, never
+// a silent direct edit. Scoped to the two figures that drive reconciliation
+// math (quantity, inputWeight) for a single DC item, matching current
+// single-item-per-DC behavior.
+model DcAmendment {
+  id               String    @id @default(uuid())
+  dcId             String
+  dc               DeliveryChallan @relation(fields: [dcId], references: [id], onDelete: Cascade)
+  dcItemId         String
+  requestedBy      String
+  requestedAt      DateTime  @default(now())
+  reason           String
+  previousQuantity Decimal   @db.Decimal(18, 3)
+  previousWeight   Decimal   @db.Decimal(18, 3)
+  newQuantity      Decimal   @db.Decimal(18, 3)
+  newWeight        Decimal   @db.Decimal(18, 3)
+  status           String    @default("PENDING")
+  decidedBy        String?
+  decidedAt        DateTime?
+  decisionReason   String?
+
+  @@index([dcId])
+  @@index([status])
 }
 
 model DeliveryChallanItem {

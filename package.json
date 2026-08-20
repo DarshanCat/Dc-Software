@@ -29,6 +29,7 @@
     "lucide-react": "^1.31.0",
     "next": "^15.0.0",
     "next-auth": "^4.24.8",
+    "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

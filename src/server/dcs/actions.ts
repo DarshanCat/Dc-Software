@@ -8,7 +8,9 @@ import { PERMISSIONS } from "@/config/permissions";
 import { writeAudit } from "@/server/audit";
 import { nextNumber, fiscalYearOf } from "@/services/number-sequence.service";
 import { computeExpected } from "@/services/reconciliation.service";
+import { generateQrToken } from "@/services/dispatch.service";
 import { z } from "zod";
+import { notifyUsersWithPermission, createNotification } from "@/server/notifications/service";
 
 const createDcSchema = z.object({
   vendorId: z.string().min(1, "Vendor is required"),
@@ -55,13 +57,16 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
     orderBy: { revision: "desc" },
   });
 
-  const expected = standard
+    const expected = standard
     ? computeExpected(
         {
           inputWeight: data.inputWeight,
-          calculationType: "PERCENTAGE",
+          calculationType: standard.calculationType,
           expectedScrapPercentage: standard.expectedScrapPercentage?.toString() ?? "0",
           allowedProcessLossPercentage: standard.allowedProcessLossPercentage?.toString() ?? "0",
+          expectedOutputWeight: standard.expectedOutputWeight.toString(),
+          expectedScrapWeight: standard.expectedScrapWeight.toString(),
+          allowedProcessLoss: standard.allowedProcessLoss.toString(),
         },
         standard.tolerancePercentage.toString(),
       )
@@ -112,17 +117,26 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
       data: { dcId: dc.id, toStatus: "DRAFT", changedBy: user!.id, reason: "DC created" },
     });
 
-    await writeAudit(tx, {
+        await writeAudit(tx, {
       userId: user!.id,
-      action: "DC_CREATED",
+      action: "DC_DISPATCHED",
       module: "DeliveryChallans",
       entityType: "DeliveryChallan",
-      entityId: dc.id,
-      newValue: { dcNumber, vendorId: data.vendorId, inputWeight: data.inputWeight },
-      reason: "DC created as DRAFT",
+      entityId: dcId,
+      newValue: { vehicleNumber: data.vehicleNumber ?? null, transporter: data.transporter ?? null, totalInputWeight },
+      reason: "DC dispatched — material-out transaction created",
     });
 
-    return { dcId: dc.id, dcNumber };
+    if (dc.createdBy && dc.createdBy !== user!.id) {
+      await createNotification(tx, {
+        userId: dc.createdBy,
+        type: "DC_DISPATCHED",
+        title: `${dc.dcNumber} has been dispatched`,
+        body: "Material has left the building and is now with the vendor.",
+        entityType: "DeliveryChallan",
+        entityId: dcId,
+      });
+    }
   });
 
   revalidatePath("/dcs");
@@ -141,10 +155,129 @@ export async function submitForApproval(dcId: string): Promise<ActionResult> {
   if (!dc) return { ok: false, error: "DC not found." };
   if (dc.status !== "DRAFT") return { ok: false, error: `Cannot submit a DC in status ${dc.status}.` };
 
-  await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
     await tx.deliveryChallan.update({ where: { id: dcId }, data: { status: "PENDING_APPROVAL" } });
     await tx.statusHistory.create({ data: { dcId, fromStatus: "DRAFT", toStatus: "PENDING_APPROVAL", changedBy: user!.id } });
     await writeAudit(tx, { userId: user!.id, action: "DC_SUBMITTED", module: "DeliveryChallans", entityType: "DeliveryChallan", entityId: dcId, reason: "Submitted for approval" });
+    await notifyUsersWithPermission(
+      tx,
+      PERMISSIONS.DC_APPROVE,
+      {
+        type: "DC_APPROVAL_REQUIRED",
+        title: `${dc.dcNumber} needs approval`,
+        body: "Submitted and waiting for approval before dispatch.",
+        entityType: "DeliveryChallan",
+        entityId: dcId,
+      },
+      user!.id,
+    );
+  });
+
+  revalidatePath(`/dcs/${dcId}`);
+  return { ok: true, dcId, dcNumber: dc.dcNumber };
+}
+
+const dispatchSchema = z.object({
+  vehicleNumber: z.string().max(20).optional(),
+  transporter: z.string().max(120).optional(),
+});
+
+export type DispatchInput = z.infer<typeof dispatchSchema>;
+
+/**
+ * Dispatch (spec Section 20): APPROVED -> DISPATCHED. Creates an immutable material-out
+ * transaction (Dispatch + DispatchItem rows are never edited afterward - corrections
+ * go through the amendment flow, not a direct update). Also mints the QR token here,
+ * once, since the DC becomes immutable-in-transit from this point.
+ */
+export async function dispatchDc(dcId: string, input: DispatchInput = {}): Promise<ActionResult> {
+  const user = await getSessionUser();
+  try {
+    await requirePermission(user, PERMISSIONS.DC_DISPATCH);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) return { ok: false, error: "Not signed in." };
+    if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to dispatch DCs." };
+    throw e;
+  }
+
+  const parsed = dispatchSchema.safeParse(input);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      if (issue.path[0]) fieldErrors[String(issue.path[0])] = issue.message;
+    }
+    return { ok: false, error: "Please fix the highlighted fields.", fieldErrors };
+  }
+  const data = parsed.data;
+
+  const dc = await prisma.deliveryChallan.findUnique({
+    where: { id: dcId },
+    include: { items: true, dispatch: true },
+  });
+  if (!dc) return { ok: false, error: "DC not found." };
+
+  if (dc.status !== "APPROVED") {
+    return { ok: false, error: `Only an APPROVED DC can be dispatched (current: ${dc.status}).` };
+  }
+  if (dc.dispatch) {
+    return { ok: false, error: "This DC has already been dispatched." };
+  }
+  if (dc.items.length === 0) {
+    return { ok: false, error: "DC has no line items." };
+  }
+  const invalidLine = dc.items.some((it) => Number(it.quantity) <= 0 || Number(it.inputWeight) <= 0);
+  if (invalidLine) {
+    return { ok: false, error: "One or more DC lines have an invalid quantity or weight." };
+  }
+
+  const totalInputWeight = dc.items.reduce((sum, it) => sum + Number(it.inputWeight), 0);
+  const now = new Date();
+  const qrToken = generateQrToken();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.dispatch.create({
+      data: {
+        dcId,
+        dispatchedAt: now,
+        dispatchedBy: user!.id,
+        vehicleNumber: data.vehicleNumber || null,
+        transporter: data.transporter || null,
+        totalInputWeight,
+        items: {
+          create: dc.items.map((it) => ({
+            itemId: it.itemId,
+            quantity: it.quantity,
+            weight: it.inputWeight,
+          })),
+        },
+      },
+    });
+
+    await tx.deliveryChallan.update({
+      where: { id: dcId },
+      data: {
+        status: "DISPATCHED",
+        dispatchedBy: user!.id,
+        dispatchedAt: now,
+        vehicleNumber: data.vehicleNumber || null,
+        transporter: data.transporter || null,
+        qrToken,
+      },
+    });
+
+    await tx.statusHistory.create({
+      data: { dcId, fromStatus: "APPROVED", toStatus: "DISPATCHED", changedBy: user!.id },
+    });
+
+    await writeAudit(tx, {
+      userId: user!.id,
+      action: "DC_DISPATCHED",
+      module: "DeliveryChallans",
+      entityType: "DeliveryChallan",
+      entityId: dcId,
+      newValue: { vehicleNumber: data.vehicleNumber ?? null, transporter: data.transporter ?? null, totalInputWeight },
+      reason: "DC dispatched - material-out transaction created",
+    });
   });
 
   revalidatePath(`/dcs/${dcId}`);

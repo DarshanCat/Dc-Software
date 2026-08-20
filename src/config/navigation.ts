@@ -68,7 +68,7 @@ export const NAVIGATION: NavSection[] = [
       { label: "Vendors", href: "/masters/vendors", permission: P.VENDOR_VIEW },
       { label: "Items", href: "/masters/items", permission: P.ITEM_VIEW },
       { label: "Processes", href: "/masters/processes", permission: P.PROCESS_VIEW },
-      { label: "Job Work Standards", href: "/masters/job-work-standards", permission: P.PROCESS_VIEW },
+      { label: "Job Work Standards", href: "/masters/job-work-standards", permission: P.JOB_WORK_STANDARD_VIEW },
       { label: "Scrap Types", href: "/masters/scrap-types", permission: P.PROCESS_VIEW },
       { label: "UOM", href: "/masters/uom", permission: P.PROCESS_VIEW },
     ],
@@ -84,6 +84,12 @@ export const NAVIGATION: NavSection[] = [
       { label: "Ageing", href: "/reports/ageing", permission: P.REPORT_VIEW },
       { label: "Vendor Performance", href: "/reports/vendor-performance", permission: P.REPORT_VIEW },
       { label: "Item History", href: "/reports/item-history", permission: P.REPORT_VIEW },
+    ],
+    },
+  {
+    label: "Notifications",
+    items: [
+      { label: "All Notifications", href: "/notifications", permission: P.DASHBOARD_VIEW },
     ],
   },
   {
