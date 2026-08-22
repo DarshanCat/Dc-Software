@@ -92,6 +92,7 @@ model Vendor {
   notes             String?
   contacts          VendorContact[]
   deliveryChallans  DeliveryChallan[]
+  workOrders        WorkOrder[]
   users             User[]
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -144,6 +145,8 @@ model Item {
   notes              String?
   jobWorkStandards   JobWorkStandard[]
   dcItems            DeliveryChallanItem[]
+  expectedReturns    DeliveryChallanExpectedReturn[] @relation("ExpectedReturnItem")
+  classificationItems MaterialClassificationItem[]   @relation("ClassificationItem")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -158,6 +161,7 @@ model Process {
   active           Boolean @default(true)
   jobWorkStandards JobWorkStandard[]
   deliveryChallans DeliveryChallan[]
+  workOrders       WorkOrder[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -221,6 +225,7 @@ model ScrapType {
   unit              String  @default("KG")
   active            Boolean @default(true)
   scrapReceiptItems ScrapReceiptItem[]
+  classificationItems MaterialClassificationItem[]
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }
@@ -258,6 +263,8 @@ model DeliveryChallan {
   id                 String    @id @default(uuid())
   dcNumber           String    @unique
   dcDate             DateTime
+  workOrderId        String
+  workOrder          WorkOrder @relation(fields: [workOrderId], references: [id])
   vendorId           String
   vendor             Vendor    @relation(fields: [vendorId], references: [id])
   purpose            DcPurpose
@@ -281,6 +288,10 @@ model DeliveryChallan {
   cancellationReason String?
   qrToken            String?   @unique
   items              DeliveryChallanItem[]
+  expectedReturns    DeliveryChallanExpectedReturn[]
+  recoveryRequirements RecoveryRequirement[]
+  recoveryReceipts   RecoveryReceipt[]
+  classifications    MaterialClassification[]
   dispatch           Dispatch?
   receipts           MaterialReceipt[]
   scrapReceipts      ScrapReceipt[]
@@ -293,17 +304,13 @@ model DeliveryChallan {
 
   @@index([dcNumber])
   @@index([dcDate])
+  @@index([workOrderId])
   @@index([vendorId])
   @@index([status])
   @@index([expectedReturnDate])
   @@index([vendorId, status])
 }
 
-// Amendment flow (spec §52): once a DC is approved, quantity/weight changes
-// require a formal request -> approval -> applied-and-audited change, never
-// a silent direct edit. Scoped to the two figures that drive reconciliation
-// math (quantity, inputWeight) for a single DC item, matching current
-// single-item-per-DC behavior.
 model DcAmendment {
   id               String    @id @default(uuid())
   dcId             String
@@ -513,13 +520,15 @@ model ReconciliationItem {
 
 enum ExceptionType {
   MATERIAL_SHORTAGE
+  MATERIAL_RETURN_SHORT
   SCRAP_SHORTAGE
   EXCESS_SCRAP
+  BORING_SHORT
+  UNCLASSIFIED_MATERIAL
   PROCESS_LOSS_EXCEEDED
   QUANTITY_MISMATCH
   WEIGHT_MISMATCH
   OVERDUE
-  QUALITY_REJECTION
   OTHER
 }
 
@@ -663,4 +672,140 @@ model NumberSequence {
   current    Int    @default(0)
 
   @@unique([key, fiscalYear])
+}
+
+// ============================================================================
+// WORK ORDER LAYER (new) — every DC belongs to a WO. WO status is
+// transaction-driven (sent vs required, returned vs expected).
+// ============================================================================
+
+enum WoStatus {
+  DRAFT
+  OPEN
+  WAITING_FOR_MATERIAL
+  READY_FOR_PROCESSING
+  PROCESSING
+  PARTIALLY_RETURNED
+  FULLY_RETURNED
+  RECONCILIATION
+  CLOSED
+  CANCELLED
+}
+
+model WorkOrder {
+  id                String   @id @default(uuid())
+  woNumber          String   @unique
+  vendorId          String
+  vendor            Vendor   @relation(fields: [vendorId], references: [id])
+  processId         String?
+  process           Process? @relation(fields: [processId], references: [id])
+  requiredInputQty  Decimal  @db.Decimal(18, 3)
+  requiredInputUOM  String   @default("NOS")
+  expectedOutputQty Decimal  @db.Decimal(18, 3)
+  expectedOutputUOM String   @default("NOS")
+  status            WoStatus @default(OPEN)
+  remarks           String?
+  createdBy         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  deliveryChallans  DeliveryChallan[]
+
+  @@index([woNumber])
+  @@index([vendorId])
+  @@index([status])
+}
+
+// Expected return line(s) per DC. returnItem MAY differ from the sent item.
+model DeliveryChallanExpectedReturn {
+  id             String  @id @default(uuid())
+  dcId           String
+  dc             DeliveryChallan @relation(fields: [dcId], references: [id], onDelete: Cascade)
+  returnItemId   String
+  returnItem     Item    @relation("ExpectedReturnItem", fields: [returnItemId], references: [id])
+  expectedQty    Decimal @db.Decimal(18, 3)
+  uom            String  @default("NOS")
+  expectedWeight Decimal @default(0) @db.Decimal(18, 3)
+  remarks        String?
+
+  @@index([dcId])
+}
+
+// ============================================================================
+// RECOVERY MATERIAL (Boring first; generic so more types can be added later)
+// ============================================================================
+
+model RecoveryType {
+  id     String  @id @default(uuid())
+  code   String  @unique
+  name   String
+  unit   String  @default("KG")
+  active Boolean @default(true)
+
+  requirements RecoveryRequirement[]
+  receipts     RecoveryReceipt[]
+}
+
+// Expected recovery (e.g. boring KG) declared on a DC.
+model RecoveryRequirement {
+  id             String  @id @default(uuid())
+  dcId           String
+  dc             DeliveryChallan @relation(fields: [dcId], references: [id], onDelete: Cascade)
+  recoveryTypeId String
+  recoveryType   RecoveryType @relation(fields: [recoveryTypeId], references: [id])
+  expectedWeight Decimal @db.Decimal(18, 3)
+
+  @@unique([dcId, recoveryTypeId])
+  @@index([dcId])
+}
+
+// Actual recovery receipts — multiple lots; history preserved.
+model RecoveryReceipt {
+  id             String   @id @default(uuid())
+  dcId           String
+  dc             DeliveryChallan @relation(fields: [dcId], references: [id])
+  recoveryTypeId String
+  recoveryType   RecoveryType @relation(fields: [recoveryTypeId], references: [id])
+  receiptDate    DateTime @default(now())
+  receivedBy     String
+  weight         Decimal  @db.Decimal(18, 3)
+  remarks        String?
+  createdAt      DateTime @default(now())
+
+  @@index([dcId])
+  @@index([recoveryTypeId])
+}
+
+// ============================================================================
+// INTERNAL CLASSIFICATION (post-receipt Good / Scrap / Unclassified).
+// Unclassified is DERIVED (received - good - scrap), never stored.
+// ============================================================================
+
+model MaterialClassification {
+  id                String   @id @default(uuid())
+  dcId              String
+  dc                DeliveryChallan @relation(fields: [dcId], references: [id])
+  materialReceiptId String?
+  classifiedBy      String
+  classifiedAt      DateTime @default(now())
+
+  items MaterialClassificationItem[]
+
+  @@index([dcId])
+}
+
+model MaterialClassificationItem {
+  id               String  @id @default(uuid())
+  classificationId String
+  classification   MaterialClassification @relation(fields: [classificationId], references: [id], onDelete: Cascade)
+  itemId           String
+  item             Item    @relation("ClassificationItem", fields: [itemId], references: [id])
+  receivedQty      Decimal @db.Decimal(18, 3)
+  goodQty          Decimal @default(0) @db.Decimal(18, 3)
+  scrapQty         Decimal @default(0) @db.Decimal(18, 3)
+  scrapTypeId      String?
+  scrapType        ScrapType? @relation(fields: [scrapTypeId], references: [id])
+
+  @@index([classificationId])
+  @@index([itemId])
 }

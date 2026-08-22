@@ -39,23 +39,21 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        // @ts-expect-error custom fields
-        token.id = user.id;
-        // @ts-expect-error custom fields
-        token.roleKeys = user.roleKeys;
-        // @ts-expect-error custom fields
-        token.vendorId = user.vendorId;
+        const u = user as { id: string; roleKeys?: string[]; vendorId?: string | null };
+        const t = token as Record<string, unknown>;
+        t.id = u.id;
+        t.roleKeys = u.roleKeys ?? [];
+        t.vendorId = u.vendorId ?? null;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        // @ts-expect-error custom fields
-        session.user.id = token.id;
-        // @ts-expect-error custom fields
-        session.user.roleKeys = token.roleKeys ?? [];
-        // @ts-expect-error custom fields
-        session.user.vendorId = token.vendorId ?? null;
+        const t = token as { id?: string; roleKeys?: string[]; vendorId?: string | null };
+        const su = session.user as Record<string, unknown>;
+        su.id = t.id;
+        su.roleKeys = t.roleKeys ?? [];
+        su.vendorId = t.vendorId ?? null;
       }
       return session;
     },

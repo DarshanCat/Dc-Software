@@ -117,26 +117,17 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
       data: { dcId: dc.id, toStatus: "DRAFT", changedBy: user!.id, reason: "DC created" },
     });
 
-        await writeAudit(tx, {
+    await writeAudit(tx, {
       userId: user!.id,
-      action: "DC_DISPATCHED",
+      action: "DC_CREATED",
       module: "DeliveryChallans",
       entityType: "DeliveryChallan",
-      entityId: dcId,
-      newValue: { vehicleNumber: data.vehicleNumber ?? null, transporter: data.transporter ?? null, totalInputWeight },
-      reason: "DC dispatched — material-out transaction created",
+      entityId: dc.id,
+      newValue: { dcNumber, vendorId: data.vendorId, inputWeight: data.inputWeight },
+      reason: "DC created as DRAFT",
     });
 
-    if (dc.createdBy && dc.createdBy !== user!.id) {
-      await createNotification(tx, {
-        userId: dc.createdBy,
-        type: "DC_DISPATCHED",
-        title: `${dc.dcNumber} has been dispatched`,
-        body: "Material has left the building and is now with the vendor.",
-        entityType: "DeliveryChallan",
-        entityId: dcId,
-      });
-    }
+    return { dcId: dc.id, dcNumber };
   });
 
   revalidatePath("/dcs");

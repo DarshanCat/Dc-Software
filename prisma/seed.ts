@@ -205,6 +205,64 @@ async function main() {
     update: {},
   });
 
+    // Recovery types (Boring first; generic for more later)
+  const recoveryDefs: [string, string][] = [
+    ["BORING", "Boring"],
+    ["MACHINING_CHIPS", "Machining Chips"],
+    ["GRINDING_DUST", "Grinding Dust"],
+    ["OTHER", "Other Recovery"],
+  ];
+  const recoveryTypes: Record<string, string> = {};
+  for (const [code, name] of recoveryDefs) {
+    const rt = await prisma.recoveryType.upsert({
+      where: { code },
+      create: { code, name, unit: "KG" },
+      update: {},
+    });
+    recoveryTypes[code] = rt.id;
+  }
+
+  // Work Order for the acceptance scenario (WO-2026-00452)
+  const wo = await prisma.workOrder.upsert({
+    where: { woNumber: "WO-2026-00452" },
+    create: {
+      woNumber: "WO-2026-00452",
+      vendorId: vendors["V-ABC"],
+      processId: processes["CNC_MACHINING"],
+      requiredInputQty: 50,
+      requiredInputUOM: "NOS",
+      expectedOutputQty: 250,
+      expectedOutputUOM: "NOS",
+      status: "OPEN",
+      createdBy: users[ROLES.STORES],
+    },
+    update: {},
+  });
+
+  // A second WO so the demo DC below has a home
+  const woDemo = await prisma.workOrder.upsert({
+    where: { woNumber: "WO-2026-00100" },
+    create: {
+      woNumber: "WO-2026-00100",
+      vendorId: vendors["V-ABC"],
+      processId: processes["CNC_MACHINING"],
+      requiredInputQty: 80,
+      requiredInputUOM: "NOS",
+      expectedOutputQty: 80,
+      expectedOutputUOM: "NOS",
+      status: "PROCESSING",
+      createdBy: users[ROLES.STORES],
+    },
+    update: {},
+  });
+
+  // WO number sequence
+  await prisma.numberSequence.upsert({
+    where: { key_fiscalYear: { key: "WO", fiscalYear: "2026" } },
+    create: { key: "WO", fiscalYear: "2026", prefix: "WO-2026-", padding: 5, current: 452 },
+    update: {},
+  });
+
   // Demo DC-2026-000001 with 8 kg unaccounted exception
   const dcNumber = "DC-2026-000001";
   const existing = await prisma.deliveryChallan.findUnique({ where: { dcNumber } });
@@ -213,6 +271,7 @@ async function main() {
       data: {
         dcNumber,
         dcDate: new Date("2026-05-01"),
+        workOrderId: woDemo.id,
         vendorId: vendors["V-ABC"],
         purpose: DcPurpose.MACHINING,
         processId: processes["CNC_MACHINING"],

@@ -14,7 +14,6 @@ export interface AuditInput {
   reason?: string;
 }
 
-/** Append-only audit log write. Pass a tx client to include it in a transaction. */
 export async function writeAudit(client: Tx, input: AuditInput): Promise<void> {
   await client.auditLog.create({
     data: {
@@ -23,8 +22,8 @@ export async function writeAudit(client: Tx, input: AuditInput): Promise<void> {
       module: input.module,
       entityType: input.entityType,
       entityId: input.entityId,
-      oldValue: input.oldValue === undefined ? undefined : (input.oldValue as Prisma.InputJsonValue),
-      newValue: input.newValue === undefined ? undefined : (input.newValue as Prisma.InputJsonValue),
+      oldValue: input.oldValue === undefined ? undefined : (input.oldValue as object),
+      newValue: input.newValue === undefined ? undefined : (input.newValue as object),
       reason: input.reason,
     },
   });
