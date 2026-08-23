@@ -45,8 +45,7 @@ async function main() {
     }
   }
 
-  const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
-  const userSpecs = [
+  const userSpecs: Array<{ email: string; name: string; role: string; password?: string }> = [
     { email: "admin@example.com", name: "Admin User", role: ROLES.ADMIN },
     { email: "stores@example.com", name: "Stores User", role: ROLES.STORES },
     { email: "purchase@example.com", name: "Purchase User", role: ROLES.PURCHASE },
@@ -55,13 +54,21 @@ async function main() {
     { email: "accounts@example.com", name: "Accounts User", role: ROLES.ACCOUNTS },
     { email: "management@example.com", name: "Management User", role: ROLES.MANAGEMENT },
     { email: "security@example.com", name: "Security User", role: ROLES.SECURITY },
+    // Real Vijay Spheroidals users
+    { email: "stores@vijayspheroidals.com", name: "Stores", role: ROLES.STORES, password: "Vs#Stores2026!" },
+    { email: "data.analyst@vijayspheroidals.com", name: "Data Analyst", role: ROLES.ADMIN, password: "Vs#Data2026!" },
+    { email: "aravind.gurudev@vijayspheroidals.com", name: "Aravind Gurudev", role: ROLES.ADMIN, password: "Vs#Aravind2026!" },
+    { email: "accounts@vijayspheroidals.com", name: "Accounts", role: ROLES.ACCOUNTS, password: "Vs#Accounts2026!" },
+    { email: "loyed@vijayspheroidals.onmicrosoft.com", name: "Loyed", role: ROLES.MANAGEMENT, password: "Vs#Manager2026!" },
   ];
+  const devPasswordHash = await bcrypt.hash(DEV_PASSWORD, 10);
   const users: Record<string, string> = {};
   for (const u of userSpecs) {
+    const passwordHash = u.password ? await bcrypt.hash(u.password, 10) : devPasswordHash;
     const user = await prisma.user.upsert({
       where: { email: u.email },
       create: { email: u.email, name: u.name, passwordHash },
-      update: {},
+      update: { passwordHash },
     });
     users[u.role] = user.id;
     const role = await prisma.role.findUnique({ where: { key: u.role } });

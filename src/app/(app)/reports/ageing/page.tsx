@@ -81,13 +81,18 @@ export default async function AgeingReportPage({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">Ageing</h1>
-        <p className="text-sm text-slate-500">
-          {basis === "dispatch"
-            ? "Days since dispatch, for all material currently outside the building."
-            : "Days overdue against expected return date."}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">Ageing</h1>
+          <p className="text-sm text-slate-500">
+            {basis === "dispatch"
+              ? "Days since dispatch, for all material currently outside the building."
+              : "Days overdue against expected return date."}
+          </p>
+        </div>
+        <a href={"/reports/ageing/export?basis=" + basis} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          Export CSV
+        </a>
       </div>
 
       <div className="flex gap-2">

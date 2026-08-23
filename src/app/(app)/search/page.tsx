@@ -33,27 +33,34 @@ export default async function SearchPage({
     );
   }
 
-  const dcs = await prisma.deliveryChallan.findMany({
-    where: {
-      OR: [
-        { dcNumber: { contains: q, mode: "insensitive" } },
-        { vehicleNumber: { contains: q, mode: "insensitive" } },
-        { jobWorkOrderNumber: { contains: q, mode: "insensitive" } },
-        { referenceNumber: { contains: q, mode: "insensitive" } },
-        { vendor: { OR: [{ vendorName: { contains: q, mode: "insensitive" } }, { vendorCode: { contains: q, mode: "insensitive" } }] } },
-        {
-          items: {
-            some: {
-              OR: [
-                { batchNumber: { contains: q, mode: "insensitive" } },
-                { heatNumber: { contains: q, mode: "insensitive" } },
-                { item: { itemCode: { contains: q, mode: "insensitive" } } },
-                { item: { itemName: { contains: q, mode: "insensitive" } } },
-              ],
-            },
+    const tokens = q.split(/\s+/).filter(Boolean);
+
+  const tokenClause = (token: string) => ({
+    OR: [
+      { dcNumber: { contains: token, mode: "insensitive" as const } },
+      { woNumber: { contains: token, mode: "insensitive" as const } },
+      { vehicleNumber: { contains: token, mode: "insensitive" as const } },
+      { jobWorkOrderNumber: { contains: token, mode: "insensitive" as const } },
+      { referenceNumber: { contains: token, mode: "insensitive" as const } },
+      { vendor: { OR: [{ vendorName: { contains: token, mode: "insensitive" as const } }, { vendorCode: { contains: token, mode: "insensitive" as const } }] } },
+      {
+        items: {
+          some: {
+            OR: [
+              { batchNumber: { contains: token, mode: "insensitive" as const } },
+              { heatNumber: { contains: token, mode: "insensitive" as const } },
+              { item: { itemCode: { contains: token, mode: "insensitive" as const } } },
+              { item: { itemName: { contains: token, mode: "insensitive" as const } } },
+            ],
           },
         },
-      ],
+      },
+    ],
+  });
+
+  const dcs = await prisma.deliveryChallan.findMany({
+    where: {
+      AND: tokens.map(tokenClause),
     },
     include: { vendor: true, process: true, items: { include: { item: true } } },
     orderBy: { dcDate: "desc" },

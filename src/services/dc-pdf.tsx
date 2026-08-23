@@ -19,7 +19,7 @@ export interface DcPdfData {
   dcDate: string;
   status: string;
   vendorName: string;
-  vendorAddress: string;
+  vend
   purpose: string;
   processName: string;
   vehicleNumber: string;
@@ -119,7 +119,7 @@ const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
   });
   y -= 11;
 
-  const contactLine = [data.company.gst ? "GST: " + data.company.gst : "", data.company.contact]
+  const contactLine = [data.company.gst ? "Our GST: " + data.company.gst : "", data.company.contact]
     .filter(Boolean)
     .join("  |  ");
   if (contactLine) {
@@ -153,6 +153,8 @@ const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
     ["E-Way Bill", data.ewayBillNumber],
     ["Reference No.", data.referenceNumber],
     ["Vendor Address", data.vendorAddress],
+    ["Party's GST No.", data.vendorGst || "—"],
+    ["Party's PAN No.", data.vendorPan || "—"],
   ];
   const colWidth = CONTENT_WIDTH / 2;
   for (let i = 0; i < infoPairs.length; i += 2) {

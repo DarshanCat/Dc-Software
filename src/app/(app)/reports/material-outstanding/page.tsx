@@ -21,10 +21,15 @@ export default async function MaterialOutstandingReportPage() {
   const rows = Array.from(byVendor.values()).sort((a, b) => (b.sentWeight - b.returnedWeight) - (a.sentWeight - a.returnedWeight));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">Material Outstanding</h1>
-        <p className="text-sm text-slate-500">Material currently outside, by vendor</p>
+      <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">Material Outstanding</h1>
+          <p className="text-sm text-slate-500">Material currently outside, by vendor</p>
+        </div>
+        <a href="/reports/material-outstanding/export" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          Export CSV
+        </a>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200">

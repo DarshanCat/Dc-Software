@@ -20,7 +20,7 @@ interface DcRowLike {
   qrToken: string | null;
   createdBy: string | null;
   approvedBy: string | null;
-  vendor: { vendorName: string; address: string | null };
+  vendor: { vendorName: string; address: string | null; gstNumber: string | null; panNumber: string | null };
   process: { name: string } | null;
   items: Array<{
     drawingNumber: string | null;
@@ -47,6 +47,8 @@ export interface DcPdfData {
   status: string;
   vendorName: string;
   vendorAddress: string;
+  vendorGst: string;
+  vendorPan: string;
   purpose: string;
   processName: string;
   vehicleNumber: string;
@@ -110,6 +112,8 @@ async function buildPdfData(dc: DcRowLike): Promise<DcPdfData> {
     status: dc.status.replace(/_/g, " "),
     vendorName: dc.vendor.vendorName,
     vendorAddress: dc.vendor.address || "",
+    vendorGst: dc.vendor.gstNumber || "",
+    vendorPan: dc.vendor.panNumber || "",
     purpose: dc.purpose.replace(/_/g, " "),
     processName: dc.process?.name ?? "—",
     vehicleNumber: dc.vehicleNumber || "—",

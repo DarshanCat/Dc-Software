@@ -274,6 +274,7 @@ model DeliveryChallan {
   transporter        String?
   vehicleNumber      String?
   ewayBillNumber     String?
+  eSugamNumber       String?
   referenceNumber    String?
   remarks            String?
   status             DcStatus  @default(DRAFT)

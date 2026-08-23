@@ -48,15 +48,20 @@ export default async function ReconciliationReportPage({
 
   const totalOpenExceptions = reconciliations.reduce((sum, r) => sum + openExceptionCount(r.dc.exceptions), 0);
 
-  const qs = (status: string | undefined) => (status ? `?status=${status}` : "");
+  const qs = (status: string | undefined) => (status ? "?status=" + status : "");
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">Reconciliation</h1>
-        <p className="text-sm text-slate-500">
-          {reconciliations.length} reconciliation(s) — {totalOpenExceptions} unresolved exception(s) across all DCs.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">Reconciliation</h1>
+          <p className="text-sm text-slate-500">
+            {reconciliations.length} reconciliation(s) - {totalOpenExceptions} unresolved exception(s) across all DCs.
+          </p>
+        </div>
+        <a href={"/reports/reconciliation/export" + qs(sp.status)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          Export CSV
+        </a>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -141,7 +146,7 @@ export default async function ReconciliationReportPage({
                       )}
                     </td>
                     <td className="px-3 py-2 text-xs text-slate-500">
-                      {r.calculatedAt ? r.calculatedAt.toLocaleString() : "—"}
+                      {r.calculatedAt ? r.calculatedAt.toLocaleString() : "-"}
                     </td>
                   </tr>
                 );

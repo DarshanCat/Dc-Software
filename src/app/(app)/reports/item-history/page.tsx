@@ -133,7 +133,7 @@ export default async function ItemHistoryReportPage({
     { label: "Total Scrap", value: totalScrap.toFixed(3) + " kg" },
     { label: "Avg Scrap %", value: avgScrapPercent === null ? "N/A" : avgScrapPercent.toFixed(1) + "%" },
     { label: "Total Process Loss", value: totalProcessLoss.toFixed(3) + " kg" },
-    { label: "Avg Return Days", value: avgReturnDays === null ? "—" : avgReturnDays.toFixed(1) },
+    { label: "Avg Return Days", value: avgReturnDays === null ? "-" : avgReturnDays.toFixed(1) },
     { label: "Vendors Used", value: String(vendorIds.size) },
     { label: "Open DCs", value: String(openDcCount) },
   ];
@@ -142,12 +142,17 @@ export default async function ItemHistoryReportPage({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">{item.itemCode} — {item.itemName}</h1>
+          <h1 className="text-lg font-semibold text-slate-900">{item.itemCode} - {item.itemName}</h1>
           <p className="text-sm text-slate-500">{dcItems.length} DC line(s) in history</p>
         </div>
-        <Link href="/reports/item-history" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-          Choose Different Item
-        </Link>
+        <div className="flex gap-2">
+          <a href={"/reports/item-history/export?itemId=" + item.id} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Export CSV
+          </a>
+          <Link href="/reports/item-history" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Choose Different Item
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -133,13 +133,18 @@ export default async function VendorPerformanceReportPage({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">Vendor Performance</h1>
-        <p className="text-sm text-slate-500">
-          Weighted score — Return Timeliness {wReturn}%, Reconciliation {wRecon}%, Scrap Recovery {wScrap}%, Quality {wQuality}%
-          (weights normalize to 100% automatically; append <code className="rounded bg-slate-100 px-1">?wReturn=&amp;wRecon=&amp;wScrap=&amp;wQuality=</code> to
-          the URL to try different weightings — there's no persistent settings UI for this yet).
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">Vendor Performance</h1>
+          <p className="text-sm text-slate-500">
+            Weighted score - Return Timeliness {wReturn}%, Reconciliation {wRecon}%, Scrap Recovery {wScrap}%, Quality {wQuality}%
+            (weights normalize to 100% automatically; append <code className="rounded bg-slate-100 px-1">?wReturn=&amp;wRecon=&amp;wScrap=&amp;wQuality=</code> to
+            the URL to try different weightings - there is no persistent settings UI for this yet).
+          </p>
+        </div>
+        <a href={"/reports/vendor-performance/export?wReturn=" + wReturn + "&wRecon=" + wRecon + "&wScrap=" + wScrap + "&wQuality=" + wQuality} className="shrink-0 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          Export CSV
+        </a>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -194,4 +199,3 @@ export default async function VendorPerformanceReportPage({
     </div>
   );
 }
- 
