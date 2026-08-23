@@ -3,8 +3,9 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
+import type { ExceptionStatus } from "@prisma/client";
 
-const OPEN_STATUSES = ["OPEN", "UNDER_REVIEW", "REJECTED"];
+const OPEN_STATUSES: ExceptionStatus[] = ["OPEN", "UNDER_REVIEW", "REJECTED"];
 
 export default async function ExceptionsPage() {
   const user = await getSessionUser();

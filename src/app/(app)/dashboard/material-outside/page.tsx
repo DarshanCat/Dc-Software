@@ -3,8 +3,9 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
+import type { DcStatus } from "@prisma/client";
 
-const DISPATCHED_ONWARD = [
+const DISPATCHED_ONWARD: DcStatus[] = [
   "DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED", "MATERIAL_RETURNED",
   "SCRAP_PENDING", "RECONCILIATION", "RECONCILED",
 ];

@@ -1,12 +1,14 @@
 import { prisma } from "@/lib/db";
+import type { DcStatus, ExceptionStatus } from "@prisma/client";
 import { StatusDistributionChart, VendorOutstandingChart, OverdueAgeingChart } from "./dashboard-charts";
 
-const TERMINAL_STATUSES = ["CLOSED", "CANCELLED"];
-const DISPATCHED_ONWARD = [
+const TERMINAL_STATUSES: DcStatus[] = ["CLOSED", "CANCELLED"];
+const DISPATCHED_ONWARD: DcStatus[] = [
   "DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED", "MATERIAL_RETURNED",
   "SCRAP_PENDING", "RECONCILIATION", "RECONCILED",
 ];
-const SCRAP_PENDING_STATUSES = ["MATERIAL_RETURNED", "SCRAP_PENDING"];
+const SCRAP_PENDING_STATUSES: DcStatus[] = ["MATERIAL_RETURNED", "SCRAP_PENDING"];
+const EXCEPTION_OPEN_STATUSES: ExceptionStatus[] = ["OPEN", "UNDER_REVIEW", "REJECTED"];
 
 function ageingBucket(days: number): string {
   if (days <= 7) return "0-7 Days";
@@ -21,7 +23,7 @@ export default async function DashboardPage() {
 
   const [statusGroups, exceptionOpenCount, dcs] = await Promise.all([
     prisma.deliveryChallan.groupBy({ by: ["status"], _count: { _all: true } }),
-    prisma.exception.count({ where: { status: { in: ["OPEN", "UNDER_REVIEW", "REJECTED"] } } }),
+    prisma.exception.count({ where: { status: { in: EXCEPTION_OPEN_STATUSES } } }),
     prisma.deliveryChallan.findMany({
       where: { status: { notIn: TERMINAL_STATUSES } },
       include: {

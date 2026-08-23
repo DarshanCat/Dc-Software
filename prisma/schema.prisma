@@ -263,8 +263,7 @@ model DeliveryChallan {
   id                 String    @id @default(uuid())
   dcNumber           String    @unique
   dcDate             DateTime
-  workOrderId        String
-  workOrder          WorkOrder @relation(fields: [workOrderId], references: [id])
+  woNumber           String
   vendorId           String
   vendor             Vendor    @relation(fields: [vendorId], references: [id])
   purpose            DcPurpose
@@ -304,7 +303,7 @@ model DeliveryChallan {
 
   @@index([dcNumber])
   @@index([dcDate])
-  @@index([workOrderId])
+  @@index([woNumber])
   @@index([vendorId])
   @@index([status])
   @@index([expectedReturnDate])
@@ -709,12 +708,11 @@ model WorkOrder {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  deliveryChallans  DeliveryChallan[]
-
   @@index([woNumber])
   @@index([vendorId])
   @@index([status])
 }
+
 
 // Expected return line(s) per DC. returnItem MAY differ from the sent item.
 model DeliveryChallanExpectedReturn {

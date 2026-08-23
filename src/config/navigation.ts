@@ -22,6 +22,12 @@ export const NAVIGATION: NavSection[] = [
       { label: "Reconciliation Exceptions", href: "/dashboard/exceptions", permission: P.DASHBOARD_VIEW },
     ],
   },
+    {
+    label: "Work Orders",
+    items: [
+      { label: "All Work Orders", href: "/work-orders", permission: P.DC_VIEW },
+    ],
+  },
   {
     label: "Delivery Challans",
     items: [
@@ -47,10 +53,10 @@ export const NAVIGATION: NavSection[] = [
     label: "Scrap Recovery",
     items: [
       { label: "Scrap Dashboard", href: "/scrap", permission: P.SCRAP_VIEW },
-      { label: "Expected Scrap", href: "/scrap/expected", permission: P.SCRAP_VIEW },
-      { label: "Received Scrap", href: "/scrap/received", permission: P.SCRAP_VIEW },
-      { label: "Scrap Outstanding", href: "/scrap/outstanding", permission: P.SCRAP_VIEW },
-      { label: "Scrap Exceptions", href: "/scrap/exceptions", permission: P.SCRAP_VIEW },
+      { label: "Expected Scrap", href: "/scrap?view=expected", permission: P.SCRAP_VIEW },
+      { label: "Received Scrap", href: "/scrap?view=received", permission: P.SCRAP_VIEW },
+      { label: "Scrap Outstanding", href: "/scrap?view=outstanding", permission: P.SCRAP_VIEW },
+      { label: "Scrap Exceptions", href: "/scrap?view=exceptions", permission: P.SCRAP_VIEW },
     ],
   },
   {

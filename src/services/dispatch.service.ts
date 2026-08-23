@@ -20,3 +20,15 @@ export function buildDcQrUrl(dcId: string): string {
   const path = `/dcs/${dcId}`;
   return base ? new URL(path, base).toString() : path;
 }
+
+/**
+ * Public, unauthenticated URL the printed QR code should encode (spec §21).
+ * Keyed by the opaque qrToken, not the internal DC id — anyone who scans it
+ * gets a PDF view/download with no login required. Never put business data
+ * in the QR itself, only this token-secured link.
+ */
+export function buildDcPublicUrl(qrToken: string): string {
+  const base = process.env.APP_URL || process.env.NEXTAUTH_URL;
+  const path = `/public/dc/${qrToken}`;
+  return base ? new URL(path, base).toString() : path;
+}

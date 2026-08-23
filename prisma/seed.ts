@@ -21,13 +21,11 @@ const DEV_PASSWORD = "Password@123";
 async function main() {
   console.log("Seeding…");
 
-  // Permissions
   const permissionKeys = Object.values(PERMISSIONS);
   for (const key of permissionKeys) {
     await prisma.permission.upsert({ where: { key }, create: { key }, update: {} });
   }
 
-  // Roles + grants
   for (const roleKey of Object.values(ROLES)) {
     const role = await prisma.role.upsert({
       where: { key: roleKey },
@@ -47,7 +45,6 @@ async function main() {
     }
   }
 
-  // Dev users
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
   const userSpecs = [
     { email: "admin@example.com", name: "Admin User", role: ROLES.ADMIN },
@@ -57,6 +54,7 @@ async function main() {
     { email: "quality@example.com", name: "Quality User", role: ROLES.QUALITY },
     { email: "accounts@example.com", name: "Accounts User", role: ROLES.ACCOUNTS },
     { email: "management@example.com", name: "Management User", role: ROLES.MANAGEMENT },
+    { email: "security@example.com", name: "Security User", role: ROLES.SECURITY },
   ];
   const users: Record<string, string> = {};
   for (const u of userSpecs) {
@@ -76,7 +74,6 @@ async function main() {
     }
   }
 
-  // UOM
   for (const uom of [
     { code: "KG", name: "Kilogram", isWeight: true },
     { code: "NOS", name: "Numbers", isWeight: false },
@@ -85,7 +82,6 @@ async function main() {
     await prisma.uOM.upsert({ where: { code: uom.code }, create: uom, update: {} });
   }
 
-  // Item categories
   for (const c of [
     { key: "RAW_MATERIAL", name: "Raw Material" },
     { key: "CASTING", name: "Casting" },
@@ -98,7 +94,6 @@ async function main() {
     await prisma.itemCategory.upsert({ where: { key: c.key }, create: c, update: {} });
   }
 
-  // Processes
   const processDefs: [string, string][] = [
     ["CNC_MACHINING", "CNC Machining"],
     ["TURNING", "Turning"],
@@ -112,7 +107,6 @@ async function main() {
     processes[code] = p.id;
   }
 
-  // Scrap types
   const scrapDefs: [string, string][] = [
     ["MACHINING_CHIPS", "Machining Chips"],
     ["TURNING_SCRAP", "Turning Scrap"],
@@ -126,7 +120,6 @@ async function main() {
     scrapTypes[code] = s.id;
   }
 
-  // Vendors
   const vendorDefs: [string, string][] = [
     ["V-ABC", "ABC Machining"],
     ["V-XYZ", "XYZ CNC"],
@@ -143,7 +136,6 @@ async function main() {
     vendors[code] = v.id;
   }
 
-  // Items
   const machined = await prisma.itemCategory.findUnique({ where: { key: "MACHINED_COMPONENT" } });
   const itemDefs: [string, string, string, number][] = [
     ["IT-1001", "Shaft Blank 50mm", "EN8", 12.5],
@@ -168,7 +160,6 @@ async function main() {
     items[code] = it.id;
   }
 
-  // Job Work Standard: IT-1001 + CNC, 1000 -> 900/90/10
   const standard = await prisma.jobWorkStandard.upsert({
     where: {
       itemId_processId_revision: {
@@ -198,14 +189,12 @@ async function main() {
     update: {},
   });
 
-  // Number sequence
   await prisma.numberSequence.upsert({
     where: { key_fiscalYear: { key: "DC", fiscalYear: "2026" } },
     create: { key: "DC", fiscalYear: "2026", prefix: "DC-2026-", padding: 6, current: 1 },
     update: {},
   });
 
-    // Recovery types (Boring first; generic for more later)
   const recoveryDefs: [string, string][] = [
     ["BORING", "Boring"],
     ["MACHINING_CHIPS", "Machining Chips"],
@@ -222,48 +211,8 @@ async function main() {
     recoveryTypes[code] = rt.id;
   }
 
-  // Work Order for the acceptance scenario (WO-2026-00452)
-  const wo = await prisma.workOrder.upsert({
-    where: { woNumber: "WO-2026-00452" },
-    create: {
-      woNumber: "WO-2026-00452",
-      vendorId: vendors["V-ABC"],
-      processId: processes["CNC_MACHINING"],
-      requiredInputQty: 50,
-      requiredInputUOM: "NOS",
-      expectedOutputQty: 250,
-      expectedOutputUOM: "NOS",
-      status: "OPEN",
-      createdBy: users[ROLES.STORES],
-    },
-    update: {},
-  });
-
-  // A second WO so the demo DC below has a home
-  const woDemo = await prisma.workOrder.upsert({
-    where: { woNumber: "WO-2026-00100" },
-    create: {
-      woNumber: "WO-2026-00100",
-      vendorId: vendors["V-ABC"],
-      processId: processes["CNC_MACHINING"],
-      requiredInputQty: 80,
-      requiredInputUOM: "NOS",
-      expectedOutputQty: 80,
-      expectedOutputUOM: "NOS",
-      status: "PROCESSING",
-      createdBy: users[ROLES.STORES],
-    },
-    update: {},
-  });
-
-  // WO number sequence
-  await prisma.numberSequence.upsert({
-    where: { key_fiscalYear: { key: "WO", fiscalYear: "2026" } },
-    create: { key: "WO", fiscalYear: "2026", prefix: "WO-2026-", padding: 5, current: 452 },
-    update: {},
-  });
-
-  // Demo DC-2026-000001 with 8 kg unaccounted exception
+  // Work Orders are a typed free-text reference on the DC — no separate
+  // WorkOrder record is created up front (matches the real paper process).
   const dcNumber = "DC-2026-000001";
   const existing = await prisma.deliveryChallan.findUnique({ where: { dcNumber } });
   if (!existing) {
@@ -271,7 +220,7 @@ async function main() {
       data: {
         dcNumber,
         dcDate: new Date("2026-05-01"),
-        workOrderId: woDemo.id,
+        woNumber: "WO-2026-00100",
         vendorId: vendors["V-ABC"],
         purpose: DcPurpose.MACHINING,
         processId: processes["CNC_MACHINING"],
@@ -375,7 +324,6 @@ async function main() {
     console.log(`  demo DC ${dcNumber} created with 8 kg unaccounted exception`);
   }
 
-  // System settings
   const settings: [string, string, string][] = [
     ["companyName", "DC & Vendor Material Management", "company"],
     ["defaultTimezone", "Asia/Kolkata", "locale"],

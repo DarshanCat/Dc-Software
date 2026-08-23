@@ -1,365 +1,96 @@
-import { notFound } from "next/navigation";
-import QRCode from "qrcode";
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
-import { buildDcQrUrl } from "@/services/dispatch.service";
-import { evaluateScrap } from "@/services/scrap.service";
-import { DcActions } from "./dc-actions";
-import { ReceiveMaterialForm } from "./receive-material-form";
-import { ReceiveScrapForm } from "./receive-scrap-form";
-import { ReconciliationPanel } from "./reconciliation-panel";
-import { DocumentsPanel } from "./documents-panel";
-import { AmendmentPanel } from "./amendment-panel";
+import { Button } from "@/components/ui/button";
 
-export default async function DcDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+const STATUS_COLORS: Record<string, string> = {
+  DRAFT: "bg-slate-100 text-slate-600",
+  PENDING_APPROVAL: "bg-amber-100 text-amber-700",
+  APPROVED: "bg-blue-100 text-blue-700",
+  DISPATCHED: "bg-indigo-100 text-indigo-700",
+  RECONCILIATION: "bg-purple-100 text-purple-700",
+  RECONCILED: "bg-green-100 text-green-700",
+  CLOSED: "bg-green-100 text-green-700",
+  CANCELLED: "bg-red-100 text-red-700",
+};
+
+export default async function DcsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; overdue?: string }>;
+}) {
+  const { status, overdue } = await searchParams;
   const user = await getSessionUser();
+  const canCreate = user ? await hasPermission(user.id, PERMISSIONS.DC_CREATE) : false;
 
-  const dc = await prisma.deliveryChallan.findUnique({
-    where: { id },
-    include: {
-      vendor: true,
-      process: true,
-      items: { include: { item: true } },
-      statusHistory: { orderBy: { createdAt: "asc" } },
-      dispatch: true,
-      receipts: { include: { items: true }, orderBy: { receiptDate: "asc" } },
-      scrapReceipts: { include: { items: { include: { scrapType: true } } }, orderBy: { receiptDate: "asc" } },
-      reconciliation: true,
-      exceptions: { orderBy: { createdAt: "asc" } },
-    },
-  });
-  if (!dc) notFound();
-
-  const canApprove = user ? await hasPermission(user.id, PERMISSIONS.DC_APPROVE) : false;
-  const canSubmit = user ? await hasPermission(user.id, PERMISSIONS.DC_CREATE) : false;
-  const canDispatch = user ? await hasPermission(user.id, PERMISSIONS.DC_DISPATCH) : false;
-  const canReceive = user ? await hasPermission(user.id, PERMISSIONS.RECEIPT_CREATE) : false;
-  const canScrap = user ? await hasPermission(user.id, PERMISSIONS.SCRAP_CREATE) : false;
-  const canCloseDc = user ? await hasPermission(user.id, PERMISSIONS.RECONCILIATION_CLOSE) : false;
-  const canOverrideException = user ? await hasPermission(user.id, PERMISSIONS.RECONCILIATION_OVERRIDE) : false;
-  const canUploadDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_UPLOAD) : false;
-  const canDeleteDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_DELETE) : false;
-  const canRequestAmendment = user ? await hasPermission(user.id, PERMISSIONS.DC_EDIT) : false;
-  const canDecideAmendment = user ? await hasPermission(user.id, PERMISSIONS.DC_APPROVE) : false;
-
-  const qrDataUrl = dc.qrToken ? await QRCode.toDataURL(buildDcQrUrl(dc.id), { margin: 1, width: 160 }) : null;
-
-  const documents = await prisma.document.findMany({
-    where: { entityType: "DeliveryChallan", entityId: dc.id },
-    orderBy: { uploadedAt: "desc" },
-  });
-  const uploaderIds = [...new Set(documents.map((d) => d.uploadedBy).filter((v): v is string => !!v))];
-  const uploaders = uploaderIds.length
-    ? await prisma.user.findMany({ where: { id: { in: uploaderIds } }, select: { id: true, name: true } })
-    : [];
-  const uploaderNameById = new Map(uploaders.map((u) => [u.id, u.name]));
-
-  const amendments = await prisma.dcAmendment.findMany({
-    where: { dcId: dc.id },
-    orderBy: { requestedAt: "desc" },
-  });
-  const amendmentUserIds = [
-    ...new Set(
-      amendments.flatMap((a) => [a.requestedBy, a.decidedBy].filter((v): v is string => !!v)),
-    ),
-  ];
-  const amendmentUsers = amendmentUserIds.length
-    ? await prisma.user.findMany({ where: { id: { in: amendmentUserIds } }, select: { id: true, name: true } })
-    : [];
-  const amendmentUserNameById = new Map(amendmentUsers.map((u) => [u.id, u.name]));
-
-  const receivedByItemId = new Map<string, number>();
-  for (const receipt of dc.receipts) {
-    for (const line of receipt.items) {
-      receivedByItemId.set(line.itemId, (receivedByItemId.get(line.itemId) ?? 0) + Number(line.quantityReceived));
-    }
+  const where: Record<string, unknown> = {};
+  if (status) where.status = status;
+  if (overdue === "1") {
+    where.expectedReturnDate = { lt: new Date() };
+    where.status = { notIn: ["CLOSED", "CANCELLED", "RECONCILED"] };
   }
-  const receivableStatuses = ["DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED"];
-  const canReceiveNow = canReceive && receivableStatuses.includes(dc.status);
-  const receiveLines = dc.items.map((it) => ({
-    itemId: it.itemId,
-    itemCode: it.item.itemCode,
-    itemName: it.item.itemName,
-    sentQuantity: Number(it.quantity),
-    alreadyReceived: receivedByItemId.get(it.itemId) ?? 0,
-  }));
 
-  const expectedScrapWeight = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
-  const receivedScrapWeight = dc.scrapReceipts.reduce(
-    (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),
-    0,
-  );
-  const scrapTolerance = dc.items.length > 0 ? Number(dc.items[0].tolerancePercentage) : 0;
-  const scrapEval = evaluateScrap(expectedScrapWeight, receivedScrapWeight, scrapTolerance);
-  const scrapReceivableStatuses = ["MATERIAL_RETURNED", "SCRAP_PENDING"];
-  const canScrapNow = canScrap && scrapReceivableStatuses.includes(dc.status);
-  const scrapTypes = canScrapNow
-    ? await prisma.scrapType.findMany({ where: { active: true }, orderBy: { code: "asc" } })
-    : [];
-
-  const totalInput = dc.items.reduce((s, it) => s + Number(it.inputWeight), 0);
-  const totalFinished = dc.items.reduce((s, it) => s + Number(it.expectedFinishedWeight), 0);
-  const totalScrap = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
-  const totalLoss = dc.items.reduce((s, it) => s + Number(it.expectedProcessLoss), 0);
+  const dcs = await prisma.deliveryChallan.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: { vendor: true, process: true, items: true },
+    take: 100,
+  });
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div className="flex items-start justify-between">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-mono text-lg font-semibold text-slate-900">{dc.dcNumber}</h1>
-          <p className="text-sm text-slate-500">
-            {dc.vendor.vendorName} · {dc.process?.name ?? "—"} · {dc.purpose.replace(/_/g, " ")}
-          </p>
+          <h1 className="text-lg font-semibold text-slate-900">Delivery Challans</h1>
+          <p className="text-sm text-slate-500">{dcs.length} DC(s)</p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-            {dc.status.replace(/_/g, " ")}
-          </span>
-          <a href={"/dcs/" + dc.id + "/pdf"} target="_blank" rel="noopener noreferrer" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Print / PDF</a>
-        </div>
-      </div>
-
-      <DcActions
-        dcId={dc.id}
-        status={dc.status}
-        canApprove={canApprove}
-        canSubmit={canSubmit}
-        canDispatch={canDispatch}
-      />
-
-      {dc.dispatch && (
-        <div className="rounded-lg border border-slate-200 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Dispatch Details</h2>
-          <div className="flex items-start justify-between gap-4">
-            <div className="grid grid-cols-2 gap-1 text-sm text-slate-700">
-              <span>Dispatched At</span><span className="text-right font-mono">{dc.dispatch.dispatchedAt.toLocaleString()}</span>
-              <span>Vehicle Number</span><span className="text-right font-mono">{dc.dispatch.vehicleNumber ?? "—"}</span>
-              <span>Transporter</span><span className="text-right font-mono">{dc.dispatch.transporter ?? "—"}</span>
-              <span>Total Input Weight</span><span className="text-right font-mono">{Number(dc.dispatch.totalInputWeight).toFixed(3)} kg</span>
-            </div>
-            {qrDataUrl && (
-              <div className="flex flex-col items-center gap-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={qrDataUrl} alt="DC QR code" width={120} height={120} />
-                <span className="text-[10px] text-slate-400">Scan to open this DC</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-lg border border-slate-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900">Expected Summary</h2>
-        <div className="grid grid-cols-2 gap-1 font-mono text-sm text-slate-700">
-          <span>Material Sent</span><span className="text-right">{totalInput.toFixed(3)} kg</span>
-          <span>Expected Finished</span><span className="text-right">{totalFinished.toFixed(3)} kg</span>
-          <span>Expected Scrap</span><span className="text-right">{totalScrap.toFixed(3)} kg</span>
-          <span>Allowed Process Loss</span><span className="text-right">{totalLoss.toFixed(3)} kg</span>
-        </div>
-      </div>
-
-      <AmendmentPanel
-        dcId={dc.id}
-        dcItems={dc.items.map((it) => ({
-          id: it.id,
-          label: it.item.itemCode + " — " + it.item.itemName,
-          quantity: Number(it.quantity),
-          weight: Number(it.inputWeight),
-        }))}
-        amendments={amendments.map((a) => ({
-          id: a.id,
-          dcItemId: a.dcItemId,
-          requestedByName: amendmentUserNameById.get(a.requestedBy) ?? "Unknown",
-          requestedAt: a.requestedAt.toISOString(),
-          reason: a.reason,
-          previousQuantity: Number(a.previousQuantity),
-          previousWeight: Number(a.previousWeight),
-          newQuantity: Number(a.newQuantity),
-          newWeight: Number(a.newWeight),
-          status: a.status,
-          decidedByName: a.decidedBy ? (amendmentUserNameById.get(a.decidedBy) ?? null) : null,
-          decisionReason: a.decisionReason,
-        }))}
-        canRequest={canRequestAmendment}
-        canDecide={canDecideAmendment}
-      />
-
-      {canReceiveNow && (
-        <ReceiveMaterialForm dcId={dc.id} lines={receiveLines} />
-      )}
-
-      <div className="rounded-lg border border-slate-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900">Material Returns</h2>
-        {dc.receipts.length === 0 ? (
-          <p className="text-sm text-slate-400">No material received yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {dc.receipts.map((r) => (
-              <div key={r.id} className="rounded-md border border-slate-100 p-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-mono font-medium text-slate-800">{r.receiptNumber}</span>
-                  <span className="text-slate-500">{r.receiptDate.toLocaleDateString()}</span>
-                </div>
-                <table className="mt-2 w-full text-sm">
-                  <thead className="text-left text-xs uppercase text-slate-500">
-                    <tr><th className="py-1">Item</th><th className="text-right">Qty Received</th><th className="text-right">Weight Received</th><th className="text-right">Rejected Qty</th></tr>
-                  </thead>
-                  <tbody>
-                    {r.items.map((line) => {
-                      const it = dc.items.find((di) => di.itemId === line.itemId);
-                      return (
-                        <tr key={line.id} className="border-t border-slate-100">
-                          <td className="py-1">{it?.item.itemCode ?? line.itemId}</td>
-                          <td className="text-right font-mono">{Number(line.quantityReceived)}</td>
-                          <td className="text-right font-mono">{Number(line.weightReceived).toFixed(3)}</td>
-                          <td className="text-right font-mono">{Number(line.rejectedQuantity)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-          </div>
+        {canCreate && (
+          <Link href="/dcs/new"><Button>Create DC</Button></Link>
         )}
       </div>
 
-      <div className="rounded-lg border border-slate-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900">Scrap Recovery</h2>
-        <div className="grid grid-cols-2 gap-1 font-mono text-sm text-slate-700 md:grid-cols-4">
-          <span>Expected Scrap</span><span className="text-right">{expectedScrapWeight.toFixed(3)} kg</span>
-          <span>Received Scrap</span><span className="text-right">{receivedScrapWeight.toFixed(3)} kg</span>
-          <span>Recovery %</span>
-          <span className="text-right">{scrapEval.recoveryPercent === null ? "N/A" : `${scrapEval.recoveryPercent.toFixed(1)}%`}</span>
-          <span>Status</span>
-          <span className="text-right">
-            <span
-              className={
-                scrapEval.status === "SCRAP_SHORT"
-                  ? "rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700"
-                  : scrapEval.status === "EXCESS_SCRAP"
-                    ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700"
-                    : scrapEval.status === "NOT_APPLICABLE"
-                      ? "rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500"
-                      : "rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700"
-              }
-            >
-              {scrapEval.status.replace(/_/g, " ")}
-            </span>
-          </span>
-        </div>
-
-        {dc.scrapReceipts.length > 0 && (
-          <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-            {dc.scrapReceipts.map((r) => (
-              <div key={r.id} className="rounded-md border border-slate-100 p-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-medium text-slate-800">{r.scrapReceiptNumber}</span>
-                  <span className="text-slate-500">{r.receiptDate.toLocaleDateString()}</span>
-                </div>
-                <ul className="mt-1 space-y-0.5">
-                  {r.items.map((line) => (
-                    <li key={line.id} className="flex justify-between font-mono text-xs text-slate-600">
-                      <span>{line.scrapType.name}</span>
-                      <span>{Number(line.weight).toFixed(3)} kg</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {dc.reconciliation && (
-        <ReconciliationPanel
-          dcId={dc.id}
-          reconciliation={{
-            status: dc.reconciliation.status,
-            totalInputWeight: Number(dc.reconciliation.totalInputWeight),
-            totalFinishedWeight: Number(dc.reconciliation.totalFinishedWeight),
-            totalScrapWeight: Number(dc.reconciliation.totalScrapWeight),
-            approvedProcessLoss: Number(dc.reconciliation.approvedProcessLoss),
-            accountedWeight: Number(dc.reconciliation.accountedWeight),
-            unaccountedWeight: Number(dc.reconciliation.unaccountedWeight),
-          }}
-          exceptions={dc.exceptions.map((e) => ({
-            id: e.id,
-            type: e.type,
-            description: e.description,
-            variance: e.variance ? Number(e.variance) : null,
-            status: e.status,
-          }))}
-          canClose={canCloseDc}
-          canOverride={canOverrideException}
-        />
-      )}
-
-      {canScrapNow && scrapTypes.length > 0 && (
-        <ReceiveScrapForm
-          dcId={dc.id}
-          scrapTypes={scrapTypes.map((s) => ({ id: s.id, code: s.code, name: s.name }))}
-        />
-      )}
-
-      <DocumentsPanel
-        entityType="DeliveryChallan"
-        entityId={dc.id}
-        documents={documents.map((d) => ({
-          id: d.id,
-          fileName: d.fileName,
-          fileType: d.fileType,
-          fileSize: d.fileSize,
-          uploadedByName: d.uploadedBy ? (uploaderNameById.get(d.uploadedBy) ?? null) : null,
-          uploadedAt: d.uploadedAt.toISOString(),
-        }))}
-        canUpload={canUploadDocs}
-        canDelete={canDeleteDocs}
-        revalidateTo={"/dcs/" + dc.id}
-      />
-
-      <div className="rounded-lg border border-slate-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900">Items</h2>
+      <div className="overflow-hidden rounded-lg border border-slate-200">
         <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase text-slate-500">
+          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="py-1">Item</th><th>Qty</th><th className="text-right">Input</th>
-              <th className="text-right">Exp. Finished</th><th className="text-right">Exp. Scrap</th>
-              <th className="text-right">Received</th><th className="text-right">Balance</th>
+              <th className="px-4 py-2 font-medium">DC No</th>
+              <th className="px-4 py-2 font-medium">Date</th>
+              <th className="px-4 py-2 font-medium">Vendor</th>
+              <th className="px-4 py-2 font-medium">Process</th>
+              <th className="px-4 py-2 font-medium">Input Wt</th>
+              <th className="px-4 py-2 font-medium">Status</th>
             </tr>
           </thead>
-          <tbody>
-            {dc.items.map((it) => {
-              const received = receivedByItemId.get(it.itemId) ?? 0;
-              const balance = Number(it.quantity) - received;
-              return (
-                <tr key={it.id} className="border-t border-slate-100">
-                  <td className="py-1.5">{it.item.itemCode} — {it.item.itemName}</td>
-                  <td>{Number(it.quantity)}</td>
-                  <td className="text-right font-mono">{Number(it.inputWeight).toFixed(3)}</td>
-                  <td className="text-right font-mono">{Number(it.expectedFinishedWeight).toFixed(3)}</td>
-                  <td className="text-right font-mono">{Number(it.expectedScrapWeight).toFixed(3)}</td>
-                  <td className="text-right font-mono">{received}</td>
-                  <td className="text-right font-mono">{balance.toFixed(3)}</td>
-                </tr>
-              );
-            })}
+          <tbody className="divide-y divide-slate-100">
+            {dcs.length === 0 ? (
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No DCs yet.</td></tr>
+            ) : (
+              dcs.map((dc) => {
+                const inputWt = dc.items.reduce((sum, it) => sum + Number(it.inputWeight), 0);
+                return (
+                  <tr key={dc.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-2">
+                      <Link href={`/dcs/${dc.id}`} className="font-mono text-blue-700 hover:underline">
+                        {dc.dcNumber}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2 text-slate-600">{dc.dcDate.toLocaleDateString()}</td>
+                    <td className="px-4 py-2 text-slate-900">{dc.vendor.vendorName}</td>
+                    <td className="px-4 py-2 text-slate-600">{dc.process?.name ?? "—"}</td>
+                    <td className="px-4 py-2 text-slate-600">{inputWt.toFixed(3)} kg</td>
+                    <td className="px-4 py-2">
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[dc.status] ?? "bg-slate-100 text-slate-600"}`}>
+                        {dc.status.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
-      </div>
-
-      <div className="rounded-lg border border-slate-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900">Status History</h2>
-        <ul className="space-y-1 text-sm text-slate-600">
-          {dc.statusHistory.map((h) => (
-            <li key={h.id} className="font-mono">
-              {h.createdAt.toLocaleString()} — {h.fromStatus ? `${h.fromStatus} → ` : ""}{h.toStatus}
-            </li>
-          ))}
-        </ul>
       </div>
     </div>
   );

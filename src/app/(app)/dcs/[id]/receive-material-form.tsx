@@ -75,6 +75,9 @@ export function ReceiveMaterialForm({ dcId, lines }: { dcId: string; lines: Rece
   return (
     <div className="rounded-lg border border-slate-200 p-4">
       <h2 className="mb-3 text-sm font-semibold text-slate-900">Receive Material</h2>
+      <p className="-mt-2 mb-3 text-xs text-slate-500">
+        Actual quantity may be more or less than the balance — variances are flagged at reconciliation.
+      </p>
       <div className="space-y-4">
         {lines.map((l) => {
           const balance = l.sentQuantity - l.alreadyReceived;

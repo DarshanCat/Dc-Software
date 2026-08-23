@@ -12,6 +12,9 @@ export interface DcPdfItem {
 
 export interface DcPdfData {
   company: { name: string; address: string; gst: string; contact: string };
+  logo?: string | null;
+  preparedByName?: string | null;
+  approvedByName?: string | null;
   dcNumber: string;
   dcDate: string;
   status: string;
@@ -59,15 +62,41 @@ function rightAlignedX(text: string, font: PDFFont, size: number, rightEdge: num
   return rightEdge - font.widthOfTextAtSize(text, size);
 }
 
+async function embedLogo(doc: PDFDocument, dataUrl: string) {
+  const base64 = dataUrl.split(",")[1] ?? "";
+  const bytes = Buffer.from(base64, "base64");
+  if (dataUrl.startsWith("data:image/png")) return doc.embedPng(bytes);
+  if (dataUrl.startsWith("data:image/jpeg") || dataUrl.startsWith("data:image/jpg")) return doc.embedJpg(bytes);
+  return null;
+}
+
 export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+  const bold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
 
   let y = PAGE_HEIGHT - MARGIN;
 
-  page.drawText(data.company.name, { x: MARGIN, y, size: 15, font: bold, color: DARK });
+  let textX = MARGIN;
+  if (data.logo) {
+    try {
+      const img = await embedLogo(pdfDoc, data.logo);
+      if (img) {
+        const maxW = 64;
+        const maxH = 36;
+        const scale = Math.min(maxW / img.width, maxH / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        page.drawImage(img, { x: MARGIN, y: y - h / 2 - 4, width: w, height: h });
+        textX = MARGIN + w + 12;
+      }
+    } catch {
+      // ignore malformed logo
+    }
+  }
+
+  page.drawText(data.company.name, { x: textX, y, size: 15, font: bold, color: DARK });
   const dcNoText = "DC No.";
   page.drawText(dcNoText, {
     x: rightAlignedX(dcNoText, font, 8, PAGE_WIDTH - MARGIN),
@@ -79,7 +108,7 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   y -= 13;
 
   if (data.company.address) {
-    page.drawText(data.company.address, { x: MARGIN, y, size: 8, font, color: GREY });
+    page.drawText(data.company.address, { x: textX, y, size: 8, font, color: GREY });
   }
   page.drawText(data.dcNumber, {
     x: rightAlignedX(data.dcNumber, bold, 13, PAGE_WIDTH - MARGIN),
@@ -94,7 +123,7 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
     .filter(Boolean)
     .join("  |  ");
   if (contactLine) {
-    page.drawText(contactLine, { x: MARGIN, y, size: 8, font, color: GREY });
+    page.drawText(contactLine, { x: textX, y, size: 8, font, color: GREY });
   }
   page.drawText(data.status, {
     x: rightAlignedX(data.status, font, 8, PAGE_WIDTH - MARGIN),
@@ -197,8 +226,13 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   const footerY = 70;
   const signBoxWidth = CONTENT_WIDTH / 4;
   const signLabels = ["Prepared By", "Approved By", "Authorized Signature"];
+  const signNames = [data.preparedByName ?? "", data.approvedByName ?? "", ""];
   signLabels.forEach((label, i) => {
     const x = MARGIN + i * signBoxWidth;
+    const name = signNames[i];
+    if (name) {
+      page.drawText(name, { x, y: footerY + 21, size: 8.5, font: bold, color: DARK });
+    }
     page.drawLine({ start: { x, y: footerY + 14 }, end: { x: x + signBoxWidth - 20, y: footerY + 14 }, thickness: 0.75, color: LINE });
     page.drawText(label, { x, y: footerY, size: 8, font, color: GREY });
   });

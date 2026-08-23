@@ -16,7 +16,7 @@ export function CreateDcForm({ vendors, processes, items, standards }: {
 }) {
   const router = useRouter();
   const [form, setForm] = useState({
-    vendorId: "", processId: "", itemId: "", purpose: "MACHINING",
+    woNumber: "", vendorId: "", processId: "", itemId: "", purpose: "MACHINING",
     quantity: "", inputWeight: "", expectedReturnDate: "", remarks: "",
   });
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +24,6 @@ export function CreateDcForm({ vendors, processes, items, standards }: {
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  // Live expected-output preview (mirrors computeExpected on the client).
   const preview = useMemo(() => {
     const input = Number(form.inputWeight);
     if (!input || input <= 0) return null;
@@ -46,13 +45,28 @@ export function CreateDcForm({ vendors, processes, items, standards }: {
 
   async function submit() {
     setSaving(true); setError(null);
-    const res = await createDc(form as unknown as CreateDcInput);
+    const payload = {
+      woNumber: form.woNumber,
+      vendorId: form.vendorId,
+      processId: form.processId,
+      purpose: form.purpose,
+      expectedReturnDate: form.expectedReturnDate,
+      remarks: form.remarks,
+      items: [
+        {
+          itemId: form.itemId,
+          quantity: form.quantity,
+          inputWeight: form.inputWeight,
+        },
+      ],
+    };
+    const res = await createDc(payload as unknown as CreateDcInput);
     setSaving(false);
     if (!res.ok) { setError(res.error); return; }
     router.push(`/dcs/${res.dcId}`);
     router.refresh();
   }
-
+  
   const Select = ({ k, label, opts, placeholder }: { k: string; label: string; opts: Opt[]; placeholder: string }) => (
     <div>
       <label className="mb-1 block text-xs font-medium text-slate-600">{label}</label>
@@ -70,6 +84,15 @@ export function CreateDcForm({ vendors, processes, items, standards }: {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <label className="mb-1 block text-xs font-medium text-slate-600">WO ID *</label>
+          <Input
+            value={form.woNumber}
+            onChange={(e) => set("woNumber", e.target.value)}
+            placeholder="e.g. WO-2026-00452"
+          />
+          <p className="mt-1 text-xs text-slate-400">Type the Work Order reference — no need to create it separately.</p>
+        </div>
         <Select k="vendorId" label="Vendor *" opts={vendors} placeholder="Select vendor" />
         <Select k="processId" label="Process *" opts={processes} placeholder="Select process" />
         <Select k="itemId" label="Item *" opts={items} placeholder="Select item" />

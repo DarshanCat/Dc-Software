@@ -102,7 +102,7 @@ export function DocumentsPanel({
 
       {canUpload && (
         <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
-          <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.csv" className="text-sm" />
+          <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.csv,.dwg,.dxf" className="text-sm" />
           <Button size="sm" disabled={busy} onClick={handleUpload}>
             {busy ? "Uploading…" : "Upload"}
           </Button>

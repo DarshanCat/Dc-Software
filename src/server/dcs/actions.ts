@@ -12,16 +12,21 @@ import { generateQrToken } from "@/services/dispatch.service";
 import { z } from "zod";
 import { notifyUsersWithPermission, createNotification } from "@/server/notifications/service";
 
+const dcLineSchema = z.object({
+  itemId: z.string().min(1, "Item is required"),
+  quantity: z.coerce.number().positive("Quantity must be > 0"),
+  inputWeight: z.coerce.number().positive("Input weight must be > 0"),
+});
+
 const createDcSchema = z.object({
+  woNumber: z.string().min(1, "WO ID is required").max(60),
   vendorId: z.string().min(1, "Vendor is required"),
   processId: z.string().min(1, "Process is required"),
-  itemId: z.string().min(1, "Item is required"),
   purpose: z.enum([
     "JOB_WORK","MACHINING","HEAT_TREATMENT","SURFACE_TREATMENT",
     "REPAIR","SAMPLE","TRIAL","SUBCONTRACTING","OTHER",
   ]),
-  quantity: z.coerce.number().positive("Quantity must be > 0"),
-  inputWeight: z.coerce.number().positive("Input weight must be > 0"),
+  items: z.array(dcLineSchema).min(1, "Add at least one item line."),
   expectedReturnDate: z.string().optional(),
   remarks: z.string().max(500).optional(),
 });
@@ -52,31 +57,70 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
   }
   const data = parsed.data;
 
-  const standard = await prisma.jobWorkStandard.findFirst({
-    where: { itemId: data.itemId, processId: data.processId, approved: true },
-    orderBy: { revision: "desc" },
-  });
+  const duplicateItem = data.items.find((l, i) => data.items.findIndex((o) => o.itemId === l.itemId) !== i);
+  if (duplicateItem) {
+    return { ok: false, error: "Duplicate item in lines. Combine quantities into one line instead." };
+  }
+
+  const itemIds = [...new Set(data.items.map((l) => l.itemId))];
+  const itemsById = new Map(
+    (await prisma.item.findMany({ where: { id: { in: itemIds } } })).map((i) => [i.id, i]),
+  );
+  const missingItem = data.items.some((l) => !itemsById.has(l.itemId));
+  if (missingItem) {
+    return { ok: false, error: "One or more selected items were not found." };
+  }
+
+  const lineData = [] as Array<{
+    itemId: string;
+    quantity: number;
+    uom: string;
+    inputWeight: number;
+    expectedFinishedWeight: string;
+    expectedScrapWeight: string;
+    expectedProcessLoss: string;
+    tolerancePercentage: number;
+    jobWorkStandardId: string | null;
+  }>;
+  for (const line of data.items) {
+    const standard = await prisma.jobWorkStandard.findFirst({
+      where: { itemId: line.itemId, processId: data.processId, approved: true },
+      orderBy: { revision: "desc" },
+    });
 
     const expected = standard
-    ? computeExpected(
-        {
-          inputWeight: data.inputWeight,
-          calculationType: standard.calculationType,
-          expectedScrapPercentage: standard.expectedScrapPercentage?.toString() ?? "0",
-          allowedProcessLossPercentage: standard.allowedProcessLossPercentage?.toString() ?? "0",
-          expectedOutputWeight: standard.expectedOutputWeight.toString(),
-          expectedScrapWeight: standard.expectedScrapWeight.toString(),
-          allowedProcessLoss: standard.allowedProcessLoss.toString(),
-        },
-        standard.tolerancePercentage.toString(),
-      )
-    : {
-        expectedFinishedWeight: data.inputWeight.toFixed(3),
-        expectedScrapWeight: "0.000",
-        allowedProcessLoss: "0.000",
-        expectedAccounted: data.inputWeight.toFixed(3),
-        balances: true,
-      };
+      ? computeExpected(
+          {
+            inputWeight: line.inputWeight,
+            calculationType: standard.calculationType,
+            expectedScrapPercentage: standard.expectedScrapPercentage?.toString() ?? "0",
+            allowedProcessLossPercentage: standard.allowedProcessLossPercentage?.toString() ?? "0",
+            expectedOutputWeight: standard.expectedOutputWeight.toString(),
+            expectedScrapWeight: standard.expectedScrapWeight.toString(),
+            allowedProcessLoss: standard.allowedProcessLoss.toString(),
+          },
+          standard.tolerancePercentage.toString(),
+        )
+      : {
+          expectedFinishedWeight: line.inputWeight.toFixed(3),
+          expectedScrapWeight: "0.000",
+          allowedProcessLoss: "0.000",
+          expectedAccounted: line.inputWeight.toFixed(3),
+          balances: true,
+        };
+
+    lineData.push({
+      itemId: line.itemId,
+      quantity: line.quantity,
+      uom: itemsById.get(line.itemId)?.defaultUOM || "NOS",
+      inputWeight: line.inputWeight,
+      expectedFinishedWeight: expected.expectedFinishedWeight,
+      expectedScrapWeight: expected.expectedScrapWeight,
+      expectedProcessLoss: expected.allowedProcessLoss,
+      tolerancePercentage: Number(standard?.tolerancePercentage ?? 0),
+      jobWorkStandardId: standard?.id ?? null,
+    });
+  }
 
   const now = new Date();
   const fy = fiscalYearOf(now);
@@ -88,6 +132,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
       data: {
         dcNumber,
         dcDate: now,
+        woNumber: data.woNumber,
         vendorId: data.vendorId,
         purpose: data.purpose,
         processId: data.processId,
@@ -95,20 +140,9 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         remarks: data.remarks || null,
         status: "DRAFT",
         createdBy: user!.id,
+        qrToken: generateQrToken(),
         items: {
-          create: [
-            {
-              itemId: data.itemId,
-              quantity: data.quantity,
-              uom: "NOS",
-              inputWeight: data.inputWeight,
-              expectedFinishedWeight: expected.expectedFinishedWeight,
-              expectedScrapWeight: expected.expectedScrapWeight,
-              expectedProcessLoss: expected.allowedProcessLoss,
-              tolerancePercentage: standard?.tolerancePercentage ?? 0,
-              jobWorkStandardId: standard?.id ?? null,
-            },
-          ],
+          create: lineData,
         },
       },
     });
@@ -123,7 +157,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
       module: "DeliveryChallans",
       entityType: "DeliveryChallan",
       entityId: dc.id,
-      newValue: { dcNumber, vendorId: data.vendorId, inputWeight: data.inputWeight },
+      newValue: { dcNumber, vendorId: data.vendorId, woNumber: data.woNumber, lineCount: lineData.length, totalInputWeight: lineData.reduce((s, l) => s + l.inputWeight, 0) },
       reason: "DC created as DRAFT",
     });
 
@@ -146,7 +180,7 @@ export async function submitForApproval(dcId: string): Promise<ActionResult> {
   if (!dc) return { ok: false, error: "DC not found." };
   if (dc.status !== "DRAFT") return { ok: false, error: `Cannot submit a DC in status ${dc.status}.` };
 
-    await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     await tx.deliveryChallan.update({ where: { id: dcId }, data: { status: "PENDING_APPROVAL" } });
     await tx.statusHistory.create({ data: { dcId, fromStatus: "DRAFT", toStatus: "PENDING_APPROVAL", changedBy: user!.id } });
     await writeAudit(tx, { userId: user!.id, action: "DC_SUBMITTED", module: "DeliveryChallans", entityType: "DeliveryChallan", entityId: dcId, reason: "Submitted for approval" });
@@ -175,12 +209,6 @@ const dispatchSchema = z.object({
 
 export type DispatchInput = z.infer<typeof dispatchSchema>;
 
-/**
- * Dispatch (spec Section 20): APPROVED -> DISPATCHED. Creates an immutable material-out
- * transaction (Dispatch + DispatchItem rows are never edited afterward - corrections
- * go through the amendment flow, not a direct update). Also mints the QR token here,
- * once, since the DC becomes immutable-in-transit from this point.
- */
 export async function dispatchDc(dcId: string, input: DispatchInput = {}): Promise<ActionResult> {
   const user = await getSessionUser();
   try {
@@ -223,7 +251,6 @@ export async function dispatchDc(dcId: string, input: DispatchInput = {}): Promi
 
   const totalInputWeight = dc.items.reduce((sum, it) => sum + Number(it.inputWeight), 0);
   const now = new Date();
-  const qrToken = generateQrToken();
 
   await prisma.$transaction(async (tx) => {
     await tx.dispatch.create({
@@ -252,7 +279,6 @@ export async function dispatchDc(dcId: string, input: DispatchInput = {}): Promi
         dispatchedAt: now,
         vehicleNumber: data.vehicleNumber || null,
         transporter: data.transporter || null,
-        qrToken,
       },
     });
 

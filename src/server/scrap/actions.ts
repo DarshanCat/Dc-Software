@@ -69,7 +69,11 @@ export async function createScrapReceipt(input: ScrapReceiptInput): Promise<Acti
 
       const now = new Date();
       const fy = fiscalYearOf(now);
-      const scrapReceiptNumber = await nextNumber(tx, { key: "SCR", fiscalYear: fy });
+      const scrapReceiptNumber = await nextNumber(tx, {
+        key: "SCR",
+        fiscalYear: fy,
+        isTaken: (n) => tx.scrapReceipt.findUnique({ where: { scrapReceiptNumber: n } }).then((r) => r !== null),
+      });
 
       const scrapReceipt = await tx.scrapReceipt.create({
         data: {

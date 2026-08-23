@@ -69,22 +69,20 @@ export async function createMaterialReceipt(input: MaterialReceiptInput): Promis
         const dcItem = dcItemById.get(line.itemId);
         if (!dcItem) throw new UserFacingError("One or more items do not belong to this DC.");
 
+        // Over/under receipts are allowed: actual received may differ from what
+        // was sent. Variances surface later in reconciliation as exceptions
+        // instead of blocking the receipt here.
         const already = alreadyReceivedByItem.get(line.itemId) ?? 0;
-        const sent = Number(dcItem.quantity);
-        const remaining = sent - already;
-
-        if (line.quantityReceived > remaining + 1e-9) {
-          throw new UserFacingError(
-            `Received quantity (${line.quantityReceived}) for this item exceeds the outstanding balance (${remaining.toFixed(3)}).`,
-          );
-        }
-
         alreadyReceivedByItem.set(line.itemId, already + line.quantityReceived);
       }
 
       const now = new Date();
       const fy = fiscalYearOf(now);
-      const receiptNumber = await nextNumber(tx, { key: "RCP", fiscalYear: fy });
+      const receiptNumber = await nextNumber(tx, {
+        key: "RCP",
+        fiscalYear: fy,
+        isTaken: (n) => tx.materialReceipt.findUnique({ where: { receiptNumber: n } }).then((r) => r !== null),
+      });
 
       const receipt = await tx.materialReceipt.create({
         data: {

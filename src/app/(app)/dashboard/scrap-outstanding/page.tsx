@@ -3,8 +3,9 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
+import type { DcStatus } from "@prisma/client";
 
-const SCRAP_PENDING_STATUSES = ["MATERIAL_RETURNED", "SCRAP_PENDING"];
+const SCRAP_PENDING_STATUSES: DcStatus[] = ["MATERIAL_RETURNED", "SCRAP_PENDING"];
 
 export default async function ScrapOutstandingPage() {
   const user = await getSessionUser();
