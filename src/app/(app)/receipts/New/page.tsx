@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import type { DcStatus } from "@prisma/client";
 
-const RECEIVABLE_STATUSES = ["DRAFT", "APPROVED", "DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED"];
+const RECEIVABLE_STATUSES: DcStatus[] = ["DRAFT", "APPROVED", "DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED"];
 
 export default async function NewReceiptPage() {
   const dcs = await prisma.deliveryChallan.findMany({

@@ -19,7 +19,9 @@ export interface DcPdfData {
   dcDate: string;
   status: string;
   vendorName: string;
-  vend
+  vendorAddress: string;
+  vendorGst: string;
+  vendorPan: string;
   purpose: string;
   processName: string;
   vehicleNumber: string;

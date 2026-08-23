@@ -80,7 +80,7 @@ export async function createRecoveryReceipt(input: RecoveryReceiptInput): Promis
   });
 
   revalidatePath(`/dcs/${data.dcId}`);
-  revalidatePath(`/work-orders/${dc.workOrderId}`);
+  revalidatePath(`/work-orders?wo=${encodeURIComponent(dc.woNumber)}`);
   return { ok: true, ...result };
 }
 
