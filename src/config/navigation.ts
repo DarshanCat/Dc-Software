@@ -102,6 +102,7 @@ export const NAVIGATION: NavSection[] = [
     label: "Administration",
     items: [
       { label: "Users", href: "/admin/users", permission: P.USER_MANAGE },
+      { label: "Registration Requests", href: "/admin/users/requests", permission: P.USER_MANAGE },
       { label: "Roles", href: "/admin/roles", permission: P.ROLE_MANAGE },
       { label: "Permissions", href: "/admin/permissions", permission: P.ROLE_MANAGE },
       { label: "Audit Trail", href: "/admin/audit", permission: P.AUDIT_VIEW },

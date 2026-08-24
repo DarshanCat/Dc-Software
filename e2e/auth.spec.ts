@@ -18,8 +18,24 @@ test.describe("Authentication & Authorization E2E", () => {
     await page.fill('input[name="password"]', "WrongPassword123");
     await page.click('button[type="submit"]');
 
-    await expect(page.locator("text=Invalid credentials")).toBeVisible();
+    await expect(page.locator("text=Invalid email or password.")).toBeVisible();
     await expect(page).toHaveURL("/login");
+  });
+
+  test("password visibility toggle button", async ({ page }) => {
+    await page.goto("/login");
+    const passwordInput = page.locator('input[name="password"]');
+    const toggleButton = page.locator('button[aria-label="Show password"]');
+
+    await expect(passwordInput).toHaveAttribute("type", "password");
+    await toggleButton.click();
+    await expect(passwordInput).toHaveAttribute("type", "text");
+  });
+
+  test("production login UI does not contain dev prefilled text", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.locator("text=Dev login prefilled")).not.toBeVisible();
+    await expect(page.locator("text=Password@123")).not.toBeVisible();
   });
 
   test("unauthenticated access redirects to /login", async ({ page }) => {

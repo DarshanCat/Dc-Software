@@ -21,7 +21,19 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email },
           include: { roles: { include: { role: true } } },
         });
-        if (!user || !user.active) return null;
+        if (!user || !user.active) {
+          const req = await prisma.registrationRequest.findFirst({
+            where: { email: credentials.email.toLowerCase().trim() },
+            orderBy: { createdAt: "desc" },
+          });
+          if (req?.status === "PENDING") {
+            throw new Error("Your account is awaiting administrator approval.");
+          }
+          if (req?.status === "REJECTED") {
+            throw new Error("Your registration was not approved.");
+          }
+          return null;
+        }
 
         const ok = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!ok) return null;

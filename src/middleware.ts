@@ -8,6 +8,8 @@ export async function middleware(req: NextRequest) {
   // Allow public routes, static files, auth endpoints, icons, and public QR scans
   if (
     pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/activate") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/public") ||
     pathname.startsWith("/qr") ||

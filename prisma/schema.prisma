@@ -33,6 +33,36 @@ model User {
   @@index([vendorId])
 }
 
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model RegistrationRequest {
+  id                       String             @id @default(uuid())
+  fullName                 String
+  email                    String
+  employeeId               String?
+  phone                    String?
+  requestedDepartment      String
+  reason                   String?
+  status                   RegistrationStatus @default(PENDING)
+  reviewedAt               DateTime?
+  reviewedById             String?
+  rejectionReason          String?
+  approvedUserId           String?
+  activationTokenHash      String?            @unique
+  activationTokenExpiresAt DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
+}
+
 model Role {
   id          String @id @default(uuid())
   key         String @unique
