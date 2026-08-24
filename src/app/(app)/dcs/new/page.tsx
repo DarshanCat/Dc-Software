@@ -2,6 +2,8 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/server/session";
 import { CreateDcForm } from "./create-dc-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewDcPage() {
   await requireUser();
   const [vendors, processes, items] = await Promise.all([

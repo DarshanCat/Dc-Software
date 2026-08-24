@@ -113,25 +113,26 @@ export async function getVendorOutstandingRows(): Promise<VendorOutstandingRow[]
   });
 }
 
+import { sanitizeCsvCell } from "@/lib/csv";
+
 export function vendorRowsToCsv(rows: VendorOutstandingRow[]): string {
   const header = [
     "Vendor Code", "Vendor Name", "Open DCs", "Material Outside (kg)",
     "Finished Pending (kg)", "Scrap Pending (kg)", "Overdue DCs", "Avg Return Days", "Scrap Recovery %",
   ];
-  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
   const lines = [header.join(",")];
   for (const r of rows) {
     lines.push(
       [
-        escape(r.vendorCode),
-        escape(r.vendorName),
+        sanitizeCsvCell(r.vendorCode),
+        sanitizeCsvCell(r.vendorName),
         String(r.openDcCount),
         r.materialOutsideKg.toFixed(3),
         r.finishedPendingKg.toFixed(3),
         r.scrapPendingKg.toFixed(3),
         String(r.overdueDcCount),
-        r.avgReturnDays === null ? "" : r.avgReturnDays.toFixed(1),
-        r.scrapRecoveryPercent === null ? "" : r.scrapRecoveryPercent.toFixed(1),
+        r.avgReturnDays === null ? '""' : r.avgReturnDays.toFixed(1),
+        r.scrapRecoveryPercent === null ? '""' : r.scrapRecoveryPercent.toFixed(1),
       ].join(","),
     );
   }

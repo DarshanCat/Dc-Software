@@ -4,8 +4,21 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { CreateUserForm } from "./create-user-form";
 import { ToggleActiveButton } from "./toggle-active-button";
+import { AdminResetPasswordDialog } from "@/components/users/admin-reset-password-dialog";
 
-export default async function UsersAdminPage() {
+export const dynamic = "force-dynamic";
+
+interface SearchParams {
+  q?: string;
+}
+
+export default async function UsersAdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const sp = await searchParams;
+  const q = (sp.q ?? "").trim();
   const sessionUser = await getSessionUser();
   const canManage = sessionUser ? await hasPermission(sessionUser.id, PERMISSIONS.USER_MANAGE) : false;
 
@@ -19,6 +32,15 @@ export default async function UsersAdminPage() {
 
   const [users, roles, vendors] = await Promise.all([
     prisma.user.findMany({
+      where: q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              { email: { contains: q, mode: "insensitive" } },
+              { id: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : undefined,
       include: { roles: { include: { role: true } }, vendor: true },
       orderBy: { createdAt: "asc" },
     }),
@@ -72,7 +94,10 @@ export default async function UsersAdminPage() {
                   </span>
                 </td>
                 <td className="px-3 py-2">
-                  <ToggleActiveButton userId={u.id} active={u.active} isSelf={u.id === sessionUser!.id} />
+                  <div className="flex items-center">
+                    <ToggleActiveButton userId={u.id} active={u.active} isSelf={u.id === sessionUser!.id} />
+                    <AdminResetPasswordDialog userId={u.id} userName={u.name} userEmail={u.email} />
+                  </div>
                 </td>
               </tr>
             ))}

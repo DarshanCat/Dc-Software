@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { GlobalSearchBox } from "@/components/layout/global-search-box";
 
+import { Suspense } from "react";
+import { ChangePasswordModal } from "@/components/users/change-password-modal";
+
 export function Topbar() {
   const { data: session } = useSession();
   const email = session?.user?.email ?? "...";
@@ -16,7 +19,9 @@ export function Topbar() {
       <div className="hidden shrink-0 text-sm text-slate-500 md:block">
         Delivery Challan &amp; Vendor Material Management
       </div>
-      <GlobalSearchBox />
+      <Suspense fallback={null}>
+        <GlobalSearchBox />
+      </Suspense>
       <div className="flex items-center gap-3">
         <NotificationBell />
         <div className="text-right">
@@ -25,6 +30,7 @@ export function Topbar() {
             <div className="text-xs text-slate-400">{roles.join(", ")}</div>
           )}
         </div>
+        <ChangePasswordModal />
         <Button variant="secondary" size="sm" onClick={() => signOut({ callbackUrl: "/login" })}>
           Sign out
         </Button>

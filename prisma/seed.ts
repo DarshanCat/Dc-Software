@@ -45,22 +45,33 @@ async function main() {
     }
   }
 
-  const userSpecs: Array<{ email: string; name: string; role: string; password?: string }> = [
-    { email: "admin@example.com", name: "Admin User", role: ROLES.ADMIN },
-    { email: "stores@example.com", name: "Stores User", role: ROLES.STORES },
-    { email: "purchase@example.com", name: "Purchase User", role: ROLES.PURCHASE },
-    { email: "production@example.com", name: "Production User", role: ROLES.PRODUCTION },
-    { email: "quality@example.com", name: "Quality User", role: ROLES.QUALITY },
-    { email: "accounts@example.com", name: "Accounts User", role: ROLES.ACCOUNTS },
-    { email: "management@example.com", name: "Management User", role: ROLES.MANAGEMENT },
-    { email: "security@example.com", name: "Security User", role: ROLES.SECURITY },
-    // Real Vijay Spheroidals users
-    { email: "stores@vijayspheroidals.com", name: "Stores", role: ROLES.STORES, password: "Vs#Stores2026!" },
-    { email: "data.analyst@vijayspheroidals.com", name: "Data Analyst", role: ROLES.ADMIN, password: "Vs#Data2026!" },
+  const realProductionUsers: Array<{ email: string; name: string; role: string; password?: string }> = [
+    { email: "darshan@vijayspheroidals.com", name: "Darshan", role: ROLES.ADMIN, password: "Vs#Darshan2026!" },
     { email: "aravind.gurudev@vijayspheroidals.com", name: "Aravind Gurudev", role: ROLES.ADMIN, password: "Vs#Aravind2026!" },
-    { email: "accounts@vijayspheroidals.com", name: "Accounts", role: ROLES.ACCOUNTS, password: "Vs#Accounts2026!" },
+    { email: "data.analyst@vijayspheroidals.com", name: "Data Analyst", role: ROLES.ADMIN, password: "Vs#Data2026!" },
     { email: "loyed@vijayspheroidals.onmicrosoft.com", name: "Loyed", role: ROLES.MANAGEMENT, password: "Vs#Manager2026!" },
+    { email: "management@vijayspheroidals.com", name: "Management", role: ROLES.MANAGEMENT, password: "Vs#Management2026!" },
+    { email: "accounts@vijayspheroidals.com", name: "Accounts", role: ROLES.ACCOUNTS, password: "Vs#Accounts2026!" },
+    { email: "quality@vijayspheroidals.com", name: "Quality", role: ROLES.QUALITY, password: "Vs#Quality2026!" },
+    { email: "purchase@vijayspheroidals.com", name: "Purchase", role: ROLES.PURCHASE, password: "Vs#Purchase2026!" },
+    { email: "stores@vijayspheroidals.com", name: "Stores", role: ROLES.STORES, password: "Vs#Stores2026!" },
+    { email: "production@vijayspheroidals.com", name: "Production Manager", role: ROLES.PRODUCTION, password: "Vs#Prod2026!" },
   ];
+
+  const testOnlyUsers: Array<{ email: string; name: string; role: string; password?: string }> = [
+    { email: "admin@example.com", name: "[TEST ONLY] Admin User", role: ROLES.ADMIN },
+    { email: "stores@example.com", name: "[TEST ONLY] Stores User", role: ROLES.STORES },
+    { email: "purchase@example.com", name: "[TEST ONLY] Purchase User", role: ROLES.PURCHASE },
+    { email: "production@example.com", name: "[TEST ONLY] Production User", role: ROLES.PRODUCTION },
+    { email: "quality@example.com", name: "[TEST ONLY] Quality User", role: ROLES.QUALITY },
+    { email: "accounts@example.com", name: "[TEST ONLY] Accounts User", role: ROLES.ACCOUNTS },
+    { email: "management@example.com", name: "[TEST ONLY] Management User", role: ROLES.MANAGEMENT },
+    { email: "security@example.com", name: "[TEST ONLY] Security User", role: ROLES.SECURITY },
+  ];
+
+  const isProduction = process.env.NODE_ENV === "production";
+  const userSpecs = isProduction ? realProductionUsers : [...realProductionUsers, ...testOnlyUsers];
+
   const devPasswordHash = await bcrypt.hash(DEV_PASSWORD, 10);
   const users: Record<string, string> = {};
   for (const u of userSpecs) {
@@ -141,6 +152,25 @@ async function main() {
       update: {},
     });
     vendors[code] = v.id;
+  }
+
+  const vendorRole = await prisma.role.findUnique({ where: { key: ROLES.VENDOR } });
+  if (vendorRole) {
+    for (const vUser of [
+      { email: "vendor@example.com", name: "Vendor ABC User", vendorId: vendors["V-ABC"] },
+      { email: "vendor2@example.com", name: "Vendor XYZ User", vendorId: vendors["V-XYZ"] },
+    ]) {
+      const u = await prisma.user.upsert({
+        where: { email: vUser.email },
+        create: { email: vUser.email, name: vUser.name, passwordHash: devPasswordHash, vendorId: vUser.vendorId },
+        update: { passwordHash: devPasswordHash, vendorId: vUser.vendorId },
+      });
+      await prisma.userRole.upsert({
+        where: { userId_roleId: { userId: u.id, roleId: vendorRole.id } },
+        create: { userId: u.id, roleId: vendorRole.id },
+        update: {},
+      });
+    }
   }
 
   const machined = await prisma.itemCategory.findUnique({ where: { key: "MACHINED_COMPONENT" } });

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
-import { requirePermission, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
+import { requirePermission, assertVendorScope, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { writeAudit } from "@/server/audit";
 import { nextNumber, fiscalYearOf } from "@/services/number-sequence.service";
@@ -47,6 +47,7 @@ export async function createMaterialReceipt(input: MaterialReceiptInput): Promis
         include: { items: true, receipts: { include: { items: true } } },
       });
       if (!dc) throw new UserFacingError("DC not found.");
+      assertVendorScope(user!, dc.vendorId);
 
       if (!RECEIVABLE_STATUSES.includes(dc.status as (typeof RECEIVABLE_STATUSES)[number])) {
         throw new UserFacingError(

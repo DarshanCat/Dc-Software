@@ -5,6 +5,8 @@ import { PERMISSIONS } from "@/config/permissions";
 import { SETTINGS_FIELDS } from "@/lib/validation/system-settings";
 import { SettingsForm } from "./settings-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage() {
   const user = await getSessionUser();
   const canManage = user ? await hasPermission(user.id, PERMISSIONS.SYSTEM_SETTINGS) : false;

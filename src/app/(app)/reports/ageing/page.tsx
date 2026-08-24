@@ -5,6 +5,8 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import type { DcStatus } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 const TERMINAL_STATUSES: DcStatus[] = ["CLOSED", "CANCELLED"];
 const BUCKET_ORDER = ["0-7 Days", "8-15 Days", "16-30 Days", "31-60 Days", "60+ Days"];
 

@@ -9,9 +9,12 @@ export function Sidebar() {
   const pathname = usePathname();
   return (
     <aside className="w-64 shrink-0 border-r border-slate-200 bg-slate-50 overflow-y-auto">
-      <div className="px-4 py-4 border-b border-slate-200">
-        <div className="text-sm font-semibold text-slate-900">DC & Vendor</div>
-        <div className="text-xs text-slate-500">Material Management</div>
+      <div className="px-4 py-3.5 border-b border-slate-200 flex items-center gap-3">
+        <img src="/company-logo.png" alt="Company Logo" className="h-9 w-9 object-contain shrink-0" />
+        <div>
+          <div className="text-sm font-semibold text-slate-900 leading-tight">DC &amp; Vendor</div>
+          <div className="text-xs text-slate-500">Material Management</div>
+        </div>
       </div>
       <nav className="p-2">
         {NAVIGATION.map((section) => (

@@ -3,6 +3,8 @@ import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 
+export const dynamic = "force-dynamic";
+
 export default async function RolesPage() {
   const user = await getSessionUser();
   const canView = user ? await hasPermission(user.id, PERMISSIONS.ROLE_MANAGE) : false;

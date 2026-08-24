@@ -5,6 +5,8 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { Button } from "@/components/ui/button";
 
+export const dynamic = "force-dynamic";
+
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-slate-100 text-slate-600",
   PENDING_APPROVAL: "bg-amber-100 text-amber-700",

@@ -1,17 +1,55 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
 import { requirePermission, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { writeAudit } from "@/server/audit";
-import { createUserSchema, type CreateUserInput } from "@/lib/validation/user";
+import {
+  createUserSchema,
+  changePasswordSchema,
+  type CreateUserInput,
+  type ChangePasswordInput,
+} from "@/lib/validation/user";
 
 export type ActionResult =
   | { ok: true; id: string }
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
+
+export type AdminResetResult =
+  | { ok: true; temporaryPassword: string }
+  | { ok: false; error: string };
+
+function generateSecureTempPassword(): string {
+  const uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lowercase = "abcdefghijkmnopqrstuvwxyz";
+  const numbers = "23456789";
+  const special = "!@#$%^&*";
+
+  const buf = randomBytes(12);
+  const chars = [
+    uppercase[buf[0] % uppercase.length],
+    lowercase[buf[1] % lowercase.length],
+    numbers[buf[2] % numbers.length],
+    special[buf[3] % special.length],
+  ];
+
+  const all = uppercase + lowercase + numbers + special;
+  for (let i = 4; i < 12; i++) {
+    chars.push(all[buf[i] % all.length]);
+  }
+
+  const shuffleBuf = randomBytes(12);
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = shuffleBuf[i] % (i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+
+  return chars.join("");
+}
 
 export async function createUser(input: CreateUserInput): Promise<ActionResult> {
   const user = await getSessionUser();
@@ -103,3 +141,92 @@ export async function setUserActive(userId: string, active: boolean): Promise<Ac
   revalidatePath("/admin/users");
   return { ok: true, id: userId };
 }
+
+export async function changePassword(input: ChangePasswordInput): Promise<ActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const parsed = changePasswordSchema.safeParse(input);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      if (issue.path[0]) fieldErrors[String(issue.path[0])] = issue.message;
+    }
+    return { ok: false, error: "Please fix the highlighted fields.", fieldErrors };
+  }
+
+  const userRecord = await prisma.user.findUnique({ where: { id: user.id } });
+  if (!userRecord || !userRecord.active) {
+    return { ok: false, error: "User account not found or inactive." };
+  }
+
+  const passwordMatches = await bcrypt.compare(parsed.data.currentPassword, userRecord.passwordHash);
+  if (!passwordMatches) {
+    return { ok: false, error: "Current password is incorrect.", fieldErrors: { currentPassword: "Incorrect password." } };
+  }
+
+  const newHash = await bcrypt.hash(parsed.data.newPassword, 10);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: newHash,
+        mustChangePassword: false,
+        passwordChangedAt: new Date(),
+      },
+    });
+
+    await writeAudit(tx, {
+      userId: user.id,
+      action: "PASSWORD_CHANGED",
+      module: "Users",
+      entityType: "User",
+      entityId: user.id,
+      reason: "User changed password successfully",
+    });
+  });
+
+  revalidatePath("/");
+  return { ok: true, id: user.id };
+}
+
+export async function adminResetPassword(targetUserId: string): Promise<AdminResetResult> {
+  const user = await getSessionUser();
+  try {
+    await requirePermission(user, PERMISSIONS.USER_MANAGE);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) return { ok: false, error: "Not signed in." };
+    if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to reset user passwords." };
+    throw e;
+  }
+
+  const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!targetUser) return { ok: false, error: "Target user not found." };
+
+  const tempPassword = generateSecureTempPassword();
+  const tempHash = await bcrypt.hash(tempPassword, 10);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: targetUserId },
+      data: {
+        passwordHash: tempHash,
+        mustChangePassword: true,
+        passwordChangedAt: new Date(),
+      },
+    });
+
+    await writeAudit(tx, {
+      userId: user!.id,
+      action: "PASSWORD_RESET_BY_ADMIN",
+      module: "Users",
+      entityType: "User",
+      entityId: targetUserId,
+      reason: "Admin reset user password with temporary credentials",
+    });
+  });
+
+  revalidatePath("/admin/users");
+  return { ok: true, temporaryPassword: tempPassword };
+}

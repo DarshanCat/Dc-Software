@@ -19,6 +19,8 @@ export interface DcRegisterRow {
   itemLabel: string;
   quantity: number;
   weight: number;
+  ewayBillNumber: string;
+  eSugamNumber: string;
   expectedReturnDate: Date | null;
   receivedQuantity: number;
   scrapWeight: number;
@@ -84,6 +86,8 @@ export async function getDcRegisterRows(
       itemLabel: firstItem ? `${firstItem.item.itemCode} — ${firstItem.item.itemName}` : "—",
       quantity,
       weight,
+      ewayBillNumber: dc.ewayBillNumber ?? "—",
+      eSugamNumber: dc.eSugamNumber ?? "—",
       expectedReturnDate: dc.expectedReturnDate,
       receivedQuantity,
       scrapWeight,
@@ -95,28 +99,31 @@ export async function getDcRegisterRows(
   return { rows, total };
 }
 
+import { sanitizeCsvCell } from "@/lib/csv";
+
 export function rowsToCsv(rows: DcRegisterRow[]): string {
   const header = [
     "DC No", "Date", "Vendor", "Process", "Item", "Qty", "Weight (kg)",
-    "Expected Return", "Received Qty", "Scrap (kg)", "Balance", "Status",
+    "E-Way Bill", "E-Sugam", "Expected Return", "Received Qty", "Scrap (kg)", "Balance", "Status",
   ];
-  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
   const lines = [header.join(",")];
   for (const r of rows) {
     lines.push(
       [
-        escape(r.dcNumber),
-        escape(r.dcDate.toISOString().slice(0, 10)),
-        escape(r.vendorName),
-        escape(r.processName),
-        escape(r.itemLabel),
+        sanitizeCsvCell(r.dcNumber),
+        sanitizeCsvCell(r.dcDate.toISOString().slice(0, 10)),
+        sanitizeCsvCell(r.vendorName),
+        sanitizeCsvCell(r.processName),
+        sanitizeCsvCell(r.itemLabel),
         String(r.quantity),
         r.weight.toFixed(3),
-        r.expectedReturnDate ? escape(r.expectedReturnDate.toISOString().slice(0, 10)) : "",
+        sanitizeCsvCell(r.ewayBillNumber),
+        sanitizeCsvCell(r.eSugamNumber),
+        r.expectedReturnDate ? sanitizeCsvCell(r.expectedReturnDate.toISOString().slice(0, 10)) : '""',
         String(r.receivedQuantity),
         r.scrapWeight.toFixed(3),
         r.balance.toFixed(3),
-        escape(r.status),
+        sanitizeCsvCell(r.status),
       ].join(","),
     );
   }

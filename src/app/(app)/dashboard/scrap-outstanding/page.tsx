@@ -5,6 +5,8 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import type { DcStatus } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 const SCRAP_PENDING_STATUSES: DcStatus[] = ["MATERIAL_RETURNED", "SCRAP_PENDING"];
 
 export default async function ScrapOutstandingPage() {

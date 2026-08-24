@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export default async function ScrapTypesPage() {
   const scrapTypes = await prisma.scrapType.findMany({ orderBy: { name: "asc" } });
   return (

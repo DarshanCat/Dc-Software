@@ -4,6 +4,8 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { redirect } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 export default async function AuditTrailPage() {
   await requireUser();
   const user = await getSessionUser();

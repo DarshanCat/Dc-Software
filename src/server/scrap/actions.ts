@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
-import { requirePermission, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
+import { requirePermission, assertVendorScope, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { writeAudit } from "@/server/audit";
 import { nextNumber, fiscalYearOf } from "@/services/number-sequence.service";
@@ -48,6 +48,7 @@ export async function createScrapReceipt(input: ScrapReceiptInput): Promise<Acti
         include: { items: true, scrapReceipts: { include: { items: true } } },
       });
       if (!dc) throw new UserFacingError("DC not found.");
+      assertVendorScope(user!, dc.vendorId);
 
       if (!SCRAP_RECEIVABLE_STATUSES.includes(dc.status as (typeof SCRAP_RECEIVABLE_STATUSES)[number])) {
         throw new UserFacingError(

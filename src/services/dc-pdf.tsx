@@ -27,6 +27,7 @@ export interface DcPdfData {
   vehicleNumber: string;
   transporter: string;
   ewayBillNumber: string;
+  eSugamNumber: string;
   referenceNumber: string;
   expectedReturnDate: string;
   items: DcPdfItem[];
@@ -153,6 +154,7 @@ const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
     ["Vehicle No.", data.vehicleNumber],
     ["Transporter", data.transporter],
     ["E-Way Bill", data.ewayBillNumber],
+    ["E-Sugam No.", data.eSugamNumber],
     ["Reference No.", data.referenceNumber],
     ["Vendor Address", data.vendorAddress],
     ["Party's GST No.", data.vendorGst || "—"],

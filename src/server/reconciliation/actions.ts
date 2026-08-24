@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
-import { requirePermission, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
+import { requirePermission, assertVendorScope, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { writeAudit } from "@/server/audit";
 import { calculateReconciliation } from "@/server/reconciliation/calculate";
@@ -31,6 +31,7 @@ export async function closeDc(dcId: string, closureReason?: string): Promise<Act
         include: { reconciliation: true },
       });
       if (!dc) throw new UserFacingError("DC not found.");
+      assertVendorScope(user!, dc.vendorId);
       if (dc.status !== "RECONCILIATION") {
         throw new UserFacingError(`Only a DC in RECONCILIATION can be closed (current: ${dc.status}).`);
       }

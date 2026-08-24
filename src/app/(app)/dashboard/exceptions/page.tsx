@@ -5,6 +5,8 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import type { ExceptionStatus } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 const OPEN_STATUSES: ExceptionStatus[] = ["OPEN", "UNDER_REVIEW", "REJECTED"];
 
 export default async function ExceptionsPage() {

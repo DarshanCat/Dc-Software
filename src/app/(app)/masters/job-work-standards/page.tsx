@@ -5,6 +5,8 @@ import { PERMISSIONS } from "@/config/permissions";
 import { JobWorkStandardForm } from "./job-work-standard-form";
 import { ApproveStandardButton } from "./approve-standard-button";
 
+export const dynamic = "force-dynamic";
+
 export default async function JobWorkStandardsPage() {
   const user = await getSessionUser();
   const canCreate = user ? await hasPermission(user.id, PERMISSIONS.JOB_WORK_STANDARD_CREATE) : false;

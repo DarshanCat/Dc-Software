@@ -25,11 +25,40 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Document not found." }, { status: 404 });
   }
 
+  let requiredPerm: string = PERMISSIONS.DC_VIEW;
+  let entityVendorId: string | null = null;
+
   if (doc.entityType === "DeliveryChallan") {
-    const canView = await hasPermission(user.id, PERMISSIONS.DC_VIEW);
-    if (!canView) {
-      return NextResponse.json({ error: "You do not have permission to view this document." }, { status: 403 });
-    }
+    requiredPerm = PERMISSIONS.DC_VIEW;
+    const dc = await prisma.deliveryChallan.findUnique({ where: { id: doc.entityId }, select: { vendorId: true } });
+    entityVendorId = dc?.vendorId ?? null;
+  } else if (doc.entityType === "MaterialReceipt") {
+    requiredPerm = PERMISSIONS.RECEIPT_VIEW;
+    const mr = await prisma.materialReceipt.findUnique({ where: { id: doc.entityId }, select: { vendorId: true } });
+    entityVendorId = mr?.vendorId ?? null;
+  } else if (doc.entityType === "ScrapReceipt") {
+    requiredPerm = PERMISSIONS.SCRAP_VIEW;
+    const sr = await prisma.scrapReceipt.findUnique({ where: { id: doc.entityId }, select: { vendorId: true } });
+    entityVendorId = sr?.vendorId ?? null;
+  } else if (doc.entityType === "Exception") {
+    requiredPerm = PERMISSIONS.RECONCILIATION_VIEW;
+    const ex = await prisma.exception.findUnique({
+      where: { id: doc.entityId },
+      select: { dc: { select: { vendorId: true } } },
+    });
+    entityVendorId = ex?.dc?.vendorId ?? null;
+  } else if (doc.entityType === "Vendor") {
+    requiredPerm = PERMISSIONS.VENDOR_VIEW;
+    entityVendorId = doc.entityId;
+  }
+
+  const canView = await hasPermission(user.id, requiredPerm);
+  if (!canView) {
+    return NextResponse.json({ error: "You do not have permission to view this document." }, { status: 403 });
+  }
+
+  if (user.roleKeys.includes("VENDOR") && entityVendorId && user.vendorId !== entityVendorId) {
+    return NextResponse.json({ error: "Access denied: vendor scope mismatch." }, { status: 403 });
   }
 
   let buffer: Buffer;

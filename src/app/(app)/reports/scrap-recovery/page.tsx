@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { evaluateScrap } from "@/services/scrap.service";
 
+export const dynamic = "force-dynamic";
+
 export default async function ScrapRecoveryReportPage() {
   const dcs = await prisma.deliveryChallan.findMany({
     where: { status: { notIn: ["DRAFT", "PENDING_APPROVAL", "CANCELLED"] } },

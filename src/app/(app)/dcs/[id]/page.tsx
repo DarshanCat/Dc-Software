@@ -5,6 +5,8 @@ import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { buildDcPublicUrl } from "@/services/dispatch.service";
+
+export const dynamic = "force-dynamic";
 import { evaluateScrap } from "@/services/scrap.service";
 import { computeRecovery } from "@/services/recovery.service";
 import { DcActions } from "./dc-actions";
@@ -15,6 +17,7 @@ import { DocumentsPanel } from "@/components/documents-panel";
 import { AmendmentPanel } from "./amendment-panel";
 import { RecoveryPanel } from "./recovery-panel";
 import { ClassificationPanel } from "./classification-panel";
+import { EditTransportDialog } from "./edit-transport-dialog";
 
 export default async function DcDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -196,12 +199,35 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
       )}
 
       <div className="rounded-lg border border-slate-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900">Expected Summary</h2>
-        <div className="grid grid-cols-2 gap-1 font-mono text-sm text-slate-700">
-          <span>Material Sent</span><span className="text-right">{totalInput.toFixed(3)} kg</span>
-          <span>Expected Finished</span><span className="text-right">{totalFinished.toFixed(3)} kg</span>
-          <span>Expected Scrap</span><span className="text-right">{totalScrap.toFixed(3)} kg</span>
-          <span>Allowed Process Loss</span><span className="text-right">{totalLoss.toFixed(3)} kg</span>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-900">Transport &amp; Compliance Details</h2>
+          {canRequestAmendment && (
+            <EditTransportDialog
+              dcId={dc.id}
+              vehicleNumber={dc.vehicleNumber}
+              transporter={dc.transporter}
+              ewayBillNumber={dc.ewayBillNumber}
+              eSugamNumber={dc.eSugamNumber}
+            />
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Vehicle Number</p>
+            <p className="font-mono text-slate-900 font-medium">{dc.vehicleNumber || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Transporter</p>
+            <p className="font-mono text-slate-900 font-medium">{dc.transporter || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">E-Way Bill Number</p>
+            <p className="font-mono text-slate-900 font-medium">{dc.ewayBillNumber || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">E-Sugam Number</p>
+            <p className="font-mono text-slate-900 font-medium">{dc.eSugamNumber || "—"}</p>
+          </div>
         </div>
       </div>
 

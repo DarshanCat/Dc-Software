@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
-import { requirePermission, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
+import { requirePermission, assertVendorScope, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { writeAudit } from "@/server/audit";
 import { computeClassification } from "@/services/classification.service";
@@ -73,6 +73,7 @@ export async function createClassification(input: ClassificationInput): Promise<
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: data.dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
+  assertVendorScope(user!, dc.vendorId);
 
   const result = await prisma.$transaction(async (tx) => {
     const classification = await tx.materialClassification.create({

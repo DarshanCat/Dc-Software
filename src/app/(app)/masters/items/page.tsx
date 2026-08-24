@@ -5,6 +5,8 @@ import { PERMISSIONS } from "@/config/permissions";
 import { ItemForm } from "./item-form";
 import { DocumentsPanel } from "@/components/documents-panel";
 
+export const dynamic = "force-dynamic";
+
 interface DocItem {
   id: string;
   fileName: string;
@@ -14,13 +16,33 @@ interface DocItem {
   uploadedAt: Date;
 }
 
-export default async function ItemsPage() {
+interface SearchParams {
+  q?: string;
+}
+
+export default async function ItemsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const sp = await searchParams;
+  const q = (sp.q ?? "").trim();
   const user = await getSessionUser();
   const canCreate = user ? await hasPermission(user.id, PERMISSIONS.ITEM_CREATE) : false;
   const canUpload = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_UPLOAD) : false;
   const canDelete = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_DELETE) : false;
 
-  const items = await prisma.item.findMany({ orderBy: { itemCode: "asc" } });
+  const items = await prisma.item.findMany({
+    where: q
+      ? {
+          OR: [
+            { itemCode: { contains: q, mode: "insensitive" } },
+            { itemName: { contains: q, mode: "insensitive" } },
+          ],
+        }
+      : undefined,
+    orderBy: { itemCode: "asc" },
+  });
 
   const itemIds = items.map((it) => it.id);
   const docs =

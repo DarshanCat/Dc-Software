@@ -34,14 +34,14 @@ export async function uploadDocument(formData: FormData): Promise<ActionResult> 
   const validated = validateUpload(buffer, file.name);
   if (!validated.ok) return { ok: false, error: validated.error };
 
-  const storageKey = await storage.save(buffer, file.name);
+  const storageKey = await storage.save(buffer, validated.sanitizedName);
 
   const result = await prisma.$transaction(async (tx) => {
     const doc = await tx.document.create({
       data: {
         entityType,
         entityId,
-        fileName: file.name,
+        fileName: validated.sanitizedName,
         fileType: validated.type,
         fileSize: buffer.length,
         storageKey,
@@ -55,7 +55,7 @@ export async function uploadDocument(formData: FormData): Promise<ActionResult> 
       module: "Documents",
       entityType,
       entityId,
-      newValue: { fileName: file.name, fileType: validated.type, fileSize: buffer.length },
+      newValue: { fileName: validated.sanitizedName, fileType: validated.type, fileSize: buffer.length },
       reason: "Document uploaded",
     });
 

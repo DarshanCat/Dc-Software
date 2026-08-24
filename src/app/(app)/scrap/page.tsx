@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { evaluateScrap } from "@/services/scrap.service";
 
+export const dynamic = "force-dynamic";
+
 type ScrapView = "all" | "expected" | "received" | "outstanding" | "exceptions";
 
 export default async function ScrapDashboardPage({

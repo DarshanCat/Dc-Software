@@ -18,6 +18,7 @@ export interface SessionUser {
   email: string;
   roleKeys: string[];
   vendorId: string | null;
+  mustChangePassword?: boolean;
 }
 
 export async function getUserPermissions(userId: string): Promise<Set<string>> {
@@ -38,6 +39,7 @@ export async function requirePermission(
   permission: string,
 ): Promise<SessionUser> {
   if (!user) throw new UnauthenticatedError();
+  if (user.mustChangePassword) throw new ForbiddenError("MUST_CHANGE_PASSWORD");
   const ok = await hasPermission(user.id, permission);
   if (!ok) throw new ForbiddenError(permission);
   return user;

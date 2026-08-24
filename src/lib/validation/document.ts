@@ -33,19 +33,30 @@ export function detectFileType(buffer: Buffer, fileName: string): SupportedDocTy
   return null;
 }
 
+export function sanitizeFileName(fileName: string): string {
+  const basename = fileName.split(/[/\\]/).pop() ?? "file";
+  const sanitized = basename
+    .replace(/[\x00-\x1F\x7F<>:"/\\|?*]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^\.+/, "")
+    .trim();
+  return sanitized.length > 0 ? sanitized : "unnamed_file";
+}
+
 export function validateUpload(
   buffer: Buffer,
   fileName: string,
-): { ok: true; type: SupportedDocType } | { ok: false; error: string } {
+): { ok: true; type: SupportedDocType; sanitizedName: string } | { ok: false; error: string } {
   if (buffer.length === 0) {
     return { ok: false, error: "File is empty." };
   }
   if (buffer.length > MAX_FILE_SIZE_BYTES) {
     return { ok: false, error: "File exceeds the 10 MB limit." };
   }
-  const type = detectFileType(buffer, fileName);
+  const cleanName = sanitizeFileName(fileName);
+  const type = detectFileType(buffer, cleanName);
   if (!type) {
     return { ok: false, error: "Unsupported or unrecognized file type. Allowed: PDF, JPG, PNG, XLSX, CSV, DWG, DXF." };
   }
-  return { ok: true, type };
+  return { ok: true, type, sanitizedName: cleanName };
 }

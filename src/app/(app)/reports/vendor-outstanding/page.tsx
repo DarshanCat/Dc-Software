@@ -3,6 +3,8 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { getVendorOutstandingRows } from "@/server/reports/vendor-outstanding";
 
+export const dynamic = "force-dynamic";
+
 export default async function VendorOutstandingReportPage() {
   const user = await getSessionUser();
   const canView = user ? await hasPermission(user.id, PERMISSIONS.REPORT_VIEW) : false;

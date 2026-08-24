@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProcessesPage() {
   const processes = await prisma.process.findMany({ orderBy: { name: "asc" } });
   return (

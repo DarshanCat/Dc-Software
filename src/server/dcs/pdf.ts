@@ -15,6 +15,7 @@ interface DcRowLike {
   vehicleNumber: string | null;
   transporter: string | null;
   ewayBillNumber: string | null;
+  eSugamNumber: string | null;
   referenceNumber: string | null;
   expectedReturnDate: Date | null;
   qrToken: string | null;
@@ -54,6 +55,7 @@ export interface DcPdfData {
   vehicleNumber: string;
   transporter: string;
   ewayBillNumber: string;
+  eSugamNumber: string;
   referenceNumber: string;
   expectedReturnDate: string;
   qrDataUrl: string | null;
@@ -119,6 +121,7 @@ async function buildPdfData(dc: DcRowLike): Promise<DcPdfData> {
     vehicleNumber: dc.vehicleNumber || "—",
     transporter: dc.transporter || "—",
     ewayBillNumber: dc.ewayBillNumber || "—",
+    eSugamNumber: dc.eSugamNumber || "—",
     referenceNumber: dc.referenceNumber || "—",
     expectedReturnDate: dc.expectedReturnDate ? dc.expectedReturnDate.toLocaleDateString() : "—",
     qrDataUrl,

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   const params = request.nextUrl.searchParams;
   const filters = {
-    vendorId: params.get("vendorId") || undefined,
+    vendorId: user.roleKeys.includes("VENDOR") && user.vendorId ? user.vendorId : params.get("vendorId") || undefined,
     status: params.get("status") || undefined,
     purpose: params.get("purpose") || undefined,
     processId: params.get("processId") || undefined,

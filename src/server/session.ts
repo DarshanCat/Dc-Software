@@ -17,7 +17,7 @@ export async function requireUser(): Promise<SessionUser> {
 export async function getSessionUser(): Promise<SessionUser | null> {
   const session = await getServerSession(authOptions);
   const u = session?.user as
-    | { id?: string; email?: string; roleKeys?: string[]; vendorId?: string | null }
+    | { id?: string; email?: string; roleKeys?: string[]; vendorId?: string | null; mustChangePassword?: boolean }
     | undefined;
   if (!u?.id || !u.email) return null;
   return {
@@ -25,5 +25,6 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     email: u.email,
     roleKeys: u.roleKeys ?? [],
     vendorId: u.vendorId ?? null,
+    mustChangePassword: u.mustChangePassword ?? false,
   };
 }

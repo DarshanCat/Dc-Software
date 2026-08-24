@@ -5,6 +5,8 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import type { DcStatus } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+
 const DISPATCHED_ONWARD: DcStatus[] = [
   "DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED", "MATERIAL_RETURNED",
   "SCRAP_PENDING", "RECONCILIATION", "RECONCILED",

@@ -4,6 +4,8 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { AdjustSequenceForm } from "./adjust-sequence-form";
 
+export const dynamic = "force-dynamic";
+
 export default async function NumberingPage() {
   const user = await getSessionUser();
   const canManage = user ? await hasPermission(user.id, PERMISSIONS.SYSTEM_SETTINGS) : false;

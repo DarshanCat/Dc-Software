@@ -4,11 +4,31 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { VendorForm } from "./vendor-form";
 
-export default async function VendorsPage() {
+export const dynamic = "force-dynamic";
+
+interface SearchParams {
+  q?: string;
+}
+
+export default async function VendorsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const sp = await searchParams;
+  const q = (sp.q ?? "").trim();
   const user = await getSessionUser();
   const canCreate = user ? await hasPermission(user.id, PERMISSIONS.VENDOR_CREATE) : false;
 
   const vendors = await prisma.vendor.findMany({
+    where: q
+      ? {
+          OR: [
+            { vendorName: { contains: q, mode: "insensitive" } },
+            { vendorCode: { contains: q, mode: "insensitive" } },
+          ],
+        }
+      : undefined,
     orderBy: { vendorCode: "asc" },
   });
 

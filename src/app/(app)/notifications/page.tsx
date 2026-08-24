@@ -4,6 +4,8 @@ import { getSessionUser } from "@/server/session";
 import { MarkAllReadButton } from "./mark-all-read-button";
 import { MarkReadLink } from "./mark-read-link";
 
+export const dynamic = "force-dynamic";
+
 export default async function NotificationsPage() {
   const user = await getSessionUser();
   if (!user) {

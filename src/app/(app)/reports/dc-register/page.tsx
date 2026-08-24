@@ -5,6 +5,8 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { getDcRegisterRows } from "@/server/reports/dc-register";
 
+export const dynamic = "force-dynamic";
+
 const PAGE_SIZE = 25;
 
 const DC_STATUSES = [

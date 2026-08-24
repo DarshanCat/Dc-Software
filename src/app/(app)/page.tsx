@@ -2,6 +2,8 @@ import { prisma } from "@/lib/db";
 import type { DcStatus, ExceptionStatus } from "@prisma/client";
 import { StatusDistributionChart, VendorOutstandingChart, OverdueAgeingChart } from "./dashboard-charts";
 
+export const dynamic = "force-dynamic";
+
 const TERMINAL_STATUSES: DcStatus[] = ["CLOSED", "CANCELLED"];
 const DISPATCHED_ONWARD: DcStatus[] = [
   "DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED", "MATERIAL_RETURNED",

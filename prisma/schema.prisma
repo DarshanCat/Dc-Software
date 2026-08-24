@@ -20,6 +20,8 @@ model User {
   name         String
   passwordHash String
   active       Boolean  @default(true)
+  mustChangePassword Boolean @default(false)
+  passwordChangedAt  DateTime?
   vendorId     String?
   vendor       Vendor?  @relation(fields: [vendorId], references: [id])
   roles        UserRole[]

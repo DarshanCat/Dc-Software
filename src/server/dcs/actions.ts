@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
-import { requirePermission, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
+import { requirePermission, assertVendorScope, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { writeAudit } from "@/server/audit";
 import { nextNumber, fiscalYearOf } from "@/services/number-sequence.service";
@@ -28,6 +28,8 @@ const createDcSchema = z.object({
   ]),
   items: z.array(dcLineSchema).min(1, "Add at least one item line."),
   expectedReturnDate: z.string().optional(),
+  ewayBillNumber: z.string().max(60).optional(),
+  eSugamNumber: z.string().max(60).optional(),
   remarks: z.string().max(500).optional(),
 });
 
@@ -137,6 +139,8 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         purpose: data.purpose,
         processId: data.processId,
         expectedReturnDate: data.expectedReturnDate ? new Date(data.expectedReturnDate) : null,
+        ewayBillNumber: data.ewayBillNumber || null,
+        eSugamNumber: data.eSugamNumber || null,
         remarks: data.remarks || null,
         status: "DRAFT",
         createdBy: user!.id,
@@ -178,6 +182,7 @@ export async function submitForApproval(dcId: string): Promise<ActionResult> {
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
+  assertVendorScope(user!, dc.vendorId);
   if (dc.status !== "DRAFT") return { ok: false, error: `Cannot submit a DC in status ${dc.status}.` };
 
   await prisma.$transaction(async (tx) => {
@@ -234,6 +239,7 @@ export async function dispatchDc(dcId: string, input: DispatchInput = {}): Promi
     include: { items: true, dispatch: true },
   });
   if (!dc) return { ok: false, error: "DC not found." };
+  assertVendorScope(user!, dc.vendorId);
 
   if (dc.status !== "APPROVED") {
     return { ok: false, error: `Only an APPROVED DC can be dispatched (current: ${dc.status}).` };
@@ -312,6 +318,7 @@ export async function approveDc(dcId: string): Promise<ActionResult> {
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
+  assertVendorScope(user!, dc.vendorId);
   if (dc.status !== "PENDING_APPROVAL") {
     return { ok: false, error: `Only a DC pending approval can be approved (current: ${dc.status}).` };
   }
@@ -323,6 +330,62 @@ export async function approveDc(dcId: string): Promise<ActionResult> {
     });
     await tx.statusHistory.create({ data: { dcId, fromStatus: "PENDING_APPROVAL", toStatus: "APPROVED", changedBy: user!.id } });
     await writeAudit(tx, { userId: user!.id, action: "DC_APPROVED", module: "DeliveryChallans", entityType: "DeliveryChallan", entityId: dcId, reason: "DC approved" });
+  });
+
+  revalidatePath(`/dcs/${dcId}`);
+  return { ok: true, dcId, dcNumber: dc.dcNumber };
+}
+
+const updateTransportSchema = z.object({
+  vehicleNumber: z.string().max(30).optional(),
+  transporter: z.string().max(120).optional(),
+  ewayBillNumber: z.string().max(60).optional(),
+  eSugamNumber: z.string().max(60).optional(),
+});
+
+export type UpdateTransportInput = z.infer<typeof updateTransportSchema>;
+
+export async function updateDcTransportDetails(dcId: string, input: UpdateTransportInput): Promise<ActionResult> {
+  const user = await getSessionUser();
+  try {
+    await requirePermission(user, PERMISSIONS.DC_EDIT);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) return { ok: false, error: "Not signed in." };
+    if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to edit DCs." };
+    throw e;
+  }
+
+  const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
+  if (!dc) return { ok: false, error: "DC not found." };
+  assertVendorScope(user!, dc.vendorId);
+
+  const parsed = updateTransportSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Invalid transport or e-Way/e-Sugam data." };
+  }
+  const data = parsed.data;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.deliveryChallan.update({
+      where: { id: dcId },
+      data: {
+        vehicleNumber: data.vehicleNumber || null,
+        transporter: data.transporter || null,
+        ewayBillNumber: data.ewayBillNumber || null,
+        eSugamNumber: data.eSugamNumber || null,
+      },
+    });
+
+    await writeAudit(tx, {
+      userId: user!.id,
+      action: "DC_EDITED",
+      module: "DeliveryChallans",
+      entityType: "DeliveryChallan",
+      entityId: dcId,
+      oldValue: { vehicleNumber: dc.vehicleNumber, transporter: dc.transporter, ewayBillNumber: dc.ewayBillNumber, eSugamNumber: dc.eSugamNumber },
+      newValue: { vehicleNumber: data.vehicleNumber, transporter: data.transporter, ewayBillNumber: data.ewayBillNumber, eSugamNumber: data.eSugamNumber },
+      reason: "Transport and e-Way Bill / e-Sugam details updated",
+    });
   });
 
   revalidatePath(`/dcs/${dcId}`);

@@ -4,6 +4,8 @@ import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 
+export const dynamic = "force-dynamic";
+
 const STATUS_OPTIONS = ["BALANCED", "EXCEPTION", "RECONCILED", "CLOSED"];
 
 interface SearchParams {

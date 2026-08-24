@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export default async function MaterialOutstandingReportPage() {
   const dcs = await prisma.deliveryChallan.findMany({
     where: { status: { notIn: ["DRAFT", "PENDING_APPROVAL", "CANCELLED", "CLOSED"] } },
