@@ -24,6 +24,8 @@ export interface DcPdfData {
   vendorPan: string;
   purpose: string;
   processName: string;
+  partNumber?: string | null;
+  expectedScrap?: string | null;
   vehicleNumber: string;
   transporter: string;
   ewayBillNumber: string;
@@ -148,6 +150,8 @@ const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
   const infoPairs: [string, string][] = [
     ["Date", data.dcDate],
     ["Vendor", data.vendorName],
+    ["Part Number", data.partNumber || "—"],
+    ["Expected Scrap", data.expectedScrap || "—"],
     ["Purpose", data.purpose],
     ["Process", data.processName],
     ["Expected Return", data.expectedReturnDate],

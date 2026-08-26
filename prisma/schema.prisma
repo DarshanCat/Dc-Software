@@ -296,6 +296,8 @@ model DeliveryChallan {
   dcNumber           String    @unique
   dcDate             DateTime
   woNumber           String
+  partNumber         String?
+  expectedScrap      Decimal?  @db.Decimal(12, 3)
   vendorId           String
   vendor             Vendor    @relation(fields: [vendorId], references: [id])
   purpose            DcPurpose
@@ -311,7 +313,9 @@ model DeliveryChallan {
   remarks            String?
   status             DcStatus  @default(DRAFT)
   createdBy          String?
+  preparedByName     String?
   approvedBy         String?
+  approvedByName     String?
   approvedAt         DateTime?
   dispatchedBy       String?
   dispatchedAt       DateTime?

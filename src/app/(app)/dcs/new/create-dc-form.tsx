@@ -16,8 +16,8 @@ export function CreateDcForm({ vendors, processes, items, standards }: {
 }) {
   const router = useRouter();
   const [form, setForm] = useState({
-    woNumber: "", vendorId: "", processId: "", itemId: "", purpose: "MACHINING",
-    quantity: "", inputWeight: "", expectedReturnDate: "", remarks: "",
+    woNumber: "", partNumber: "", expectedScrap: "", vendorId: "", processId: "", itemId: "", purpose: "MACHINING",
+    quantity: "", inputWeight: "", preparedByName: "", expectedReturnDate: "", remarks: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -44,12 +44,27 @@ export function CreateDcForm({ vendors, processes, items, standards }: {
   }, [form.inputWeight, form.itemId, form.processId, standards]);
 
   async function submit() {
+    if (!form.partNumber.trim()) {
+      setError("Part Number is required.");
+      return;
+    }
+    if (form.expectedScrap !== "" && Number(form.expectedScrap) < 0) {
+      setError("Expected Scrap cannot be negative.");
+      return;
+    }
+    if (!form.preparedByName.trim()) {
+      setError("Prepared By Name is required.");
+      return;
+    }
     setSaving(true); setError(null);
     const payload = {
       woNumber: form.woNumber,
+      partNumber: form.partNumber.trim(),
+      expectedScrap: form.expectedScrap !== "" ? Number(form.expectedScrap) : 0,
       vendorId: form.vendorId,
       processId: form.processId,
       purpose: form.purpose,
+      preparedByName: form.preparedByName.trim(),
       expectedReturnDate: form.expectedReturnDate,
       remarks: form.remarks,
       items: [
@@ -84,14 +99,23 @@ export function CreateDcForm({ vendors, processes, items, standards }: {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2">
+        <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">WO ID *</label>
           <Input
             value={form.woNumber}
             onChange={(e) => set("woNumber", e.target.value)}
             placeholder="e.g. WO-2026-00452"
           />
-          <p className="mt-1 text-xs text-slate-400">Type the Work Order reference — no need to create it separately.</p>
+          <p className="mt-1 text-xs text-slate-400">Work Order reference.</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Part Number *</label>
+          <Input
+            value={form.partNumber}
+            onChange={(e) => set("partNumber", e.target.value)}
+            placeholder="Enter Part Number"
+          />
+          <p className="mt-1 text-xs text-slate-400">Manufactured Part Number (e.g. ABC-12345).</p>
         </div>
         <Select k="vendorId" label="Vendor *" opts={vendors} placeholder="Select vendor" />
         <Select k="processId" label="Process *" opts={processes} placeholder="Select process" />
@@ -110,6 +134,27 @@ export function CreateDcForm({ vendors, processes, items, standards }: {
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Input Weight (kg) *</label>
           <Input type="number" value={form.inputWeight} onChange={(e) => set("inputWeight", e.target.value)} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Expected Scrap (kg)</label>
+          <Input
+            type="number"
+            step="0.001"
+            min="0"
+            value={form.expectedScrap}
+            onChange={(e) => set("expectedScrap", e.target.value)}
+            placeholder="Enter expected scrap quantity"
+          />
+          <p className="mt-1 text-xs text-slate-400">Scrap expected to be recovered from vendor for this movement.</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Prepared By Name *</label>
+          <Input
+            value={form.preparedByName}
+            onChange={(e) => set("preparedByName", e.target.value)}
+            placeholder="Enter name to appear on DC"
+          />
+          <p className="mt-1 text-xs text-slate-400">Name to be printed on physical PDF.</p>
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Expected Return Date</label>

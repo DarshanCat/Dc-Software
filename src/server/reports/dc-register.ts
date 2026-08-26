@@ -14,6 +14,8 @@ export interface DcRegisterRow {
   dcId: string;
   dcNumber: string;
   dcDate: Date;
+  partNumber: string;
+  expectedScrap: number;
   vendorName: string;
   processName: string;
   itemLabel: string;
@@ -81,6 +83,8 @@ export async function getDcRegisterRows(
       dcId: dc.id,
       dcNumber: dc.dcNumber,
       dcDate: dc.dcDate,
+      partNumber: dc.partNumber ?? "—",
+      expectedScrap: dc.expectedScrap != null ? Number(dc.expectedScrap) : 0,
       vendorName: dc.vendor.vendorName,
       processName: dc.process?.name ?? "—",
       itemLabel: firstItem ? `${firstItem.item.itemCode} — ${firstItem.item.itemName}` : "—",
@@ -103,8 +107,8 @@ import { sanitizeCsvCell } from "@/lib/csv";
 
 export function rowsToCsv(rows: DcRegisterRow[]): string {
   const header = [
-    "DC No", "Date", "Vendor", "Process", "Item", "Qty", "Weight (kg)",
-    "E-Way Bill", "E-Sugam", "Expected Return", "Received Qty", "Scrap (kg)", "Balance", "Status",
+    "DC No", "Date", "Part Number", "Vendor", "Process", "Item", "Qty", "Weight (kg)",
+    "Expected Scrap (kg)", "E-Way Bill", "E-Sugam", "Expected Return", "Received Qty", "Actual Scrap (kg)", "Balance", "Status",
   ];
   const lines = [header.join(",")];
   for (const r of rows) {
@@ -112,11 +116,13 @@ export function rowsToCsv(rows: DcRegisterRow[]): string {
       [
         sanitizeCsvCell(r.dcNumber),
         sanitizeCsvCell(r.dcDate.toISOString().slice(0, 10)),
+        sanitizeCsvCell(r.partNumber),
         sanitizeCsvCell(r.vendorName),
         sanitizeCsvCell(r.processName),
         sanitizeCsvCell(r.itemLabel),
         String(r.quantity),
         r.weight.toFixed(3),
+        r.expectedScrap.toFixed(3),
         sanitizeCsvCell(r.ewayBillNumber),
         sanitizeCsvCell(r.eSugamNumber),
         r.expectedReturnDate ? sanitizeCsvCell(r.expectedReturnDate.toISOString().slice(0, 10)) : '""',

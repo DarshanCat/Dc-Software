@@ -9,6 +9,7 @@ import { writeAudit } from "@/server/audit";
 import { nextNumber, fiscalYearOf } from "@/services/number-sequence.service";
 import { computeExpected } from "@/services/reconciliation.service";
 import { generateQrToken } from "@/services/dispatch.service";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { notifyUsersWithPermission, createNotification } from "@/server/notifications/service";
 
@@ -20,6 +21,8 @@ const dcLineSchema = z.object({
 
 const createDcSchema = z.object({
   woNumber: z.string().min(1, "WO ID is required").max(60),
+  partNumber: z.string().trim().min(1, "Part Number is required.").max(60, "Part Number cannot exceed 60 characters."),
+  expectedScrap: z.coerce.number().min(0, "Expected scrap cannot be negative.").optional().default(0),
   vendorId: z.string().min(1, "Vendor is required"),
   processId: z.string().min(1, "Process is required"),
   purpose: z.enum([
@@ -27,6 +30,7 @@ const createDcSchema = z.object({
     "REPAIR","SAMPLE","TRIAL","SUBCONTRACTING","OTHER",
   ]),
   items: z.array(dcLineSchema).min(1, "Add at least one item line."),
+  preparedByName: z.string().trim().min(1, "Prepared By Name is required.").max(100, "Prepared By Name cannot exceed 100 characters."),
   expectedReturnDate: z.string().optional(),
   ewayBillNumber: z.string().max(60).optional(),
   eSugamNumber: z.string().max(60).optional(),
@@ -135,6 +139,8 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         dcNumber,
         dcDate: now,
         woNumber: data.woNumber,
+        partNumber: data.partNumber.trim(),
+        expectedScrap: data.expectedScrap != null ? new Prisma.Decimal(data.expectedScrap) : null,
         vendorId: data.vendorId,
         purpose: data.purpose,
         processId: data.processId,
@@ -144,6 +150,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         remarks: data.remarks || null,
         status: "DRAFT",
         createdBy: user!.id,
+        preparedByName: data.preparedByName.trim(),
         qrToken: generateQrToken(),
         items: {
           create: lineData,
@@ -161,7 +168,16 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
       module: "DeliveryChallans",
       entityType: "DeliveryChallan",
       entityId: dc.id,
-      newValue: { dcNumber, vendorId: data.vendorId, woNumber: data.woNumber, lineCount: lineData.length, totalInputWeight: lineData.reduce((s, l) => s + l.inputWeight, 0) },
+      newValue: {
+        dcNumber,
+        vendorId: data.vendorId,
+        woNumber: data.woNumber,
+        partNumber: data.partNumber.trim(),
+        expectedScrap: data.expectedScrap,
+        preparedByName: data.preparedByName.trim(),
+        lineCount: lineData.length,
+        totalInputWeight: lineData.reduce((s, l) => s + l.inputWeight, 0),
+      },
       reason: "DC created as DRAFT",
     });
 
@@ -307,13 +323,21 @@ export async function dispatchDc(dcId: string, input: DispatchInput = {}): Promi
   return { ok: true, dcId, dcNumber: dc.dcNumber };
 }
 
-export async function approveDc(dcId: string): Promise<ActionResult> {
+export async function approveDc(dcId: string, approvedByName?: string): Promise<ActionResult> {
   const user = await getSessionUser();
   try {
     await requirePermission(user, PERMISSIONS.DC_APPROVE);
   } catch (e) {
     if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to approve DCs." };
     return { ok: false, error: "Not permitted." };
+  }
+
+  const trimmedName = (approvedByName || "").trim();
+  if (!trimmedName) {
+    return { ok: false, error: "Approved By Name is required.", fieldErrors: { approvedByName: "Please enter the name to appear on the DC." } };
+  }
+  if (trimmedName.length > 100) {
+    return { ok: false, error: "Approved By Name cannot exceed 100 characters." };
   }
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
@@ -326,10 +350,23 @@ export async function approveDc(dcId: string): Promise<ActionResult> {
   await prisma.$transaction(async (tx) => {
     await tx.deliveryChallan.update({
       where: { id: dcId },
-      data: { status: "APPROVED", approvedBy: user!.id, approvedAt: new Date() },
+      data: {
+        status: "APPROVED",
+        approvedBy: user!.id,
+        approvedByName: trimmedName,
+        approvedAt: new Date(),
+      },
     });
     await tx.statusHistory.create({ data: { dcId, fromStatus: "PENDING_APPROVAL", toStatus: "APPROVED", changedBy: user!.id } });
-    await writeAudit(tx, { userId: user!.id, action: "DC_APPROVED", module: "DeliveryChallans", entityType: "DeliveryChallan", entityId: dcId, reason: "DC approved" });
+    await writeAudit(tx, {
+      userId: user!.id,
+      action: "DC_APPROVED",
+      module: "DeliveryChallans",
+      entityType: "DeliveryChallan",
+      entityId: dcId,
+      newValue: { approvedByName: trimmedName, approvedBy: user!.id },
+      reason: "DC approved",
+    });
   });
 
   revalidatePath(`/dcs/${dcId}`);

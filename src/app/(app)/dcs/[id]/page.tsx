@@ -90,6 +90,12 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
     : [];
   const uploaderNameById = new Map(uploaders.map((u) => [u.id, u.name]));
 
+  const auditUserIds = [...new Set([dc.createdBy, dc.approvedBy].filter((v): v is string => !!v))];
+  const auditUsers = auditUserIds.length
+    ? await prisma.user.findMany({ where: { id: { in: auditUserIds } }, select: { id: true, name: true, email: true } })
+    : [];
+  const auditUserMap = new Map(auditUsers.map((u) => [u.id, u.name || u.email]));
+
   const amendments = await prisma.dcAmendment.findMany({
     where: { dcId: dc.id },
     orderBy: { requestedAt: "desc" },
@@ -120,7 +126,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
     alreadyReceived: receivedByItemId.get(it.itemId) ?? 0,
   }));
 
-  const expectedScrapWeight = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+  const expectedScrapWeight = dc.expectedScrap != null ? Number(dc.expectedScrap) : dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
   const receivedScrapWeight = dc.scrapReceipts.reduce(
     (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),
     0,
@@ -147,6 +153,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
             <a href={`/work-orders?wo=${encodeURIComponent(dc.woNumber)}`} className="font-mono text-blue-700 hover:underline">
               {dc.woNumber}
             </a>
+            {dc.partNumber ? ` · Part No: ${dc.partNumber}` : ""}
             {" · "}
             {dc.vendor.vendorName} · {dc.process?.name ?? "—"} · {dc.purpose.replace(/_/g, " ")}
           </p>
@@ -227,6 +234,54 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
           <div>
             <p className="text-xs text-slate-500 uppercase tracking-wider">E-Sugam Number</p>
             <p className="font-mono text-slate-900 font-medium">{dc.eSugamNumber || "—"}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 p-4 bg-white space-y-3">
+        <h2 className="text-sm font-semibold text-slate-900">DC Movement Specifications</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Part Number</p>
+            <p className="font-mono text-slate-900 font-semibold">{dc.partNumber || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Expected Scrap</p>
+            <p className="font-mono text-slate-900 font-semibold">
+              {dc.expectedScrap !== null && dc.expectedScrap !== undefined
+                ? `${Number(dc.expectedScrap).toFixed(3)} kg`
+                : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Work Order ID</p>
+            <p className="font-mono text-slate-900 font-medium">{dc.woNumber}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">DC Purpose</p>
+            <p className="font-mono text-slate-900 font-medium">{dc.purpose.replace(/_/g, " ")}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 p-4 bg-white space-y-3">
+        <h2 className="text-sm font-semibold text-slate-900">Signatures &amp; Authorization Details</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Prepared By (Printed)</p>
+            <p className="font-semibold text-slate-900">{dc.preparedByName || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Approved By (Printed)</p>
+            <p className="font-semibold text-slate-900">{dc.approvedByName || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Created By (Audit User)</p>
+            <p className="text-slate-700">{dc.createdBy ? (auditUserMap.get(dc.createdBy) || dc.createdBy) : "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Approved By (Audit User)</p>
+            <p className="text-slate-700">{dc.approvedBy ? (auditUserMap.get(dc.approvedBy) || dc.approvedBy) : "—"}</p>
           </div>
         </div>
       </div>
@@ -335,29 +390,39 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
         )}
       </div>
 
-      <div className="rounded-lg border border-slate-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900">Scrap Recovery</h2>
-        <div className="grid grid-cols-2 gap-1 font-mono text-sm text-slate-700 md:grid-cols-4">
-          <span>Expected Scrap</span><span className="text-right">{expectedScrapWeight.toFixed(3)} kg</span>
-          <span>Received Scrap</span><span className="text-right">{receivedScrapWeight.toFixed(3)} kg</span>
-          <span>Recovery %</span>
-          <span className="text-right">{scrapEval.recoveryPercent === null ? "N/A" : `${scrapEval.recoveryPercent.toFixed(1)}%`}</span>
-          <span>Status</span>
-          <span className="text-right">
+      <div className="rounded-lg border border-slate-200 p-4 bg-white space-y-3">
+        <h2 className="text-sm font-semibold text-slate-900">Scrap Recovery &amp; Variance Analysis</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm font-mono text-slate-700">
+          <div>
+            <p className="text-xs font-sans text-slate-500 uppercase tracking-wider">Expected Scrap (DC Creation)</p>
+            <p className="font-semibold text-slate-900">{expectedScrapWeight.toFixed(3)} kg</p>
+          </div>
+          <div>
+            <p className="text-xs font-sans text-slate-500 uppercase tracking-wider">Actual Scrap Returned</p>
+            <p className="font-semibold text-slate-900">{receivedScrapWeight.toFixed(3)} kg</p>
+          </div>
+          <div>
+            <p className="text-xs font-sans text-slate-500 uppercase tracking-wider">Scrap Difference</p>
+            <p className={`font-semibold ${expectedScrapWeight - receivedScrapWeight > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+              {Math.max(expectedScrapWeight - receivedScrapWeight, 0).toFixed(3)} kg
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-sans text-slate-500 uppercase tracking-wider">Recovery Status</p>
             <span
               className={
                 scrapEval.status === "SCRAP_SHORT"
-                  ? "rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700"
+                  ? "rounded-full bg-red-100 px-2 py-0.5 text-xs font-sans text-red-700"
                   : scrapEval.status === "EXCESS_SCRAP"
-                    ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700"
+                    ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-sans text-amber-700"
                     : scrapEval.status === "NOT_APPLICABLE"
-                      ? "rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500"
-                      : "rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700"
+                      ? "rounded-full bg-slate-100 px-2 py-0.5 text-xs font-sans text-slate-500"
+                      : "rounded-full bg-green-100 px-2 py-0.5 text-xs font-sans text-green-700"
               }
             >
               {scrapEval.status.replace(/_/g, " ")}
             </span>
-          </span>
+          </div>
         </div>
 
         {dc.scrapReceipts.length > 0 && (

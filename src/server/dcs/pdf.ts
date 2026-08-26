@@ -12,6 +12,9 @@ interface DcRowLike {
   dcDate: Date;
   status: string;
   purpose: string;
+  woNumber: string;
+  partNumber: string | null;
+  expectedScrap: unknown;
   vehicleNumber: string | null;
   transporter: string | null;
   ewayBillNumber: string | null;
@@ -21,6 +24,8 @@ interface DcRowLike {
   qrToken: string | null;
   createdBy: string | null;
   approvedBy: string | null;
+  preparedByName: string | null;
+  approvedByName: string | null;
   vendor: { vendorName: string; address: string | null; gstNumber: string | null; panNumber: string | null };
   process: { name: string } | null;
   items: Array<{
@@ -52,6 +57,8 @@ export interface DcPdfData {
   vendorPan: string;
   purpose: string;
   processName: string;
+  partNumber?: string | null;
+  expectedScrap?: string | null;
   vehicleNumber: string;
   transporter: string;
   ewayBillNumber: string;
@@ -83,32 +90,20 @@ async function fetchCompanySettings() {
   };
 }
 
-async function fetchSignatureNames(dc: DcRowLike): Promise<{ preparedByName: string | null; approvedByName: string | null }> {
-  const ids = [dc.createdBy, dc.approvedBy].filter((id): id is string => Boolean(id));
-  if (ids.length === 0) return { preparedByName: null, approvedByName: null };
-  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
-  const byId = new Map(users.map((u) => [u.id, u.name]));
-  return {
-    preparedByName: (dc.createdBy && byId.get(dc.createdBy)) || null,
-    approvedByName: (dc.approvedBy && byId.get(dc.approvedBy)) || null,
-  };
-}
-
 async function buildPdfData(dc: DcRowLike): Promise<DcPdfData> {
-  const [company, qrDataUrl, logo, signatures] = await Promise.all([
+  const [company, qrDataUrl, logo] = await Promise.all([
     fetchCompanySettings(),
     dc.qrToken
       ? QRCode.toDataURL(buildDcQrUrl(dc.qrToken), { margin: 1, width: 200 })
       : Promise.resolve(null),
     getCompanyLogoDataUrl(),
-    fetchSignatureNames(dc),
   ]);
 
   return {
     company,
     logo,
-    preparedByName: signatures.preparedByName,
-    approvedByName: signatures.approvedByName,
+    preparedByName: dc.preparedByName || null,
+    approvedByName: dc.approvedByName || null,
     dcNumber: dc.dcNumber,
     dcDate: dc.dcDate.toLocaleDateString(),
     status: dc.status.replace(/_/g, " "),
@@ -118,6 +113,8 @@ async function buildPdfData(dc: DcRowLike): Promise<DcPdfData> {
     vendorPan: dc.vendor.panNumber || "",
     purpose: dc.purpose.replace(/_/g, " "),
     processName: dc.process?.name ?? "—",
+    partNumber: dc.partNumber || "—",
+    expectedScrap: dc.expectedScrap != null ? Number(dc.expectedScrap).toFixed(3) + " kg" : "—",
     vehicleNumber: dc.vehicleNumber || "—",
     transporter: dc.transporter || "—",
     ewayBillNumber: dc.ewayBillNumber || "—",
