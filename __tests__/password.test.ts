@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { passwordPolicy, changePasswordSchema } from "../src/lib/validation/user";
+import bcrypt from "bcryptjs";
 
 describe("Password Policy Validation", () => {
   it("rejects short passwords (< 8 chars)", () => {
@@ -33,7 +34,7 @@ describe("Password Policy Validation", () => {
   });
 });
 
-describe("Change Password Schema", () => {
+describe("Change Password Schema & Hashing Safety", () => {
   it("rejects mismatching confirm passwords", () => {
     const result = changePasswordSchema.safeParse({
       currentPassword: "OldPassword123!",
@@ -59,5 +60,15 @@ describe("Change Password Schema", () => {
       confirmPassword: "NewPassword123!",
     });
     expect(result.success).toBe(true);
+  });
+
+  it("hashes temporary passwords securely with bcrypt", async () => {
+    const tempPassword = "TempSecurePass@123";
+    const hash = await bcrypt.hash(tempPassword, 10);
+
+    expect(hash).not.toBe(tempPassword);
+    expect(hash.startsWith("$2a$") || hash.startsWith("$2b$")).toBe(true);
+    expect(await bcrypt.compare(tempPassword, hash)).toBe(true);
+    expect(await bcrypt.compare("WrongPass@123", hash)).toBe(false);
   });
 });

@@ -17,12 +17,12 @@ export async function GET() {
 
   const dcs = await prisma.deliveryChallan.findMany({
     where: { status: { notIn: ["DRAFT", "PENDING_APPROVAL", "CANCELLED"] } },
-    include: { vendor: true, items: true, scrapReceipts: { include: { items: true } } },
+    include: { vendor: true, scrapReceipts: { include: { items: true } } },
   });
 
   const byVendor = new Map<string, { name: string; expected: number; received: number; dcCount: number }>();
   for (const dc of dcs) {
-    const expected = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+    const expected = Number(dc.expectedScrap ?? 0);
     const received = dc.scrapReceipts.reduce((s, r) => s + r.items.reduce((si, ri) => si + Number(ri.weight), 0), 0);
     if (expected <= 0 && received <= 0) continue;
     const entry = byVendor.get(dc.vendorId) ?? { name: dc.vendor.vendorName, expected: 0, received: 0, dcCount: 0 };

@@ -45,3 +45,5 @@ next-env.d.ts
 
 # local file storage (dev/self-hosted only — see src/services/storage)
 /.storage-uploads/
+.vercel
+/scratch

@@ -10,9 +10,58 @@ export interface CreateNotificationInput {
   body?: string;
   entityType?: string;
   entityId?: string;
+  targetUrl?: string;
+}
+
+export function getNotificationTargetUrl(notification: {
+  entityType?: string | null;
+  entityId?: string | null;
+  targetUrl?: string | null;
+}): string | null {
+  if (notification.targetUrl) return notification.targetUrl;
+  if (!notification.entityType) return null;
+
+  const entityType = notification.entityType.toUpperCase();
+  if (
+    (entityType === "DELIVERYCHALLAN" ||
+      entityType === "DELIVERY_CHALLAN" ||
+      entityType === "DC") &&
+    notification.entityId
+  ) {
+    return `/dcs/${notification.entityId}`;
+  }
+  if (
+    (entityType === "REGISTRATIONREQUEST" ||
+      entityType === "REGISTRATION_REQUEST") &&
+    notification.entityId
+  ) {
+    return `/admin/users/requests`;
+  }
+  if (
+    (entityType === "AMENDMENT" || entityType === "DCAMENDMENT") &&
+    notification.entityId
+  ) {
+    return `/dcs/${notification.entityId}`;
+  }
+  if (
+    (entityType === "RECEIPT" || entityType === "DELIVERYCHALLANRECEIPT") &&
+    notification.entityId
+  ) {
+    return `/dcs/${notification.entityId}`;
+  }
+  return null;
 }
 
 export async function createNotification(tx: Tx, input: CreateNotificationInput) {
+  const derivedTargetUrl =
+    input.targetUrl ??
+    getNotificationTargetUrl({
+      entityType: input.entityType,
+      entityId: input.entityId,
+      targetUrl: input.targetUrl,
+    }) ??
+    null;
+
   return tx.notification.create({
     data: {
       userId: input.userId,
@@ -21,6 +70,7 @@ export async function createNotification(tx: Tx, input: CreateNotificationInput)
       body: input.body ?? null,
       entityType: input.entityType ?? null,
       entityId: input.entityId ?? null,
+      targetUrl: derivedTargetUrl,
     },
   });
 }

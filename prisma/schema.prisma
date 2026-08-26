@@ -52,6 +52,7 @@ model RegistrationRequest {
   reviewedAt               DateTime?
   reviewedById             String?
   rejectionReason          String?
+  approvingPersonName      String?
   approvedUserId           String?
   activationTokenHash      String?            @unique
   activationTokenExpiresAt DateTime?
@@ -146,13 +147,6 @@ model VendorContact {
   @@index([vendorId])
 }
 
-model ItemCategory {
-  id    String @id @default(uuid())
-  key   String @unique
-  name  String
-  items Item[]
-}
-
 model UOM {
   id       String  @id @default(uuid())
   code     String  @unique
@@ -160,87 +154,19 @@ model UOM {
   isWeight Boolean @default(false)
 }
 
-model Item {
-  id                 String        @id @default(uuid())
-  itemCode           String        @unique
-  itemName           String
-  description        String?
-  itemCategoryId     String?
-  itemCategory       ItemCategory? @relation(fields: [itemCategoryId], references: [id])
-  drawingNumber      String?
-  drawingRevision    String?
-  materialGrade      String?
-  defaultUOM         String        @default("NOS")
-  weightUOM          String        @default("KG")
-  standardUnitWeight Decimal?      @db.Decimal(18, 3)
-  active             Boolean       @default(true)
-  notes              String?
-  jobWorkStandards   JobWorkStandard[]
-  dcItems            DeliveryChallanItem[]
-  expectedReturns    DeliveryChallanExpectedReturn[] @relation("ExpectedReturnItem")
-  classificationItems MaterialClassificationItem[]   @relation("ClassificationItem")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  @@index([itemCode])
-  @@index([itemCategoryId])
-}
-
 model Process {
   id               String  @id @default(uuid())
   code             String  @unique
   name             String
   active           Boolean @default(true)
-  jobWorkStandards JobWorkStandard[]
   deliveryChallans DeliveryChallan[]
   workOrders       WorkOrder[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
 
-model JobWorkStandard {
-  id                           String          @id @default(uuid())
-  itemId                       String
-  item                         Item            @relation(fields: [itemId], references: [id])
-  processId                    String
-  process                      Process         @relation(fields: [processId], references: [id])
-  inputUOM                     String          @default("KG")
-  inputWeight                  Decimal         @db.Decimal(18, 3)
-  expectedOutputQty            Decimal?        @db.Decimal(18, 3)
-  expectedOutputWeight         Decimal         @db.Decimal(18, 3)
-  expectedScrapWeight          Decimal         @db.Decimal(18, 3)
-  expectedScrapPercentage      Decimal?        @db.Decimal(9, 4)
-  allowedProcessLoss           Decimal         @db.Decimal(18, 3)
-  allowedProcessLossPercentage Decimal?        @db.Decimal(9, 4)
-  tolerancePercentage          Decimal         @default(0) @db.Decimal(9, 4)
-  calculationType              CalculationType @default(PERCENTAGE)
-  effectiveFrom                DateTime
-  effectiveTo                  DateTime?
-  revision                     Int             @default(1)
-  approved                     Boolean         @default(false)
-  approvedBy                   String?
-  approvedAt                   DateTime?
-  revisions                    JobWorkStandardRevision[]
-  dcItems                      DeliveryChallanItem[]
-  createdAt                    DateTime @default(now())
-  updatedAt                    DateTime @updatedAt
 
-  @@unique([itemId, processId, revision])
-  @@index([itemId, processId, effectiveFrom])
-  @@index([approved])
-}
 
-model JobWorkStandardRevision {
-  id         String          @id @default(uuid())
-  standardId String
-  standard   JobWorkStandard @relation(fields: [standardId], references: [id])
-  revision   Int
-  snapshot   Json
-  createdBy  String?
-  createdAt  DateTime        @default(now())
-
-  @@index([standardId])
-}
 
 enum CalculationType {
   FIXED
@@ -297,6 +223,9 @@ model DeliveryChallan {
   dcDate             DateTime
   woNumber           String
   partNumber         String?
+  rmQuantity         Decimal?  @db.Decimal(12, 3)
+  returnFgQuantity   Decimal?  @db.Decimal(12, 3)
+  heatNumber         String?
   expectedScrap      Decimal?  @db.Decimal(12, 3)
   vendorId           String
   vendor             Vendor    @relation(fields: [vendorId], references: [id])
@@ -323,8 +252,6 @@ model DeliveryChallan {
   cancelledBy        String?
   cancellationReason String?
   qrToken            String?   @unique
-  items              DeliveryChallanItem[]
-  expectedReturns    DeliveryChallanExpectedReturn[]
   recoveryRequirements RecoveryRequirement[]
   recoveryReceipts   RecoveryReceipt[]
   classifications    MaterialClassification[]
@@ -351,7 +278,6 @@ model DcAmendment {
   id               String    @id @default(uuid())
   dcId             String
   dc               DeliveryChallan @relation(fields: [dcId], references: [id], onDelete: Cascade)
-  dcItemId         String
   requestedBy      String
   requestedAt      DateTime  @default(now())
   reason           String
@@ -366,35 +292,6 @@ model DcAmendment {
 
   @@index([dcId])
   @@index([status])
-}
-
-model DeliveryChallanItem {
-  id                       String  @id @default(uuid())
-  dcId                     String
-  dc                       DeliveryChallan @relation(fields: [dcId], references: [id], onDelete: Cascade)
-  itemId                   String
-  item                     Item    @relation(fields: [itemId], references: [id])
-  batchNumber              String?
-  heatNumber               String?
-  drawingNumber            String?
-  drawingRevision          String?
-  quantity                 Decimal @db.Decimal(18, 3)
-  uom                      String  @default("NOS")
-  inputUnitWeight          Decimal? @db.Decimal(18, 3)
-  inputWeight              Decimal @db.Decimal(18, 3)
-  expectedFinishedQuantity Decimal? @db.Decimal(18, 3)
-  expectedFinishedWeight   Decimal @db.Decimal(18, 3)
-  expectedScrapWeight      Decimal @db.Decimal(18, 3)
-  expectedProcessLoss      Decimal @db.Decimal(18, 3)
-  tolerancePercentage      Decimal @default(0) @db.Decimal(9, 4)
-  jobWorkStandardId        String?
-  jobWorkStandard          JobWorkStandard? @relation(fields: [jobWorkStandardId], references: [id])
-  remarks                  String?
-
-  @@index([dcId])
-  @@index([itemId])
-  @@index([batchNumber])
-  @@index([heatNumber])
 }
 
 // ---------------------- DISPATCH ----------------------
@@ -452,7 +349,7 @@ model MaterialReceiptItem {
   id               String  @id @default(uuid())
   receiptId        String
   receipt          MaterialReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  itemId           String
+  itemId           String?
   quantityReceived Decimal @db.Decimal(18, 3)
   weightReceived   Decimal @db.Decimal(18, 3)
   batchNumber      String?
@@ -533,25 +430,8 @@ model Reconciliation {
   closedAt             DateTime?
   closedBy             String?
   closureReason        String?
-  items                ReconciliationItem[]
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
   @@index([dcId])
   @@index([status])
-}
-
-model ReconciliationItem {
-  id                String  @id @default(uuid())
-  reconciliationId  String
-  reconciliation    Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
-  itemId            String
-  inputWeight       Decimal @db.Decimal(18, 3)
-  finishedWeight    Decimal @db.Decimal(18, 3)
-  scrapWeight       Decimal @db.Decimal(18, 3)
-  unaccountedWeight Decimal @db.Decimal(18, 3)
-
-  @@index([reconciliationId])
 }
 
 enum ExceptionType {
@@ -648,6 +528,7 @@ model Notification {
   body       String?
   entityType String?
   entityId   String?
+  targetUrl  String?
   read       Boolean  @default(false)
   createdAt  DateTime @default(now())
 
@@ -751,20 +632,7 @@ model WorkOrder {
 }
 
 
-// Expected return line(s) per DC. returnItem MAY differ from the sent item.
-model DeliveryChallanExpectedReturn {
-  id             String  @id @default(uuid())
-  dcId           String
-  dc             DeliveryChallan @relation(fields: [dcId], references: [id], onDelete: Cascade)
-  returnItemId   String
-  returnItem     Item    @relation("ExpectedReturnItem", fields: [returnItemId], references: [id])
-  expectedQty    Decimal @db.Decimal(18, 3)
-  uom            String  @default("NOS")
-  expectedWeight Decimal @default(0) @db.Decimal(18, 3)
-  remarks        String?
 
-  @@index([dcId])
-}
 
 // ============================================================================
 // RECOVERY MATERIAL (Boring first; generic so more types can be added later)
@@ -833,8 +701,6 @@ model MaterialClassificationItem {
   id               String  @id @default(uuid())
   classificationId String
   classification   MaterialClassification @relation(fields: [classificationId], references: [id], onDelete: Cascade)
-  itemId           String
-  item             Item    @relation("ClassificationItem", fields: [itemId], references: [id])
   receivedQty      Decimal @db.Decimal(18, 3)
   goodQty          Decimal @default(0) @db.Decimal(18, 3)
   scrapQty         Decimal @default(0) @db.Decimal(18, 3)
@@ -842,5 +708,4 @@ model MaterialClassificationItem {
   scrapType        ScrapType? @relation(fields: [scrapTypeId], references: [id])
 
   @@index([classificationId])
-  @@index([itemId])
 }

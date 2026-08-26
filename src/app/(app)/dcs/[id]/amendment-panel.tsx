@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 
 interface AmendmentItem {
   id: string;
-  dcItemId: string;
   requestedByName: string;
   requestedAt: string;
   reason: string;
@@ -21,22 +20,13 @@ interface AmendmentItem {
   decisionReason: string | null;
 }
 
-interface DcItemOption {
-  id: string;
-  label: string;
-  quantity: number;
-  weight: number;
-}
-
 export function AmendmentPanel({
   dcId,
-  dcItems,
   amendments,
   canRequest,
   canDecide,
 }: {
   dcId: string;
-  dcItems: DcItemOption[];
   amendments: AmendmentItem[];
   canRequest: boolean;
   canDecide: boolean;
@@ -46,24 +36,17 @@ export function AmendmentPanel({
   const [error, setError] = useState<string | null>(null);
   const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
 
-  const [selectedItemId, setSelectedItemId] = useState(dcItems[0]?.id ?? "");
   const [newQuantity, setNewQuantity] = useState("");
   const [newWeight, setNewWeight] = useState("");
   const [reason, setReason] = useState("");
 
-  const pendingItemIds = new Set(amendments.filter((a) => a.status === "PENDING").map((a) => a.dcItemId));
-  const requestableItems = dcItems.filter((it) => !pendingItemIds.has(it.id));
+  const hasPending = amendments.some((a) => a.status === "PENDING");
 
   async function handleSubmitRequest() {
     setError(null);
-    if (!selectedItemId) {
-      setError("Select an item.");
-      return;
-    }
     setBusy(true);
     const res = await requestAmendment({
       dcId,
-      dcItemId: selectedItemId,
       newQuantity: Number(newQuantity),
       newWeight: Number(newWeight),
       reason,
@@ -79,125 +62,97 @@ export function AmendmentPanel({
     router.refresh();
   }
 
-  async function handleApprove(amendmentId: string) {
+  async function handleApprove(id: string) {
+    setError(null);
     setBusy(true);
-    const res = await approveAmendment(amendmentId);
+    const res = await approveAmendment(id);
     setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
-    router.refresh();
+    if (!res.ok) setError(res.error);
+    else router.refresh();
   }
 
-  async function handleReject(amendmentId: string) {
-    const rejectReason = rejectReasons[amendmentId];
-    if (!rejectReason || rejectReason.trim().length === 0) {
-      setError("Enter a reason to reject this amendment.");
+  async function handleReject(id: string) {
+    setError(null);
+    const r = rejectReasons[id] || "";
+    if (!r.trim()) {
+      setError("Please explain why this amendment is rejected.");
       return;
     }
     setBusy(true);
-    const res = await rejectAmendment(amendmentId, rejectReason);
+    const res = await rejectAmendment(id, r);
     setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
-    router.refresh();
+    if (!res.ok) setError(res.error);
+    else router.refresh();
   }
-
-  if (amendments.length === 0 && !canRequest) return null;
 
   return (
-    <div className="rounded-lg border border-slate-200 p-4">
-      <h2 className="mb-3 text-sm font-semibold text-slate-900">Amendments</h2>
+    <div className="space-y-4 rounded-lg border border-slate-200 p-4">
+      <h2 className="text-sm font-semibold text-slate-900">Quantities & Weights Amendment</h2>
 
-      {amendments.length > 0 && (
-        <div className="mb-4 space-y-3">
+      {error && <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">{error}</div>}
+
+      {canRequest && !hasPending && (
+        <div className="space-y-3 rounded border border-slate-100 bg-slate-50 p-3 text-xs">
+          <div className="font-medium text-slate-700">Request Correction / Amendment</div>
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              type="number"
+              placeholder="New Return FG Qty"
+              value={newQuantity}
+              onChange={(e) => setNewQuantity(e.target.value)}
+            />
+            <Input
+              type="number"
+              placeholder="New RM Qty (Weight)"
+              value={newWeight}
+              onChange={(e) => setNewWeight(e.target.value)}
+            />
+          </div>
+          <Input
+            placeholder="Reason for amendment (min 10 characters)"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <Button size="sm" onClick={handleSubmitRequest} disabled={busy}>
+            {busy ? "Submitting…" : "Submit Request"}
+          </Button>
+        </div>
+      )}
+
+      {amendments.length === 0 ? (
+        <p className="text-xs text-slate-400">No amendment history for this DC.</p>
+      ) : (
+        <div className="space-y-3 text-xs">
           {amendments.map((a) => (
-            <div key={a.id} className="rounded-md border border-slate-100 p-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-800">
-                  Qty {a.previousQuantity} → {a.newQuantity}, Weight {a.previousWeight.toFixed(3)} → {a.newWeight.toFixed(3)} kg
-                </span>
-                <span
-                  className={
-                    a.status === "PENDING"
-                      ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700"
-                      : a.status === "APPROVED"
-                        ? "rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700"
-                        : "rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700"
-                  }
-                >
+            <div key={a.id} className="rounded border border-slate-200 p-3 space-y-2">
+              <div className="flex items-center justify-between text-slate-500 font-mono">
+                <span>{a.requestedByName} · {new Date(a.requestedAt).toLocaleString()}</span>
+                <span className={`font-semibold ${a.status === "PENDING" ? "text-amber-600" : a.status === "APPROVED" ? "text-emerald-600" : "text-rose-600"}`}>
                   {a.status}
                 </span>
               </div>
-              <p className="mt-1 text-slate-600">{a.reason}</p>
-              <p className="mt-1 text-xs text-slate-400">
-                Requested by {a.requestedByName} on {new Date(a.requestedAt).toLocaleString()}
-              </p>
-              {a.decisionReason && <p className="mt-1 text-xs text-slate-500">Decision note: {a.decisionReason}</p>}
-
+              <p className="text-slate-800">Reason: {a.reason}</p>
+              <div className="grid grid-cols-2 gap-2 bg-white p-2 rounded border border-slate-100 font-mono text-slate-700">
+                <div>Return FG Qty: <span className="line-through text-slate-400">{a.previousQuantity}</span> → <span className="font-semibold text-emerald-700">{a.newQuantity}</span></div>
+                <div>RM Weight: <span className="line-through text-slate-400">{a.previousWeight}</span> → <span className="font-semibold text-emerald-700">{a.newWeight}</span> kg</div>
+              </div>
               {a.status === "PENDING" && canDecide && (
-                <div className="mt-2 flex items-end gap-2">
-                  <Button size="sm" disabled={busy} onClick={() => handleApprove(a.id)}>
-                    Approve
-                  </Button>
-                  <div className="flex-1">
-                    <Input
-                      placeholder="Rejection reason"
-                      value={rejectReasons[a.id] ?? ""}
-                      onChange={(e) => setRejectReasons((r) => ({ ...r, [a.id]: e.target.value }))}
-                    />
-                  </div>
-                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => handleReject(a.id)}>
-                    Reject
-                  </Button>
+                <div className="flex items-center gap-2 pt-2">
+                  <Button size="sm" onClick={() => handleApprove(a.id)} disabled={busy}>Approve Amendment</Button>
+                  <Input
+                    placeholder="Rejection reason…"
+                    value={rejectReasons[a.id] || ""}
+                    onChange={(e) => setRejectReasons({ ...rejectReasons, [a.id]: e.target.value })}
+                    className="h-8 text-xs"
+                  />
+                  <Button size="sm" variant="secondary" onClick={() => handleReject(a.id)} disabled={busy}>Reject</Button>
                 </div>
               )}
+              {a.decisionReason && <p className="text-rose-600">Decision note: {a.decisionReason}</p>}
             </div>
           ))}
         </div>
       )}
-
-      {canRequest && requestableItems.length > 0 && (
-        <div className="border-t border-slate-100 pt-3">
-          <h3 className="mb-2 text-xs font-semibold uppercase text-slate-500">Request Amendment</h3>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Item</label>
-              <select
-                value={selectedItemId}
-                onChange={(e) => setSelectedItemId(e.target.value)}
-                className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm"
-              >
-                {requestableItems.map((it) => (
-                  <option key={it.id} value={it.id}>{it.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">New Quantity</label>
-              <Input type="number" value={newQuantity} onChange={(e) => setNewQuantity(e.target.value)} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">New Weight (kg)</label>
-              <Input type="number" step="0.001" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} />
-            </div>
-            <div className="md:col-span-1">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Reason</label>
-              <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this correction needed?" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <Button size="sm" disabled={busy} onClick={handleSubmitRequest}>
-              {busy ? "Submitting…" : "Submit Amendment Request"}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
     </div>
   );
 }

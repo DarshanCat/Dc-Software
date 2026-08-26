@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createMaterialReceipt } from "@/server/receipts/actions";
+import { createReceipt } from "@/server/receipts/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -58,7 +58,7 @@ export function ReceiveMaterialForm({ dcId, lines }: { dcId: string; lines: Rece
     }
 
     setBusy(true);
-    const res = await createMaterialReceipt({ dcId, lines: submittedLines });
+    const res = await createReceipt({ dcId, lines: submittedLines });
     setBusy(false);
     if (!res.ok) {
       setError(res.error);

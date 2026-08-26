@@ -29,34 +29,25 @@ export default async function SearchPage({
       <div className="space-y-4">
         <h1 className="text-lg font-semibold text-slate-900">Search</h1>
         <p className="text-sm text-slate-500">
-          Enter a search term above - DC number, vendor, item code/name, job work order, vehicle number, batch/heat number.
+          Enter a search term above — DC number, Part Number, Vendor, Process, Heat number, WO ID, Vehicle number.
         </p>
       </div>
     );
   }
 
-    const tokens = q.split(/\s+/).filter(Boolean);
+  const tokens = q.split(/\s+/).filter(Boolean);
 
   const tokenClause = (token: string) => ({
     OR: [
       { dcNumber: { contains: token, mode: "insensitive" as const } },
+      { partNumber: { contains: token, mode: "insensitive" as const } },
+      { heatNumber: { contains: token, mode: "insensitive" as const } },
       { woNumber: { contains: token, mode: "insensitive" as const } },
       { vehicleNumber: { contains: token, mode: "insensitive" as const } },
       { jobWorkOrderNumber: { contains: token, mode: "insensitive" as const } },
       { referenceNumber: { contains: token, mode: "insensitive" as const } },
       { vendor: { OR: [{ vendorName: { contains: token, mode: "insensitive" as const } }, { vendorCode: { contains: token, mode: "insensitive" as const } }] } },
-      {
-        items: {
-          some: {
-            OR: [
-              { batchNumber: { contains: token, mode: "insensitive" as const } },
-              { heatNumber: { contains: token, mode: "insensitive" as const } },
-              { item: { itemCode: { contains: token, mode: "insensitive" as const } } },
-              { item: { itemName: { contains: token, mode: "insensitive" as const } } },
-            ],
-          },
-        },
-      },
+      { process: { name: { contains: token, mode: "insensitive" as const } } },
     ],
   });
 
@@ -64,7 +55,7 @@ export default async function SearchPage({
     where: {
       AND: tokens.map(tokenClause),
     },
-    include: { vendor: true, process: true, items: { include: { item: true } } },
+    include: { vendor: true, process: true },
     orderBy: { dcDate: "desc" },
     take: 50,
   });
@@ -81,17 +72,19 @@ export default async function SearchPage({
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-3 py-2 font-medium">DC No</th>
+              <th className="px-3 py-2 font-medium">Part No</th>
+              <th className="px-3 py-2 font-medium">Heat No</th>
               <th className="px-3 py-2 font-medium">Vendor</th>
               <th className="px-3 py-2 font-medium">Process</th>
-              <th className="px-3 py-2 font-medium">Items</th>
-              <th className="px-3 py-2 font-medium">Vehicle</th>
+              <th className="px-3 py-2 text-right font-medium">RM Qty</th>
+              <th className="px-3 py-2 text-right font-medium">Return FG Qty</th>
               <th className="px-3 py-2 font-medium">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {dcs.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-slate-400">No matches found.</td>
+                <td colSpan={8} className="px-3 py-8 text-center text-slate-400">No matches found.</td>
               </tr>
             ) : (
               dcs.map((dc) => (
@@ -99,12 +92,12 @@ export default async function SearchPage({
                   <td className="px-3 py-2">
                     <Link href={"/dcs/" + dc.id} className="font-mono text-blue-700 hover:underline">{dc.dcNumber}</Link>
                   </td>
+                  <td className="px-3 py-2 font-mono text-slate-700">{dc.partNumber || "—"}</td>
+                  <td className="px-3 py-2 font-mono text-slate-700">{dc.heatNumber || "—"}</td>
                   <td className="px-3 py-2 text-slate-900">{dc.vendor.vendorName}</td>
-                  <td className="px-3 py-2 text-slate-600">{dc.process?.name ?? "-"}</td>
-                  <td className="px-3 py-2 text-slate-600">
-                    {dc.items.map((it) => it.item.itemCode).join(", ") || "-"}
-                  </td>
-                  <td className="px-3 py-2 text-slate-600">{dc.vehicleNumber ?? "-"}</td>
+                  <td className="px-3 py-2 text-slate-600">{dc.process?.name ?? "—"}</td>
+                  <td className="px-3 py-2 text-right font-mono">{dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"}</td>
+                  <td className="px-3 py-2 text-right font-mono">{dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"}</td>
                   <td className="px-3 py-2">
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{dc.status.replace(/_/g, " ")}</span>
                   </td>

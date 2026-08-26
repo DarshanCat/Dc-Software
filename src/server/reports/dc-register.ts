@@ -15,12 +15,12 @@ export interface DcRegisterRow {
   dcNumber: string;
   dcDate: Date;
   partNumber: string;
+  rmQuantity: number;
+  returnFgQuantity: number;
+  heatNumber: string;
   expectedScrap: number;
   vendorName: string;
   processName: string;
-  itemLabel: string;
-  quantity: number;
-  weight: number;
   ewayBillNumber: string;
   eSugamNumber: string;
   expectedReturnDate: Date | null;
@@ -56,7 +56,6 @@ export async function getDcRegisterRows(
       include: {
         vendor: true,
         process: true,
-        items: { include: { item: true } },
         receipts: { include: { items: true } },
         scrapReceipts: { include: { items: true } },
       },
@@ -67,9 +66,8 @@ export async function getDcRegisterRows(
   ]);
 
   const rows: DcRegisterRow[] = dcs.map((dc) => {
-    const firstItem = dc.items[0];
-    const quantity = dc.items.reduce((s, it) => s + Number(it.quantity), 0);
-    const weight = dc.items.reduce((s, it) => s + Number(it.inputWeight), 0);
+    const rmQty = dc.rmQuantity != null ? Number(dc.rmQuantity) : 0;
+    const returnFgQty = dc.returnFgQuantity != null ? Number(dc.returnFgQuantity) : 0;
     const receivedQuantity = dc.receipts.reduce(
       (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.quantityReceived), 0),
       0,
@@ -84,18 +82,18 @@ export async function getDcRegisterRows(
       dcNumber: dc.dcNumber,
       dcDate: dc.dcDate,
       partNumber: dc.partNumber ?? "—",
+      rmQuantity: rmQty,
+      returnFgQuantity: returnFgQty,
+      heatNumber: dc.heatNumber ?? "—",
       expectedScrap: dc.expectedScrap != null ? Number(dc.expectedScrap) : 0,
       vendorName: dc.vendor.vendorName,
       processName: dc.process?.name ?? "—",
-      itemLabel: firstItem ? `${firstItem.item.itemCode} — ${firstItem.item.itemName}` : "—",
-      quantity,
-      weight,
       ewayBillNumber: dc.ewayBillNumber ?? "—",
       eSugamNumber: dc.eSugamNumber ?? "—",
       expectedReturnDate: dc.expectedReturnDate,
       receivedQuantity,
       scrapWeight,
-      balance: Math.max(quantity - receivedQuantity, 0),
+      balance: Math.max(returnFgQty - receivedQuantity, 0),
       status: dc.status,
     };
   });
@@ -107,8 +105,8 @@ import { sanitizeCsvCell } from "@/lib/csv";
 
 export function rowsToCsv(rows: DcRegisterRow[]): string {
   const header = [
-    "DC No", "Date", "Part Number", "Vendor", "Process", "Item", "Qty", "Weight (kg)",
-    "Expected Scrap (kg)", "E-Way Bill", "E-Sugam", "Expected Return", "Received Qty", "Actual Scrap (kg)", "Balance", "Status",
+    "DC No", "Date", "Part Number", "RM Qty", "Return FG Qty", "Heat Number", "Vendor", "Process",
+    "E-Way Bill", "E-Sugam", "Expected Return", "Received Qty", "Actual Scrap (kg)", "Balance", "Status",
   ];
   const lines = [header.join(",")];
   for (const r of rows) {
@@ -117,12 +115,11 @@ export function rowsToCsv(rows: DcRegisterRow[]): string {
         sanitizeCsvCell(r.dcNumber),
         sanitizeCsvCell(r.dcDate.toISOString().slice(0, 10)),
         sanitizeCsvCell(r.partNumber),
+        r.rmQuantity.toFixed(3),
+        r.returnFgQuantity.toFixed(3),
+        sanitizeCsvCell(r.heatNumber),
         sanitizeCsvCell(r.vendorName),
         sanitizeCsvCell(r.processName),
-        sanitizeCsvCell(r.itemLabel),
-        String(r.quantity),
-        r.weight.toFixed(3),
-        r.expectedScrap.toFixed(3),
         sanitizeCsvCell(r.ewayBillNumber),
         sanitizeCsvCell(r.eSugamNumber),
         r.expectedReturnDate ? sanitizeCsvCell(r.expectedReturnDate.toISOString().slice(0, 10)) : '""',

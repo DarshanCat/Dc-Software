@@ -9,7 +9,7 @@ const RECEIVABLE_STATUSES: DcStatus[] = ["DRAFT", "APPROVED", "DISPATCHED", "AT_
 export default async function NewReceiptPage() {
   const dcs = await prisma.deliveryChallan.findMany({
     where: { status: { in: RECEIVABLE_STATUSES } },
-    include: { vendor: true, items: true },
+    include: { vendor: true },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
@@ -29,7 +29,7 @@ export default async function NewReceiptPage() {
             <tr>
               <th className="px-4 py-2 font-medium">DC No</th>
               <th className="px-4 py-2 font-medium">Vendor</th>
-              <th className="px-4 py-2 font-medium text-right">Sent Qty</th>
+              <th className="px-4 py-2 font-medium text-right">Return FG Qty</th>
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium"></th>
             </tr>
@@ -39,7 +39,7 @@ export default async function NewReceiptPage() {
               <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">No DCs available to receive against.</td></tr>
             ) : (
               dcs.map((dc) => {
-                const qty = dc.items.reduce((s, it) => s + Number(it.quantity), 0);
+                const qty = Number(dc.returnFgQuantity ?? 0);
                 return (
                   <tr key={dc.id} className="hover:bg-slate-50">
                     <td className="px-4 py-2 font-mono text-slate-700">{dc.dcNumber}</td>

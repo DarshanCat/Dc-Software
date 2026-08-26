@@ -12,7 +12,7 @@ describe("Registration Request Schema Validation", () => {
   it("accepts valid self-registration input", () => {
     const result = createRegistrationSchema.safeParse({
       fullName: "Rahul Sharma",
-      email: "rahul@example.com",
+      email: "rahul@vijayspheroidals.com",
       employeeId: "EMP-102",
       phone: "+91 9876543210",
       requestedDepartment: "Production",
@@ -24,12 +24,12 @@ describe("Registration Request Schema Validation", () => {
   it("trims and lowercases email address", () => {
     const result = createRegistrationSchema.safeParse({
       fullName: "Anita Kumar",
-      email: "  ANITA@EXAMPLE.COM  ",
+      email: "  ANITA@VIJAYSPHEROIDALS.COM  ",
       requestedDepartment: "Quality",
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.email).toBe("anita@example.com");
+      expect(result.data.email).toBe("anita@vijayspheroidals.com");
     }
   });
 
@@ -45,7 +45,7 @@ describe("Registration Request Schema Validation", () => {
   it("rejects invalid or unapproved departments", () => {
     const result = createRegistrationSchema.safeParse({
       fullName: "Test User",
-      email: "test@example.com",
+      email: "test@vijayspheroidals.com",
       requestedDepartment: "SUPER_ADMIN_DEPT",
     });
     expect(result.success).toBe(false);
@@ -55,7 +55,7 @@ describe("Registration Request Schema Validation", () => {
     for (const dept of ALLOWED_DEPARTMENTS) {
       const result = createRegistrationSchema.safeParse({
         fullName: "Valid User",
-        email: "user@example.com",
+        email: "user@vijayspheroidals.com",
         requestedDepartment: dept,
       });
       expect(result.success).toBe(true);
@@ -64,13 +64,17 @@ describe("Registration Request Schema Validation", () => {
 });
 
 describe("Admin Approval & Rejection Schema Validation", () => {
-  it("requires valid role and department for approval", () => {
+  it("requires valid role and department for approval, and accepts approving person's name", () => {
     const result = approveRegistrationSchema.safeParse({
       requestId: "req-123",
       department: "Production",
       roleKey: "STORES",
+      approvingPersonName: "Darshan Manager",
     });
     expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.approvingPersonName).toBe("Darshan Manager");
+    }
   });
 
   it("rejects approval with invalid department", () => {

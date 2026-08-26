@@ -23,7 +23,7 @@ export default async function WorkOrdersPage({
 
   const dcs = await prisma.deliveryChallan.findMany({
     where: wo ? { woNumber: { contains: wo, mode: "insensitive" } } : undefined,
-    include: { vendor: true, process: true, items: true, receipts: { include: { items: true } } },
+    include: { vendor: true, process: true, receipts: { include: { items: true } } },
     orderBy: { createdAt: "desc" },
     take: 300,
   });
@@ -61,7 +61,7 @@ export default async function WorkOrdersPage({
       ) : (
         <div className="space-y-6">
           {Array.from(byWo.entries()).map(([woNumber, group]) => {
-            const totalSent = group.reduce((s, dc) => s + dc.items.reduce((si, it) => si + Number(it.quantity), 0), 0);
+            const totalSent = group.reduce((s, dc) => s + Number(dc.returnFgQuantity ?? 0), 0);
             const totalReturned = group.reduce(
               (s, dc) => s + dc.receipts.reduce(
                 (sr, r) => sr + r.items.reduce((sri, ri) => sri + Number(ri.quantityReceived), 0), 0), 0);
@@ -70,7 +70,7 @@ export default async function WorkOrdersPage({
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="font-mono text-sm font-semibold text-slate-900">{woNumber}</h2>
                   <span className="text-xs text-slate-500">
-                    Sent {totalSent} · Returned {totalReturned}
+                    Expected Return FG Qty {totalSent} · Returned {totalReturned}
                   </span>
                 </div>
                 <table className="w-full text-sm">
@@ -79,7 +79,7 @@ export default async function WorkOrdersPage({
                       <th className="py-1">DC No</th>
                       <th>Vendor</th>
                       <th>Process</th>
-                      <th className="text-right">Qty</th>
+                      <th className="text-right font-mono">Return FG Qty</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -94,7 +94,7 @@ export default async function WorkOrdersPage({
                         <td>{dc.vendor.vendorName}</td>
                         <td>{dc.process?.name ?? "—"}</td>
                         <td className="text-right font-mono">
-                          {dc.items.reduce((s, it) => s + Number(it.quantity), 0)}
+                          {Number(dc.returnFgQuantity ?? 0).toFixed(3)}
                         </td>
                         <td>
                           <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[dc.status] ?? "bg-slate-100 text-slate-600"}`}>

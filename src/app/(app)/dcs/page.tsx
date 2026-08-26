@@ -37,7 +37,7 @@ export default async function DcsPage({
   const dcs = await prisma.deliveryChallan.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    include: { vendor: true, process: true, items: true },
+    include: { vendor: true, process: true },
     take: 100,
   });
 
@@ -70,7 +70,7 @@ export default async function DcsPage({
               <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No DCs yet.</td></tr>
             ) : (
               dcs.map((dc) => {
-                const inputWt = dc.items.reduce((sum, it) => sum + Number(it.inputWeight), 0);
+                const inputWt = Number(dc.rmQuantity ?? 0);
                 return (
                   <tr key={dc.id} className="hover:bg-slate-50">
                     <td className="px-4 py-2">

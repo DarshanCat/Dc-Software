@@ -104,32 +104,17 @@ export default async function QrScanPage({ params }: { params: Promise<{ token: 
         <hr className="mt-4 border-slate-300" />
 
         {/* Items */}
-        <table className="mt-3 w-full text-[11px]">
-          <thead>
-            <tr className="border-b border-slate-300 text-left text-[9px] uppercase tracking-wide text-slate-500">
-              <th className="py-1 pr-1 font-semibold">Sl</th>
-              <th className="py-1 pr-1 font-semibold">Item Code</th>
-              <th className="py-1 pr-1 font-semibold">Description</th>
-              <th className="py-1 pr-1 font-semibold">Drawing</th>
-              <th className="py-1 pr-1 text-right font-semibold">Qty</th>
-              <th className="py-1 pr-1 font-semibold">UOM</th>
-              <th className="py-1 text-right font-semibold">Weight (kg)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((it) => (
-              <tr key={it.slNo} className="border-b border-slate-200 text-slate-800">
-                <td className="py-1.5 pr-1">{it.slNo}</td>
-                <td className="py-1.5 pr-1 font-medium">{it.itemCode}</td>
-                <td className="py-1.5 pr-1">{it.description}</td>
-                <td className="py-1.5 pr-1">{it.drawingNumber}</td>
-                <td className="py-1.5 pr-1 text-right">{it.quantity}</td>
-                <td className="py-1.5 pr-1">{it.uom}</td>
-                <td className="py-1.5 text-right">{it.weight}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="mt-4 rounded border border-slate-200 p-3 bg-slate-50">
+          <div className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Movement Specifications</div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div><span className="text-slate-500">Part Number:</span> <span className="font-semibold">{data.partNumber}</span></div>
+            <div><span className="text-slate-500">Heat Number:</span> <span className="font-semibold">{data.heatNumber}</span></div>
+            <div><span className="text-slate-500">RM Qty:</span> <span className="font-semibold">{data.rmQuantity}</span></div>
+            <div><span className="text-slate-500">Return FG Qty:</span> <span className="font-semibold">{data.returnFgQuantity}</span></div>
+            <div><span className="text-slate-500">Process:</span> <span className="font-semibold">{data.processName}</span></div>
+            <div><span className="text-slate-500">Purpose:</span> <span className="font-semibold">{data.purpose}</span></div>
+          </div>
+        </div>
 
         {/* Terms */}
         <p className="mt-4 text-[10px] leading-relaxed text-slate-400">

@@ -51,7 +51,6 @@ export default async function VendorPerformanceReportPage({
       reconciliation: true,
       receipts: { include: { items: true } },
       scrapReceipts: { include: { items: true } },
-      items: true,
     },
   });
 
@@ -65,17 +64,20 @@ export default async function VendorPerformanceReportPage({
   const rows = vendors.map((vendor) => {
     const vendorDcs = dcsByVendor.get(vendor.id) ?? [];
 
-    let timelyCount = 0;
+    let totalDcs = 0;
     let timelinessEligible = 0;
-    let balancedCount = 0;
+    let timelyCount = 0;
     let reconciledEligible = 0;
+    let balancedCount = 0;
     let totalExpectedScrap = 0;
     let totalReceivedScrap = 0;
     let totalGrossReceived = 0;
     let totalRejected = 0;
 
     for (const dc of vendorDcs) {
-      if (FULLY_RETURNED_ONWARD.includes(dc.status) && dc.dispatch && dc.expectedReturnDate && dc.receipts.length > 0) {
+      totalDcs++;
+
+      if (dc.expectedReturnDate && dc.receipts.length > 0) {
         timelinessEligible++;
         const lastReceipt = [...dc.receipts].sort((a, b) => b.receiptDate.getTime() - a.receiptDate.getTime())[0];
         if (lastReceipt.receiptDate <= dc.expectedReturnDate) timelyCount++;
@@ -86,7 +88,7 @@ export default async function VendorPerformanceReportPage({
         if (dc.reconciliation.status === "BALANCED" || dc.reconciliation.status === "CLOSED") balancedCount++;
       }
 
-      totalExpectedScrap += dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+      totalExpectedScrap += Number(dc.expectedScrap ?? 0);
       totalReceivedScrap += dc.scrapReceipts.reduce(
         (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),
         0,

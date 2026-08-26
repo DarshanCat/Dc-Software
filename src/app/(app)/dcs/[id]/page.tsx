@@ -28,7 +28,6 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
     include: {
       vendor: true,
       process: true,
-      items: { include: { item: true } },
       statusHistory: { orderBy: { createdAt: "asc" } },
       dispatch: true,
       receipts: { include: { items: true }, orderBy: { receiptDate: "asc" } },
@@ -37,10 +36,27 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
       exceptions: { orderBy: { createdAt: "asc" } },
       recoveryRequirements: { include: { recoveryType: true } },
       recoveryReceipts: { include: { recoveryType: true }, orderBy: { receiptDate: "asc" } },
-      classifications: { include: { items: { include: { scrapType: true, item: true } } }, orderBy: { classifiedAt: "asc" } },
+      classifications: { include: { items: { include: { scrapType: true } } }, orderBy: { classifiedAt: "asc" } },
     },
   });
-  if (!dc) notFound();
+  if (!dc) {
+    return (
+      <div className="mx-auto max-w-lg rounded-xl border border-amber-200 bg-amber-50 p-6 text-center shadow-sm my-12">
+        <h2 className="text-lg font-bold text-amber-900">Record Not Available</h2>
+        <p className="mt-2 text-sm text-amber-800">
+          This record is no longer available. It may have been removed or you may have followed an outdated link.
+        </p>
+        <div className="mt-6">
+          <a
+            href="/dcs"
+            className="inline-flex items-center rounded-md bg-amber-900 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800 transition-colors"
+          >
+            Back to Delivery Challans
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const recoveryTypes = await prisma.recoveryType.findMany({ where: { active: true }, orderBy: { name: "asc" } });
   const canReceiveRecovery = user ? await hasPermission(user.id, PERMISSIONS.SCRAP_CREATE) : false;
@@ -53,13 +69,10 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
   });
 
   const canClassify = user ? await hasPermission(user.id, PERMISSIONS.RECEIPT_EDIT) : false;
-  const classifiedByItemId = new Map<string, number>();
+  let totalClassifiedQty = 0;
   for (const c of dc.classifications) {
     for (const line of c.items) {
-      classifiedByItemId.set(
-        line.itemId,
-        (classifiedByItemId.get(line.itemId) ?? 0) + Number(line.goodQty) + Number(line.scrapQty),
-      );
+      totalClassifiedQty += Number(line.goodQty) + Number(line.scrapQty);
     }
   }
   const scrapTypesForClassification = canClassify
@@ -110,28 +123,27 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
     : [];
   const amendmentUserNameById = new Map(amendmentUsers.map((u) => [u.id, u.name]));
 
-  const receivedByItemId = new Map<string, number>();
-  for (const receipt of dc.receipts) {
-    for (const line of receipt.items) {
-      receivedByItemId.set(line.itemId, (receivedByItemId.get(line.itemId) ?? 0) + Number(line.quantityReceived));
-    }
-  }
   const receivableStatuses = ["DRAFT", "APPROVED", "DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED"];
   const canReceiveNow = canReceive && receivableStatuses.includes(dc.status);
-  const receiveLines = dc.items.map((it) => ({
-    itemId: it.itemId,
-    itemCode: it.item.itemCode,
-    itemName: it.item.itemName,
-    sentQuantity: Number(it.quantity),
-    alreadyReceived: receivedByItemId.get(it.itemId) ?? 0,
-  }));
+  const receiveLines = [
+    {
+      itemId: "default",
+      itemCode: dc.partNumber ?? "PART",
+      itemName: "Part Material",
+      sentQuantity: Number(dc.returnFgQuantity ?? 0),
+      alreadyReceived: dc.receipts.reduce(
+        (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.quantityReceived), 0),
+        0,
+      ),
+    },
+  ];
 
-  const expectedScrapWeight = dc.expectedScrap != null ? Number(dc.expectedScrap) : dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+  const expectedScrapWeight = Number(dc.expectedScrap ?? 0);
   const receivedScrapWeight = dc.scrapReceipts.reduce(
     (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),
     0,
   );
-  const scrapTolerance = dc.items.length > 0 ? Number(dc.items[0].tolerancePercentage) : 0;
+  const scrapTolerance = 0;
   const scrapEval = evaluateScrap(expectedScrapWeight, receivedScrapWeight, scrapTolerance);
   const scrapReceivableStatuses = ["MATERIAL_RETURNED", "SCRAP_PENDING"];
   const canScrapNow = canScrap && scrapReceivableStatuses.includes(dc.status);
@@ -139,10 +151,10 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
     ? await prisma.scrapType.findMany({ where: { active: true }, orderBy: { code: "asc" } })
     : [];
 
-  const totalInput = dc.items.reduce((s, it) => s + Number(it.inputWeight), 0);
-  const totalFinished = dc.items.reduce((s, it) => s + Number(it.expectedFinishedWeight), 0);
-  const totalScrap = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
-  const totalLoss = dc.items.reduce((s, it) => s + Number(it.expectedProcessLoss), 0);
+  const totalInput = Number(dc.rmQuantity ?? 0);
+  const totalFinished = Number(dc.returnFgQuantity ?? 0);
+  const totalScrap = Number(dc.expectedScrap ?? 0);
+  const totalLoss = 0;
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -246,12 +258,28 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
             <p className="font-mono text-slate-900 font-semibold">{dc.partNumber || "—"}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Expected Scrap</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">RM Qty</p>
             <p className="font-mono text-slate-900 font-semibold">
-              {dc.expectedScrap !== null && dc.expectedScrap !== undefined
-                ? `${Number(dc.expectedScrap).toFixed(3)} kg`
+              {dc.rmQuantity !== null && dc.rmQuantity !== undefined
+                ? Number(dc.rmQuantity).toFixed(3)
                 : "—"}
             </p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Return FG Qty</p>
+            <p className="font-mono text-slate-900 font-semibold">
+              {dc.returnFgQuantity !== null && dc.returnFgQuantity !== undefined
+                ? Number(dc.returnFgQuantity).toFixed(3)
+                : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Heat Number</p>
+            <p className="font-mono text-slate-900 font-semibold">{dc.heatNumber || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Process</p>
+            <p className="font-mono text-slate-900 font-medium">{dc.process?.name || "—"}</p>
           </div>
           <div>
             <p className="text-xs text-slate-500 uppercase tracking-wider">Work Order ID</p>
@@ -302,19 +330,20 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
 
       <ClassificationPanel
         dcId={dc.id}
-        items={dc.items.map((it) => ({
-          itemId: it.itemId,
-          itemCode: it.item.itemCode,
-          itemName: it.item.itemName,
-          receivedQty: receivedByItemId.get(it.itemId) ?? 0,
-          alreadyClassifiedQty: classifiedByItemId.get(it.itemId) ?? 0,
-        }))}
+        items={[
+          {
+            receivedQty: dc.receipts.reduce(
+              (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.quantityReceived), 0),
+              0,
+            ),
+            alreadyClassifiedQty: totalClassifiedQty,
+          },
+        ]}
         scrapTypes={scrapTypesForClassification.map((s) => ({ id: s.id, name: s.name }))}
         history={dc.classifications.map((c) => ({
           id: c.id,
           classifiedAt: c.classifiedAt.toISOString(),
           lines: c.items.map((l) => ({
-            itemCode: l.item.itemCode,
             receivedQty: Number(l.receivedQty),
             goodQty: Number(l.goodQty),
             scrapQty: Number(l.scrapQty),
@@ -326,15 +355,8 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
 
       <AmendmentPanel
         dcId={dc.id}
-        dcItems={dc.items.map((it) => ({
-          id: it.id,
-          label: it.item.itemCode + " — " + it.item.itemName,
-          quantity: Number(it.quantity),
-          weight: Number(it.inputWeight),
-        }))}
         amendments={amendments.map((a) => ({
           id: a.id,
-          dcItemId: a.dcItemId,
           requestedByName: amendmentUserNameById.get(a.requestedBy) ?? "Unknown",
           requestedAt: a.requestedAt.toISOString(),
           reason: a.reason,
@@ -372,10 +394,9 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
                   </thead>
                   <tbody>
                     {r.items.map((line) => {
-                      const it = dc.items.find((di) => di.itemId === line.itemId);
                       return (
                         <tr key={line.id} className="border-t border-slate-100">
-                          <td className="py-1">{it?.item.itemCode ?? line.itemId}</td>
+                          <td className="py-1">{dc.partNumber ?? "Part Material"}</td>
                           <td className="text-right font-mono">{Number(line.quantityReceived)}</td>
                           <td className="text-right font-mono">{Number(line.weightReceived).toFixed(3)}</td>
                           <td className="text-right font-mono">{Number(line.rejectedQuantity)}</td>
@@ -494,34 +515,14 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
         revalidateTo={"/dcs/" + dc.id}
       />
 
-      <div className="rounded-lg border border-slate-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900">Items</h2>
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase text-slate-500">
-            <tr>
-              <th className="py-1">Item</th><th>Qty</th><th className="text-right">Input</th>
-              <th className="text-right">Exp. Finished</th><th className="text-right">Exp. Scrap</th>
-              <th className="text-right">Received</th><th className="text-right">Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dc.items.map((it) => {
-              const received = receivedByItemId.get(it.itemId) ?? 0;
-              const balance = Number(it.quantity) - received;
-              return (
-                <tr key={it.id} className="border-t border-slate-100">
-                  <td className="py-1.5">{it.item.itemCode} — {it.item.itemName}</td>
-                  <td>{Number(it.quantity)}</td>
-                  <td className="text-right font-mono">{Number(it.inputWeight).toFixed(3)}</td>
-                  <td className="text-right font-mono">{Number(it.expectedFinishedWeight).toFixed(3)}</td>
-                  <td className="text-right font-mono">{Number(it.expectedScrapWeight).toFixed(3)}</td>
-                  <td className="text-right font-mono">{received}</td>
-                  <td className="text-right font-mono">{balance.toFixed(3)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="rounded-lg border border-slate-200 p-4 bg-slate-50">
+        <h2 className="mb-3 text-sm font-semibold text-slate-900 uppercase tracking-wider">Movement Specifications</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <div><span className="text-slate-500 block text-xs">Part Number</span><span className="font-semibold text-slate-900">{dc.partNumber || "—"}</span></div>
+          <div><span className="text-slate-500 block text-xs">Heat Number</span><span className="font-semibold text-slate-900">{dc.heatNumber || "—"}</span></div>
+          <div><span className="text-slate-500 block text-xs">RM Qty</span><span className="font-semibold text-slate-900">{dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"}</span></div>
+          <div><span className="text-slate-500 block text-xs">Return FG Qty</span><span className="font-semibold text-slate-900">{dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"}</span></div>
+        </div>
       </div>
 
       <div className="rounded-lg border border-slate-200 p-4">

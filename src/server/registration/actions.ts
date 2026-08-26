@@ -96,6 +96,7 @@ export async function submitRegistrationRequest(
         body: `${data.fullName} has requested access to DC & Vendor Material Management.`,
         entityType: "RegistrationRequest",
         entityId: req.id,
+        targetUrl: "/admin/users/requests",
       });
 
       await writeAudit(tx, {
@@ -222,6 +223,7 @@ export async function approveRegistrationRequest(
           status: "APPROVED",
           reviewedAt: new Date(),
           reviewedById: adminUser!.id,
+          approvingPersonName: data.approvingPersonName || adminUser?.email || "Admin",
           approvedUserId: newUser.id,
           activationTokenHash: tokenHash,
           activationTokenExpiresAt: expiresAt,

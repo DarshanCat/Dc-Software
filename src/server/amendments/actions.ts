@@ -8,6 +8,7 @@ import { PERMISSIONS } from "@/config/permissions";
 import { writeAudit } from "@/server/audit";
 import { notifyUsersWithPermission, createNotification } from "@/server/notifications/service";
 import { requestAmendmentSchema, type RequestAmendmentInput } from "@/lib/validation/amendment";
+import { Prisma } from "@prisma/client";
 
 export type ActionResult = { ok: true; id: string } | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
@@ -45,24 +46,23 @@ export async function requestAmendment(input: RequestAmendmentInput): Promise<Ac
         throw new UserFacingError(`Cannot amend a DC in status ${dc.status}.`);
       }
 
-      const dcItem = await tx.deliveryChallanItem.findUnique({ where: { id: data.dcItemId } });
-      if (!dcItem || dcItem.dcId !== data.dcId) throw new UserFacingError("Item does not belong to this DC.");
-
       const existingPending = await tx.dcAmendment.findFirst({
-        where: { dcItemId: data.dcItemId, status: "PENDING" },
+        where: { dcId: data.dcId, status: "PENDING" },
       });
       if (existingPending) {
-        throw new UserFacingError("There is already a pending amendment request for this item.");
+        throw new UserFacingError("There is already a pending amendment request for this DC.");
       }
+
+      const prevQty = Number(dc.returnFgQuantity ?? 0);
+      const prevWt = Number(dc.rmQuantity ?? 0);
 
       const amendment = await tx.dcAmendment.create({
         data: {
           dcId: data.dcId,
-          dcItemId: data.dcItemId,
           requestedBy: user!.id,
           reason: data.reason,
-          previousQuantity: dcItem.quantity,
-          previousWeight: dcItem.inputWeight,
+          previousQuantity: prevQty,
+          previousWeight: prevWt,
           newQuantity: data.newQuantity,
           newWeight: data.newWeight,
         },
@@ -74,8 +74,8 @@ export async function requestAmendment(input: RequestAmendmentInput): Promise<Ac
         module: "DeliveryChallans",
         entityType: "DeliveryChallan",
         entityId: data.dcId,
-        oldValue: { quantity: dcItem.quantity.toString(), inputWeight: dcItem.inputWeight.toString() },
-        newValue: { quantity: data.newQuantity, inputWeight: data.newWeight },
+        oldValue: { returnFgQuantity: prevQty, rmQuantity: prevWt },
+        newValue: { returnFgQuantity: data.newQuantity, rmQuantity: data.newWeight },
         reason: data.reason,
       });
 
@@ -88,6 +88,7 @@ export async function requestAmendment(input: RequestAmendmentInput): Promise<Ac
           body: data.reason,
           entityType: "DeliveryChallan",
           entityId: data.dcId,
+          targetUrl: `/dcs/${data.dcId}`,
         },
         user!.id,
       );
@@ -119,11 +120,8 @@ export async function approveAmendment(amendmentId: string): Promise<ActionResul
       if (!amendment) throw new UserFacingError("Amendment not found.");
       if (amendment.status !== "PENDING") throw new UserFacingError(`This amendment is already ${amendment.status.toLowerCase()}.`);
 
-      const dcItem = await tx.deliveryChallanItem.findUnique({ where: { id: amendment.dcItemId } });
-      if (!dcItem) throw new UserFacingError("The item this amendment refers to no longer exists.");
-
       const alreadyReceived = await tx.materialReceiptItem.aggregate({
-        where: { itemId: dcItem.itemId, receipt: { dcId: amendment.dcId } },
+        where: { receipt: { dcId: amendment.dcId } },
         _sum: { quantityReceived: true },
       });
       const receivedSoFar = Number(alreadyReceived._sum.quantityReceived ?? 0);
@@ -133,14 +131,21 @@ export async function approveAmendment(amendmentId: string): Promise<ActionResul
         );
       }
 
-      const updatedItem = await tx.deliveryChallanItem.update({
-        where: { id: amendment.dcItemId },
-        data: { quantity: amendment.newQuantity, inputWeight: amendment.newWeight },
+      await tx.deliveryChallan.update({
+        where: { id: amendment.dcId },
+        data: {
+          returnFgQuantity: new Prisma.Decimal(amendment.newQuantity),
+          rmQuantity: new Prisma.Decimal(amendment.newWeight),
+        },
       });
 
       await tx.dcAmendment.update({
         where: { id: amendmentId },
-        data: { status: "APPROVED", decidedBy: user!.id, decidedAt: new Date() },
+        data: {
+          status: "APPROVED",
+          decidedBy: user!.id,
+          decidedAt: new Date(),
+        },
       });
 
       await writeAudit(tx, {
@@ -149,24 +154,26 @@ export async function approveAmendment(amendmentId: string): Promise<ActionResul
         module: "DeliveryChallans",
         entityType: "DeliveryChallan",
         entityId: amendment.dcId,
-        oldValue: { quantity: amendment.previousQuantity.toString(), inputWeight: amendment.previousWeight.toString() },
-        newValue: { quantity: updatedItem.quantity.toString(), inputWeight: updatedItem.inputWeight.toString() },
-        reason: "Amendment approved and applied",
+        oldValue: { returnFgQuantity: amendment.previousQuantity, rmQuantity: amendment.previousWeight },
+        newValue: { returnFgQuantity: amendment.newQuantity, rmQuantity: amendment.newWeight },
+        reason: "Amendment approved",
       });
 
       await createNotification(tx, {
         userId: amendment.requestedBy,
         type: "DC_AMENDMENT_APPROVED",
-        title: "Your amendment request was approved",
+        title: `Amendment approved for DC`,
+        body: `Your amendment request was approved by ${user!.email || "an administrator"}.`,
         entityType: "DeliveryChallan",
         entityId: amendment.dcId,
+        targetUrl: `/dcs/${amendment.dcId}`,
       });
 
       return amendment.dcId;
     });
 
     revalidatePath(`/dcs/${dcId}`);
-    return { ok: true, id: amendmentId };
+    return { ok: true, id: dcId };
   } catch (e) {
     if (e instanceof UserFacingError) return { ok: false, error: e.message };
     throw e;
@@ -183,9 +190,8 @@ export async function rejectAmendment(amendmentId: string, reason: string): Prom
     throw e;
   }
 
-  if (!reason || reason.trim().length === 0) {
-    return { ok: false, error: "A reason is required to reject an amendment." };
-  }
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) return { ok: false, error: "Please provide a reason for rejecting the amendment." };
 
   try {
     const dcId = await prisma.$transaction(async (tx) => {
@@ -195,7 +201,12 @@ export async function rejectAmendment(amendmentId: string, reason: string): Prom
 
       await tx.dcAmendment.update({
         where: { id: amendmentId },
-        data: { status: "REJECTED", decidedBy: user!.id, decidedAt: new Date(), decisionReason: reason },
+        data: {
+          status: "REJECTED",
+          decidedBy: user!.id,
+          decidedAt: new Date(),
+          decisionReason: trimmedReason,
+        },
       });
 
       await writeAudit(tx, {
@@ -204,23 +215,24 @@ export async function rejectAmendment(amendmentId: string, reason: string): Prom
         module: "DeliveryChallans",
         entityType: "DeliveryChallan",
         entityId: amendment.dcId,
-        reason,
+        reason: trimmedReason,
       });
 
       await createNotification(tx, {
         userId: amendment.requestedBy,
         type: "DC_AMENDMENT_REJECTED",
-        title: "Your amendment request was rejected",
-        body: reason,
+        title: `Amendment rejected for DC`,
+        body: `Reason: ${trimmedReason}`,
         entityType: "DeliveryChallan",
         entityId: amendment.dcId,
+        targetUrl: `/dcs/${amendment.dcId}`,
       });
 
       return amendment.dcId;
     });
 
     revalidatePath(`/dcs/${dcId}`);
-    return { ok: true, id: amendmentId };
+    return { ok: true, id: dcId };
   } catch (e) {
     if (e instanceof UserFacingError) return { ok: false, error: e.message };
     throw e;

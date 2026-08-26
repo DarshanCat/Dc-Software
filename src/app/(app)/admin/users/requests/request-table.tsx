@@ -48,6 +48,7 @@ export function RequestTable({
   const [approveModalReq, setApproveModalReq] = useState<RequestItem | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>("Production");
   const [selectedRoleKey, setSelectedRoleKey] = useState<string>("STORES");
+  const [approvingPersonName, setApprovingPersonName] = useState<string>("");
   const [approving, setApproving] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
 
@@ -74,6 +75,7 @@ export function RequestTable({
     setApproveModalReq(req);
     setSelectedDept(req.requestedDepartment || "Production");
     setSelectedRoleKey(availableRoles.find((r) => r.key === "STORES")?.key || availableRoles[0]?.key || "STORES");
+    setApprovingPersonName("");
     setApproveError(null);
   }
 
@@ -88,6 +90,7 @@ export function RequestTable({
         requestId: approveModalReq.id,
         department: selectedDept as any,
         roleKey: selectedRoleKey,
+        approvingPersonName: approvingPersonName.trim() || undefined,
       });
 
       if (!res.ok) {
@@ -339,6 +342,23 @@ export function RequestTable({
                 </select>
                 <p className="text-xs text-slate-500">
                   User self-registration never assigns a role. Admin must assign the initial role.
+                </p>
+              </div>
+
+              {/* Approving Person's Name */}
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  Approving Person&apos;s Name
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Enter name of person approving this account..."
+                  value={approvingPersonName}
+                  onChange={(e) => setApprovingPersonName(e.target.value)}
+                  className="h-10 text-sm border-slate-300"
+                />
+                <p className="text-xs text-slate-500">
+                  Optional: Name of manager/approver authorizing this account creation.
                 </p>
               </div>
 

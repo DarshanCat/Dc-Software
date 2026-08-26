@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     where: { status: { not: "CANCELLED" } },
     include: {
       vendor: true, dispatch: true, reconciliation: true,
-      receipts: { include: { items: true } }, scrapReceipts: { include: { items: true } }, items: true,
+      receipts: { include: { items: true } }, scrapReceipts: { include: { items: true } },
     },
   });
 
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
         reconciledEligible++;
         if (dc.reconciliation.status === "BALANCED" || dc.reconciliation.status === "CLOSED") balancedCount++;
       }
-      totalExpectedScrap += dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+      totalExpectedScrap += Number(dc.expectedScrap ?? 0);
       totalReceivedScrap += dc.scrapReceipts.reduce((sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0), 0);
       for (const receipt of dc.receipts) {
         for (const line of receipt.items) {

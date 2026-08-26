@@ -25,6 +25,9 @@ export interface DcPdfData {
   purpose: string;
   processName: string;
   partNumber?: string | null;
+  rmQuantity?: string | null;
+  returnFgQuantity?: string | null;
+  heatNumber?: string | null;
   expectedScrap?: string | null;
   vehicleNumber: string;
   transporter: string;
@@ -32,7 +35,7 @@ export interface DcPdfData {
   eSugamNumber: string;
   referenceNumber: string;
   expectedReturnDate: string;
-  items: DcPdfItem[];
+  items?: DcPdfItem[];
   qrDataUrl: string | null;
 }
 
@@ -151,9 +154,11 @@ const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
     ["Date", data.dcDate],
     ["Vendor", data.vendorName],
     ["Part Number", data.partNumber || "—"],
-    ["Expected Scrap", data.expectedScrap || "—"],
-    ["Purpose", data.purpose],
+    ["RM Qty", data.rmQuantity || "—"],
+    ["Return FG Qty", data.returnFgQuantity || "—"],
+    ["Heat Number", data.heatNumber || "—"],
     ["Process", data.processName],
+    ["Purpose", data.purpose],
     ["Expected Return", data.expectedReturnDate],
     ["Vehicle No.", data.vehicleNumber],
     ["Transporter", data.transporter],
@@ -179,48 +184,7 @@ const font = await pdfDoc.embedFont(StandardFonts.TimesRoman);
 
   y += 4;
   page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_WIDTH - MARGIN, y }, thickness: 0.75, color: LINE });
-  y -= 16;
-
-  const cols = [
-    { key: "slNo", label: "Sl", width: 28, align: "left" as const },
-    { key: "itemCode", label: "Item Code", width: 75, align: "left" as const },
-    { key: "description", label: "Description", width: 140, align: "left" as const },
-    { key: "drawingNumber", label: "Drawing", width: 80, align: "left" as const },
-    { key: "quantity", label: "Qty", width: 45, align: "right" as const },
-    { key: "uom", label: "UOM", width: 40, align: "left" as const },
-    { key: "weight", label: "Weight (kg)", width: 75, align: "right" as const },
-  ];
-
-  function drawTableRow(values: string[], rowY: number, opts: { header?: boolean } = {}) {
-    let x = MARGIN;
-    const f = opts.header ? bold : font;
-    const size = opts.header ? 7.5 : 8.5;
-    const color = opts.header ? GREY : DARK;
-    for (let i = 0; i < cols.length; i++) {
-      const col = cols[i];
-      const text = opts.header ? col.label.toUpperCase() : values[i];
-      const textX = col.align === "right" ? x + col.width - f.widthOfTextAtSize(text, size) : x;
-      page.drawText(text, { x: textX, y: rowY, size, font: f, color });
-      x += col.width;
-    }
-  }
-
-  drawTableRow([], y, { header: true });
-  y -= 4;
-  page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_WIDTH - MARGIN, y }, thickness: 0.75, color: LINE });
-  y -= 12;
-
-  for (const item of data.items) {
-    drawTableRow(
-      [String(item.slNo), item.itemCode, item.description, item.drawingNumber, item.quantity, item.uom, item.weight],
-      y,
-    );
-    y -= 8;
-    page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_WIDTH - MARGIN, y }, thickness: 0.5, color: LINE });
-    y -= 12;
-  }
-
-  y -= 8;
+  y -= 20;
 
   const termsText =
     "Terms: Material listed above is sent for job work only and remains the property of " +

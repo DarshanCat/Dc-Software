@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
+import { getNotificationTargetUrl } from "@/server/notifications/service";
 import { MarkAllReadButton } from "./mark-all-read-button";
-import { MarkReadLink } from "./mark-read-link";
+import { NotificationItemRow } from "./notification-item-row";
 
 export const dynamic = "force-dynamic";
 
@@ -30,34 +30,23 @@ export default async function NotificationsPage() {
         {unreadCount > 0 && <MarkAllReadButton />}
       </div>
 
-      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 overflow-hidden bg-white">
         {notifications.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-slate-400">No notifications yet.</p>
         ) : (
           notifications.map((n) => {
-            const href = n.entityType === "DeliveryChallan" && n.entityId ? "/dcs/" + n.entityId : null;
+            const targetUrl = getNotificationTargetUrl(n);
             return (
-              <div key={n.id} className={"px-4 py-3 " + (n.read ? "" : "bg-blue-50")}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] uppercase text-slate-600">{n.type}</span>
-                      {!n.read && <span className="h-2 w-2 rounded-full bg-blue-600" />}
-                    </div>
-                    <p className="mt-1 text-sm font-medium text-slate-900">{n.title}</p>
-                    {n.body && <p className="mt-0.5 text-sm text-slate-600">{n.body}</p>}
-                    <p className="mt-1 text-xs text-slate-400">{n.createdAt.toLocaleString()}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 text-xs">
-                    {href && (
-                      <Link href={href} className="text-blue-700 hover:underline">
-                        Open
-                      </Link>
-                    )}
-                    {!n.read && <MarkReadLink notificationId={n.id} />}
-                  </div>
-                </div>
-              </div>
+              <NotificationItemRow
+                key={n.id}
+                id={n.id}
+                type={n.type}
+                title={n.title}
+                body={n.body}
+                read={n.read}
+                createdAtFormatted={n.createdAt.toLocaleString()}
+                targetUrl={targetUrl}
+              />
             );
           })
         )}

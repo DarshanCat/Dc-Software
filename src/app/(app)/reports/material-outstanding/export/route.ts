@@ -16,13 +16,14 @@ export async function GET() {
 
   const dcs = await prisma.deliveryChallan.findMany({
     where: { status: { notIn: ["DRAFT", "PENDING_APPROVAL", "CANCELLED", "CLOSED"] } },
-    include: { vendor: true, items: true, receipts: { include: { items: true } } },
+    include: { vendor: true, receipts: { include: { items: true } } },
   });
 
   const byVendor = new Map<string, { name: string; sentWeight: number; returnedWeight: number; dcCount: number }>();
   for (const dc of dcs) {
-    const sentWeight = dc.items.reduce((s, it) => s + Number(it.inputWeight), 0);
-    const returnedWeight = dc.receipts.reduce((s, r) => s + r.items.reduce((si, ri) => si + Number(ri.weightReceived), 0), 0);
+    const sentWeight = Number(dc.rmQuantity ?? 0);
+    const returnedWeight = dc.receipts.reduce(
+      (s, r) => s + r.items.reduce((si, ri) => si + Number(ri.weightReceived), 0), 0);
     const entry = byVendor.get(dc.vendorId) ?? { name: dc.vendor.vendorName, sentWeight: 0, returnedWeight: 0, dcCount: 0 };
     entry.sentWeight += sentWeight;
     entry.returnedWeight += returnedWeight;
@@ -30,10 +31,12 @@ export async function GET() {
     byVendor.set(dc.vendorId, entry);
   }
 
-  const header = ["Vendor", "Open DCs", "Sent Weight (kg)", "Returned Weight (kg)", "Outstanding (kg)"];
+  const rows = Array.from(byVendor.values()).sort((a, b) => (b.sentWeight - b.returnedWeight) - (a.sentWeight - a.returnedWeight));
+
+  const header = ["Vendor", "Active DCs", "Sent Weight (kg)", "Returned Weight (kg)", "Outstanding (kg)"];
   const lines = [header.join(",")];
-  for (const r of byVendor.values()) {
-    const outstanding = Math.max(0, r.sentWeight - r.returnedWeight);
+  for (const r of rows) {
+    const outstanding = Math.max(r.sentWeight - r.returnedWeight, 0);
     lines.push([csvEscape(r.name), String(r.dcCount), r.sentWeight.toFixed(3), r.returnedWeight.toFixed(3), outstanding.toFixed(3)].join(","));
   }
 

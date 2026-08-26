@@ -30,7 +30,6 @@ export default async function DashboardPage() {
       where: { status: { notIn: TERMINAL_STATUSES } },
       include: {
         vendor: true,
-        items: true,
         receipts: { include: { items: true } },
         scrapReceipts: { include: { items: true } },
       },
@@ -57,7 +56,7 @@ export default async function DashboardPage() {
     }
 
     if (DISPATCHED_ONWARD.includes(dc.status)) {
-      const totalInput = dc.items.reduce((s, it) => s + Number(it.inputWeight), 0);
+      const totalInput = Number(dc.rmQuantity ?? 0);
       const totalReceivedNet = dc.receipts.reduce(
         (sum, r) => sum + r.items.reduce((s, l) => s + (Number(l.weightReceived) - Number(l.rejectedWeight)), 0),
         0,
@@ -73,7 +72,7 @@ export default async function DashboardPage() {
     }
 
     if (SCRAP_PENDING_STATUSES.includes(dc.status)) {
-      const expectedScrap = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+      const expectedScrap = Number(dc.expectedScrap ?? 0);
       const receivedScrap = dc.scrapReceipts.reduce(
         (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),
         0,
@@ -84,12 +83,12 @@ export default async function DashboardPage() {
 
   const allNonCancelled = await prisma.deliveryChallan.findMany({
     where: { status: { not: "CANCELLED" } },
-    include: { items: true, scrapReceipts: { include: { items: true } } },
+    include: { scrapReceipts: { include: { items: true } } },
   });
   let totalExpectedScrap = 0;
   let totalReceivedScrap = 0;
   for (const dc of allNonCancelled) {
-    totalExpectedScrap += dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+    totalExpectedScrap += Number(dc.expectedScrap ?? 0);
     totalReceivedScrap += dc.scrapReceipts.reduce(
       (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),
       0,

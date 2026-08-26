@@ -3,11 +3,25 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
-import { markNotificationRead, markAllNotificationsRead } from "@/server/notifications/service";
+import { markNotificationRead, markAllNotificationsRead, getNotificationTargetUrl } from "@/server/notifications/service";
 
 export async function getMyNotificationSummary() {
   const user = await getSessionUser();
-  if (!user) return { unreadCount: 0, recent: [] as { id: string; type: string; title: string; body: string | null; read: boolean; createdAt: string; entityType: string | null; entityId: string | null }[] };
+  if (!user)
+    return {
+      unreadCount: 0,
+      recent: [] as {
+        id: string;
+        type: string;
+        title: string;
+        body: string | null;
+        read: boolean;
+        createdAt: string;
+        entityType: string | null;
+        entityId: string | null;
+        targetUrl: string | null;
+      }[],
+    };
 
   const [unreadCount, recent] = await Promise.all([
     prisma.notification.count({ where: { userId: user.id, read: false } }),
@@ -29,6 +43,7 @@ export async function getMyNotificationSummary() {
       createdAt: n.createdAt.toISOString(),
       entityType: n.entityType,
       entityId: n.entityId,
+      targetUrl: getNotificationTargetUrl(n),
     })),
   };
 }

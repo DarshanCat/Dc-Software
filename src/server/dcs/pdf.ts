@@ -4,7 +4,7 @@ import { buildDcQrUrl } from "@/services/dispatch.service";
 import { getCompanyLogoDataUrl } from "@/services/company-branding";
 import { renderDcPdf } from "@/services/dc-pdf";
 
-const dcInclude = { vendor: true, process: true, items: { include: { item: true } } } as const;
+const dcInclude = { vendor: true, process: true } as const;
 
 /** Structural view of a DC row (with relations) needed to render its PDF. */
 interface DcRowLike {
@@ -14,6 +14,9 @@ interface DcRowLike {
   purpose: string;
   woNumber: string;
   partNumber: string | null;
+  rmQuantity: unknown;
+  returnFgQuantity: unknown;
+  heatNumber: string | null;
   expectedScrap: unknown;
   vehicleNumber: string | null;
   transporter: string | null;
@@ -28,13 +31,6 @@ interface DcRowLike {
   approvedByName: string | null;
   vendor: { vendorName: string; address: string | null; gstNumber: string | null; panNumber: string | null };
   process: { name: string } | null;
-  items: Array<{
-    drawingNumber: string | null;
-    quantity: unknown;
-    uom: string;
-    inputWeight: unknown;
-    item: { itemCode: string; itemName: string; drawingNumber: string | null };
-  }>;
 }
 
 /** Everything the PDF renderer needs, flattened to plain scalars. */
@@ -57,8 +53,10 @@ export interface DcPdfData {
   vendorPan: string;
   purpose: string;
   processName: string;
-  partNumber?: string | null;
-  expectedScrap?: string | null;
+  partNumber: string;
+  rmQuantity: string;
+  returnFgQuantity: string;
+  heatNumber: string;
   vehicleNumber: string;
   transporter: string;
   ewayBillNumber: string;
@@ -66,15 +64,6 @@ export interface DcPdfData {
   referenceNumber: string;
   expectedReturnDate: string;
   qrDataUrl: string | null;
-  items: Array<{
-    slNo: number;
-    itemCode: string;
-    description: string;
-    drawingNumber: string;
-    quantity: string;
-    uom: string;
-    weight: string;
-  }>;
 }
 
 async function fetchCompanySettings() {
@@ -114,7 +103,9 @@ async function buildPdfData(dc: DcRowLike): Promise<DcPdfData> {
     purpose: dc.purpose.replace(/_/g, " "),
     processName: dc.process?.name ?? "—",
     partNumber: dc.partNumber || "—",
-    expectedScrap: dc.expectedScrap != null ? Number(dc.expectedScrap).toFixed(3) + " kg" : "—",
+    rmQuantity: dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—",
+    returnFgQuantity: dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—",
+    heatNumber: dc.heatNumber || "—",
     vehicleNumber: dc.vehicleNumber || "—",
     transporter: dc.transporter || "—",
     ewayBillNumber: dc.ewayBillNumber || "—",
@@ -122,15 +113,6 @@ async function buildPdfData(dc: DcRowLike): Promise<DcPdfData> {
     referenceNumber: dc.referenceNumber || "—",
     expectedReturnDate: dc.expectedReturnDate ? dc.expectedReturnDate.toLocaleDateString() : "—",
     qrDataUrl,
-    items: dc.items.map((it, idx) => ({
-      slNo: idx + 1,
-      itemCode: it.item.itemCode,
-      description: it.item.itemName,
-      drawingNumber: it.drawingNumber || it.item.drawingNumber || "—",
-      quantity: Number(it.quantity).toString(),
-      uom: it.uom,
-      weight: Number(it.inputWeight).toFixed(3),
-    })),
   };
 }
 
@@ -149,7 +131,17 @@ export async function loadDcPdfDataByToken(qrToken: string): Promise<DcPdfData |
   return dc ? buildPdfData(dc) : null;
 }
 
-export async function renderDcPdfBuffer(data: Omit<DcPdfData, "company">): Promise<Uint8Array> {
-  const company = await fetchCompanySettings();
-  return renderDcPdf({ ...data, company });
+export async function generateDcPdf(dcId: string): Promise<Uint8Array | null> {
+  const data = await loadDcPdfData(dcId);
+  if (!data) return null;
+  return renderDcPdf(data);
 }
+
+export async function generateDcPdfByToken(token: string): Promise<Uint8Array | null> {
+  const data = await loadDcPdfDataByToken(token);
+  if (!data) return null;
+  return renderDcPdf(data);
+}
+
+export const renderDcPdfBuffer = generateDcPdf;
+export const renderDcPdfBufferByToken = generateDcPdfByToken;

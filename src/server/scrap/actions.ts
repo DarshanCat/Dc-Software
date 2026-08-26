@@ -45,7 +45,7 @@ export async function createScrapReceipt(input: ScrapReceiptInput): Promise<Acti
 
       const dc = await tx.deliveryChallan.findUnique({
         where: { id: data.dcId },
-        include: { items: true, scrapReceipts: { include: { items: true } } },
+        include: { scrapReceipts: { include: { items: true } } },
       });
       if (!dc) throw new UserFacingError("DC not found.");
       assertVendorScope(user!, dc.vendorId);
@@ -56,8 +56,8 @@ export async function createScrapReceipt(input: ScrapReceiptInput): Promise<Acti
         );
       }
 
-      const expectedScrapWeight = dc.items.reduce((sum, it) => sum + Number(it.expectedScrapWeight), 0);
-      const tolerancePercentage = dc.items.length > 0 ? Number(dc.items[0].tolerancePercentage) : 0;
+      const expectedScrapWeight = Number(dc.expectedScrap ?? 0);
+      const tolerancePercentage = 0;
 
       const alreadyReceived = dc.scrapReceipts.reduce(
         (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),

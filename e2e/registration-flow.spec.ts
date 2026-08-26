@@ -8,7 +8,7 @@ test.describe("Controlled User Registration & Admin Approval Workflow", () => {
     await expect(page).toHaveURL("/register");
 
     // 2. Fill registration request form
-    const uniqueEmail = `test.applicant.${Date.now()}@example.com`;
+    const uniqueEmail = `test.applicant.${Date.now()}@vijayspheroidals.com`;
     await page.fill('input[name="fullName"]', "New Applicant");
     await page.fill('input[name="email"]', uniqueEmail);
     await page.fill('input[name="employeeId"]', "EMP-999");
@@ -26,7 +26,7 @@ test.describe("Controlled User Registration & Admin Approval Workflow", () => {
 
     // 5. Login as Admin
     await page.goto("/login");
-    await page.fill('input[name="email"]', "admin@example.com");
+    await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
     await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
@@ -39,9 +39,10 @@ test.describe("Controlled User Registration & Admin Approval Workflow", () => {
     const row = page.locator("tr", { hasText: uniqueEmail });
     await row.locator('button:has-text("Approve")').click();
 
-    // 8. Assign Department and Role in approval modal
+    // 8. Assign Department, Role, and Approving Person's Name in approval modal
     await page.selectOption('div.fixed select:has-option("Production")', "Production");
     await page.selectOption('div.fixed select:has-option("STORES")', "STORES");
+    await page.fill('div.fixed input[placeholder*="person approving"]', "Darshan Manager");
     await page.click('button:has-text("Confirm & Approve Account")');
 
     // 9. Verify activation link modal appears
@@ -84,7 +85,7 @@ test.describe("Controlled User Registration & Admin Approval Workflow", () => {
   test("rejecting a registration request prevents account activation and login", async ({ page }) => {
     // 1. Submit a registration request
     await page.goto("/register");
-    const rejectedEmail = `rejected.user.${Date.now()}@example.com`;
+    const rejectedEmail = `rejected.user.${Date.now()}@vijayspheroidals.com`;
     await page.fill('input[name="fullName"]', "Rejected User");
     await page.fill('input[name="email"]', rejectedEmail);
     await page.selectOption('select[name="requestedDepartment"]', "Quality");
@@ -93,7 +94,7 @@ test.describe("Controlled User Registration & Admin Approval Workflow", () => {
 
     // 2. Admin login & navigate to registration requests
     await page.goto("/login");
-    await page.fill('input[name="email"]', "admin@example.com");
+    await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
     await page.goto("/admin/users/requests");

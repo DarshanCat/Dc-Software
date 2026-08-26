@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
-import { loadDcPdfData, renderDcPdfBuffer } from "@/server/dcs/pdf";
+import { generateDcPdf, loadDcPdfData } from "@/server/dcs/pdf";
 
 export const runtime = "nodejs";
 
@@ -17,13 +17,16 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "You do not have permission to view this DC." }, { status: 403 });
   }
 
-  const data = await loadDcPdfData(id);
-  if (!data) {
+  const [data, pdfBuffer] = await Promise.all([
+    loadDcPdfData(id),
+    generateDcPdf(id),
+  ]);
+
+  if (!data || !pdfBuffer) {
     return NextResponse.json({ error: "DC not found." }, { status: 404 });
   }
 
-  const pdfBuffer = await renderDcPdfBuffer(data);
-  return new NextResponse(new Uint8Array(pdfBuffer), {
+  return new NextResponse(Buffer.from(pdfBuffer), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",

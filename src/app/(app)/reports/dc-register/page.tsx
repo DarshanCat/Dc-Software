@@ -151,23 +151,21 @@ export default async function DcRegisterReportPage({
               <th className="px-3 py-2 font-medium">DC No</th>
               <th className="px-3 py-2 font-medium">Date</th>
               <th className="px-3 py-2 font-medium">Part No</th>
+              <th className="px-3 py-2 text-right font-medium">RM Qty</th>
+              <th className="px-3 py-2 text-right font-medium">Return FG Qty</th>
+              <th className="px-3 py-2 font-medium">Heat No</th>
               <th className="px-3 py-2 font-medium">Vendor</th>
               <th className="px-3 py-2 font-medium">Process</th>
-              <th className="px-3 py-2 font-medium">Item</th>
-              <th className="px-3 py-2 text-right font-medium">Qty</th>
-              <th className="px-3 py-2 text-right font-medium">Weight</th>
-              <th className="px-3 py-2 text-right font-medium">Exp Scrap</th>
               <th className="px-3 py-2 font-medium">Expected Return</th>
               <th className="px-3 py-2 text-right font-medium">Received</th>
               <th className="px-3 py-2 text-right font-medium">Actual Scrap</th>
-              <th className="px-3 py-2 text-right font-medium">Balance</th>
-              <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 text-right font-medium">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={14} className="px-3 py-8 text-center text-slate-400">
+                <td colSpan={12} className="px-3 py-8 text-center text-slate-400">
                   No DCs match the current filters.
                 </td>
               </tr>
@@ -181,16 +179,14 @@ export default async function DcRegisterReportPage({
                   </td>
                   <td className="px-3 py-2 text-slate-600">{r.dcDate.toLocaleDateString()}</td>
                   <td className="px-3 py-2 font-mono text-slate-700">{r.partNumber}</td>
+                  <td className="px-3 py-2 text-right font-mono">{r.rmQuantity.toFixed(3)}</td>
+                  <td className="px-3 py-2 text-right font-mono">{r.returnFgQuantity.toFixed(3)}</td>
+                  <td className="px-3 py-2 font-mono text-slate-700">{r.heatNumber}</td>
                   <td className="px-3 py-2 text-slate-900">{r.vendorName}</td>
                   <td className="px-3 py-2 text-slate-600">{r.processName}</td>
-                  <td className="px-3 py-2 text-slate-600">{r.itemLabel}</td>
-                  <td className="px-3 py-2 text-right font-mono">{r.quantity}</td>
-                  <td className="px-3 py-2 text-right font-mono">{r.weight.toFixed(3)}</td>
-                  <td className="px-3 py-2 text-right font-mono">{r.expectedScrap.toFixed(3)}</td>
                   <td className="px-3 py-2 text-slate-600">{r.expectedReturnDate ? r.expectedReturnDate.toLocaleDateString() : "—"}</td>
                   <td className="px-3 py-2 text-right font-mono">{r.receivedQuantity}</td>
                   <td className="px-3 py-2 text-right font-mono">{r.scrapWeight.toFixed(3)}</td>
-                  <td className="px-3 py-2 text-right font-mono">{r.balance.toFixed(3)}</td>
                   <td className="px-3 py-2">
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
                       {r.status.replace(/_/g, " ")}

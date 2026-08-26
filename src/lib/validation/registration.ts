@@ -53,6 +53,12 @@ export const approveRegistrationSchema = z.object({
     errorMap: () => ({ message: "Please select a valid department." }),
   }),
   roleKey: z.string().min(1, "Role is required."),
+  approvingPersonName: z
+    .string()
+    .trim()
+    .min(2, "Approving person's name must be at least 2 characters.")
+    .optional()
+    .or(z.literal("")),
 });
 
 export type ApproveRegistrationInput = z.infer<typeof approveRegistrationSchema>;

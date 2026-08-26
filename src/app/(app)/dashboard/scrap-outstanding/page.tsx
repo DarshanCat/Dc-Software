@@ -19,13 +19,13 @@ export default async function ScrapOutstandingPage() {
 
   const dcs = await prisma.deliveryChallan.findMany({
     where: { status: { in: SCRAP_PENDING_STATUSES } },
-    include: { vendor: true, items: true, scrapReceipts: { include: { items: true } } },
+    include: { vendor: true, scrapReceipts: { include: { items: true } } },
     orderBy: { dcDate: "desc" },
   });
 
   const rows = dcs
     .map((dc) => {
-      const expectedScrap = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+      const expectedScrap = Number(dc.expectedScrap ?? 0);
       const receivedScrap = dc.scrapReceipts.reduce(
         (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),
         0,

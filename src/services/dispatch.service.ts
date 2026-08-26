@@ -10,15 +10,28 @@ export function generateQrToken(): string {
   return randomBytes(24).toString("base64url");
 }
 
+function getValidBaseUrl(): string | null {
+  const base = process.env.APP_URL || process.env.NEXTAUTH_URL;
+  if (!base || base.includes("SENSITIVE") || base.includes("[") || base.includes("]")) {
+    return null;
+  }
+  return base;
+}
+
 /**
  * Builds the absolute URL a scanned QR code should resolve to.
  * Falls back to a relative path if no base URL is configured, so this still
  * works before deployment env vars are set (dev / this sandbox).
  */
 export function buildDcQrUrl(dcId: string): string {
-  const base = process.env.APP_URL || process.env.NEXTAUTH_URL;
+  const base = getValidBaseUrl();
   const path = `/dcs/${dcId}`;
-  return base ? new URL(path, base).toString() : path;
+  if (!base) return path;
+  try {
+    return new URL(path, base.startsWith("http") ? base : `https://${base}`).toString();
+  } catch {
+    return path;
+  }
 }
 
 /**
@@ -28,7 +41,12 @@ export function buildDcQrUrl(dcId: string): string {
  * in the QR itself, only this token-secured link.
  */
 export function buildDcPublicUrl(qrToken: string): string {
-  const base = process.env.APP_URL || process.env.NEXTAUTH_URL;
+  const base = getValidBaseUrl();
   const path = `/public/dc/${qrToken}`;
-  return base ? new URL(path, base).toString() : path;
+  if (!base) return path;
+  try {
+    return new URL(path, base.startsWith("http") ? base : `https://${base}`).toString();
+  } catch {
+    return path;
+  }
 }

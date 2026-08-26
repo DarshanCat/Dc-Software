@@ -6,35 +6,47 @@ import { getSessionUser } from "@/server/session";
 import { requirePermission, assertVendorScope, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { writeAudit } from "@/server/audit";
+import { notifyUsersWithPermission } from "@/server/notifications/service";
 import { nextNumber, fiscalYearOf } from "@/services/number-sequence.service";
-import { calculateReconciliation } from "@/server/reconciliation/calculate";
-import { materialReceiptSchema, type MaterialReceiptInput } from "@/lib/validation/receipt";
+import { z } from "zod";
 
-export type ActionResult =
-  | { ok: true; receiptId: string; receiptNumber: string; dcStatus: string }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> };
+const receiptLineSchema = z.object({
+  quantityReceived: z.coerce.number().min(0, "Quantity cannot be negative"),
+  weightReceived: z.coerce.number().min(0, "Weight cannot be negative"),
+  rejectedQuantity: z.coerce.number().min(0).default(0),
+  rejectedWeight: z.coerce.number().min(0).default(0),
+  batchNumber: z.string().optional(),
+  heatNumber: z.string().optional(),
+  remarks: z.string().optional(),
+});
 
-const RECEIVABLE_STATUSES = ["DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED"] as const;
+const createReceiptSchema = z.object({
+  dcId: z.string().min(1, "DC is required"),
+  documentReference: z.string().optional(),
+  remarks: z.string().optional(),
+  lines: z.array(receiptLineSchema).min(1, "At least one line is required"),
+});
+
+export type CreateReceiptInput = z.infer<typeof createReceiptSchema>;
+export type ActionResult = { ok: true; receiptId: string } | { ok: false; error: string };
 
 class UserFacingError extends Error {}
 
-export async function createMaterialReceipt(input: MaterialReceiptInput): Promise<ActionResult> {
+const RECEIVABLE_STATUSES = ["DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED"] as const;
+
+export async function createReceipt(input: CreateReceiptInput): Promise<ActionResult> {
   const user = await getSessionUser();
   try {
     await requirePermission(user, PERMISSIONS.RECEIPT_CREATE);
   } catch (e) {
     if (e instanceof UnauthenticatedError) return { ok: false, error: "Not signed in." };
-    if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to receive material." };
+    if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to create receipts." };
     throw e;
   }
 
-  const parsed = materialReceiptSchema.safeParse(input);
+  const parsed = createReceiptSchema.safeParse(input);
   if (!parsed.success) {
-    const fieldErrors: Record<string, string> = {};
-    for (const issue of parsed.error.issues) {
-      if (issue.path[0]) fieldErrors[String(issue.path[0])] = issue.message;
-    }
-    return { ok: false, error: "Please fix the highlighted fields.", fieldErrors };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
   const data = parsed.data;
 
@@ -44,7 +56,7 @@ export async function createMaterialReceipt(input: MaterialReceiptInput): Promis
 
       const dc = await tx.deliveryChallan.findUnique({
         where: { id: data.dcId },
-        include: { items: true, receipts: { include: { items: true } } },
+        include: { receipts: { include: { items: true } } },
       });
       if (!dc) throw new UserFacingError("DC not found.");
       assertVendorScope(user!, dc.vendorId);
@@ -55,27 +67,15 @@ export async function createMaterialReceipt(input: MaterialReceiptInput): Promis
         );
       }
 
-      const dcItemById = new Map(dc.items.map((it) => [it.itemId, it]));
-      const alreadyReceivedByItem = new Map<string, number>();
+      let alreadyReceivedQty = 0;
       for (const receipt of dc.receipts) {
         for (const line of receipt.items) {
-          alreadyReceivedByItem.set(
-            line.itemId,
-            (alreadyReceivedByItem.get(line.itemId) ?? 0) + Number(line.quantityReceived),
-          );
+          alreadyReceivedQty += Number(line.quantityReceived);
         }
       }
 
-      for (const line of data.lines) {
-        const dcItem = dcItemById.get(line.itemId);
-        if (!dcItem) throw new UserFacingError("One or more items do not belong to this DC.");
-
-        // Over/under receipts are allowed: actual received may differ from what
-        // was sent. Variances surface later in reconciliation as exceptions
-        // instead of blocking the receipt here.
-        const already = alreadyReceivedByItem.get(line.itemId) ?? 0;
-        alreadyReceivedByItem.set(line.itemId, already + line.quantityReceived);
-      }
+      const newLinesQty = data.lines.reduce((s, l) => s + l.quantityReceived, 0);
+      const totalReceivedQty = alreadyReceivedQty + newLinesQty;
 
       const now = new Date();
       const fy = fiscalYearOf(now);
@@ -96,7 +96,6 @@ export async function createMaterialReceipt(input: MaterialReceiptInput): Promis
           documentReference: data.documentReference || null,
           items: {
             create: data.lines.map((l) => ({
-              itemId: l.itemId,
               quantityReceived: l.quantityReceived,
               weightReceived: l.weightReceived,
               rejectedQuantity: l.rejectedQuantity,
@@ -109,11 +108,9 @@ export async function createMaterialReceipt(input: MaterialReceiptInput): Promis
         },
       });
 
-      const fullyReturned = dc.items.every((it) => {
-        const total = alreadyReceivedByItem.get(it.itemId) ?? 0;
-        return total >= Number(it.quantity) - 1e-9;
-      });
-      const expectedScrapWeight = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+      const targetReturnQty = Number(dc.returnFgQuantity ?? 0);
+      const fullyReturned = totalReceivedQty >= targetReturnQty - 1e-9;
+      const expectedScrapWeight = Number(dc.expectedScrap ?? 0);
       const newStatus = !fullyReturned
         ? "PARTIALLY_RETURNED"
         : expectedScrapWeight <= 0
@@ -123,29 +120,46 @@ export async function createMaterialReceipt(input: MaterialReceiptInput): Promis
       if (newStatus !== dc.status) {
         await tx.deliveryChallan.update({ where: { id: data.dcId }, data: { status: newStatus } });
         await tx.statusHistory.create({
-          data: { dcId: data.dcId, fromStatus: dc.status, toStatus: newStatus, changedBy: user!.id },
+          data: {
+            dcId: data.dcId,
+            fromStatus: dc.status,
+            toStatus: newStatus,
+            changedBy: user!.id,
+            reason: `Receipt created (${receiptNumber})`,
+          },
         });
-      }
-
-      if (newStatus === "RECONCILIATION") {
-        await calculateReconciliation(tx, data.dcId, user!.id);
       }
 
       await writeAudit(tx, {
         userId: user!.id,
         action: "RECEIPT_CREATED",
-        module: "MaterialReceipts",
+        module: "Receipts",
         entityType: "MaterialReceipt",
         entityId: receipt.id,
-        newValue: { receiptNumber, dcId: data.dcId, lines: data.lines },
+        newValue: { receiptNumber, linesCount: data.lines.length },
         reason: "Material receipt recorded",
       });
 
-      return { receiptId: receipt.id, receiptNumber, dcStatus: newStatus };
+      await notifyUsersWithPermission(
+        tx,
+        PERMISSIONS.DC_VIEW,
+        {
+          type: "MATERIAL_RECEIVED",
+          title: `Material received for ${dc.dcNumber}`,
+          body: `Receipt ${receiptNumber} recorded for ${dc.dcNumber}`,
+          entityType: "DeliveryChallan",
+          entityId: data.dcId,
+          targetUrl: `/dcs/${data.dcId}`,
+        },
+        user!.id,
+      );
+
+      return receipt.id;
     });
 
     revalidatePath(`/dcs/${data.dcId}`);
-    return { ok: true, ...result };
+    revalidatePath("/receipts");
+    return { ok: true, receiptId: result };
   } catch (e) {
     if (e instanceof UserFacingError) return { ok: false, error: e.message };
     throw e;

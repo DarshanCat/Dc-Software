@@ -16,16 +16,16 @@ export default async function ScrapDashboardPage({
 
   const dcs = await prisma.deliveryChallan.findMany({
     where: { status: { notIn: ["DRAFT", "PENDING_APPROVAL", "CANCELLED"] } },
-    include: { vendor: true, items: true, scrapReceipts: { include: { items: true } } },
+    include: { vendor: true, scrapReceipts: { include: { items: true } } },
     orderBy: { createdAt: "desc" },
     take: 200,
   });
 
   const rows = dcs.map((dc) => {
-    const expectedScrapWeight = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+    const expectedScrapWeight = Number(dc.expectedScrap ?? 0);
     const receivedScrapWeight = dc.scrapReceipts.reduce(
       (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0), 0);
-    const tolerance = dc.items.length > 0 ? Number(dc.items[0].tolerancePercentage) : 0;
+    const tolerance = 0;
     const evalResult = evaluateScrap(expectedScrapWeight, receivedScrapWeight, tolerance);
     return { dc, expectedScrapWeight, receivedScrapWeight, evalResult };
   });

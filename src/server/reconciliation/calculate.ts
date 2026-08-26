@@ -1,21 +1,19 @@
-import type { Prisma, ExceptionType } from "@prisma/client";
-import { reconcile, type ReconciliationResult } from "@/services/reconciliation.service";
-import { writeAudit } from "@/server/audit";
-import { notifyUsersWithPermission } from "@/server/notifications/service";
-import { PERMISSIONS } from "@/config/permissions";
+import { prisma } from "@/lib/db";
+import { reconcile } from "@/services/reconciliation.service";
+import type { ExceptionType } from "@prisma/client";
 
-type Tx = Prisma.TransactionClient;
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
-function exceptionDescription(type: string, result: ReconciliationResult): string {
-  switch (type) {
+function describeException(code: string, result: ReturnType<typeof reconcile>): string {
+  switch (code) {
     case "MATERIAL_SHORTAGE":
-      return `Finished material received (${result.breakdown.finishedWeight} kg) is less than expected (${result.breakdown.unaccountedWeight} kg unaccounted).`;
+      return `Finished weight returned (${result.breakdown.finishedWeight} kg) is less than expected (${result.breakdown.accountedWeight} kg).`;
     case "SCRAP_SHORTAGE":
-      return `Scrap received (${result.breakdown.scrapWeight} kg) is below the tolerance band.`;
+      return `Scrap returned (${result.breakdown.scrapWeight} kg) is less than expected (${result.breakdown.scrapOutstanding} kg outstanding).`;
     case "EXCESS_SCRAP":
-      return `Scrap received (${result.breakdown.scrapWeight} kg) is above the tolerance band — flagged for review, not assumed bad.`;
+      return `Scrap returned (${result.breakdown.scrapWeight} kg) exceeds allowed tolerance.`;
     case "PROCESS_LOSS_EXCEEDED":
-      return `Unaccounted weight (${result.breakdown.unaccountedWeight} kg) exceeds the allowed tolerance.`;
+      return `Unaccounted process loss (${result.breakdown.unaccountedWeight} kg) exceeds allowed threshold (${result.breakdown.approvedProcessLoss} kg).`;
     case "WEIGHT_MISMATCH":
       return `Unaccounted weight (${result.breakdown.unaccountedWeight} kg) is outside the configured tolerance.`;
     default:
@@ -27,18 +25,17 @@ export async function calculateReconciliation(tx: Tx, dcId: string, userId: stri
   const dc = await tx.deliveryChallan.findUnique({
     where: { id: dcId },
     include: {
-      items: true,
       receipts: { include: { items: true } },
       scrapReceipts: { include: { items: true } },
     },
   });
   if (!dc) throw new Error("DC not found during reconciliation calculation.");
 
-  const totalInputWeight = dc.items.reduce((s, it) => s + Number(it.inputWeight), 0);
-  const expectedFinishedWeight = dc.items.reduce((s, it) => s + Number(it.expectedFinishedWeight), 0);
-  const expectedScrapWeight = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
-  const approvedProcessLoss = dc.items.reduce((s, it) => s + Number(it.expectedProcessLoss), 0);
-  const tolerancePercentage = dc.items.length > 0 ? Number(dc.items[0].tolerancePercentage) : 0;
+  const totalInputWeight = Number(dc.rmQuantity ?? 0);
+  const expectedFinishedWeight = Number(dc.returnFgQuantity ?? 0);
+  const expectedScrapWeight = Number(dc.expectedScrap ?? 0);
+  const approvedProcessLoss = 0;
+  const tolerancePercentage = 0;
 
   const totalFinishedWeight = dc.receipts.reduce(
     (sum, r) => sum + r.items.reduce((s, l) => s + (Number(l.weightReceived) - Number(l.rejectedWeight)), 0),
@@ -69,71 +66,42 @@ export async function calculateReconciliation(tx: Tx, dcId: string, userId: stri
     create: {
       dcId,
       status: result.status,
-      totalInputWeight,
-      totalFinishedWeight,
-      totalScrapWeight,
-      totalRejectedWeight,
-      approvedProcessLoss,
+      totalInputWeight: result.breakdown.inputWeight,
+      totalFinishedWeight: result.breakdown.finishedWeight,
+      totalScrapWeight: result.breakdown.scrapWeight,
+      totalRejectedWeight: result.breakdown.rejectedWeight,
+      approvedProcessLoss: result.breakdown.approvedProcessLoss,
       accountedWeight: result.breakdown.accountedWeight,
       unaccountedWeight: result.breakdown.unaccountedWeight,
-      scrapRecoveryPercent: result.breakdown.scrapRecoveryPercent,
-      calculatedBy: userId,
+      scrapRecoveryPercent: result.breakdown.scrapRecoveryPercent ? Number(result.breakdown.scrapRecoveryPercent) : null,
+      closedAt: result.eligibleForClosure ? new Date() : null,
+      closedBy: result.eligibleForClosure ? userId : null,
     },
     update: {
       status: result.status,
-      totalInputWeight,
-      totalFinishedWeight,
-      totalScrapWeight,
-      totalRejectedWeight,
-      approvedProcessLoss,
+      totalInputWeight: result.breakdown.inputWeight,
+      totalFinishedWeight: result.breakdown.finishedWeight,
+      totalScrapWeight: result.breakdown.scrapWeight,
+      totalRejectedWeight: result.breakdown.rejectedWeight,
+      approvedProcessLoss: result.breakdown.approvedProcessLoss,
       accountedWeight: result.breakdown.accountedWeight,
       unaccountedWeight: result.breakdown.unaccountedWeight,
-      scrapRecoveryPercent: result.breakdown.scrapRecoveryPercent,
-      calculatedAt: new Date(),
-      calculatedBy: userId,
+      scrapRecoveryPercent: result.breakdown.scrapRecoveryPercent ? Number(result.breakdown.scrapRecoveryPercent) : null,
     },
   });
 
-  const existingOpen = await tx.exception.findMany({ where: { dcId, status: "OPEN" }, select: { type: true } });
-  const existingOpenTypes = new Set(existingOpen.map((e) => e.type as string));
+  await tx.exception.deleteMany({ where: { dcId } });
 
-  for (const type of result.exceptionTypes) {
-    if (existingOpenTypes.has(type)) continue;
-    await tx.exception.create({
-      data: {
-        dcId,
-        type: type as ExceptionType,
-        severity: "MEDIUM",
-        description: exceptionDescription(type, result),
-        variance: result.breakdown.unaccountedWeight,
-        status: "OPEN",
-        createdBy: userId,
-      },
-    });
-  }
-
-    await writeAudit(tx, {
-    userId,
-    action: "RECONCILIATION_CALCULATED",
-    module: "Reconciliation",
-    entityType: "Reconciliation",
-    entityId: reconciliation.id,
-    newValue: {
-      status: result.status,
-      unaccountedWeight: result.breakdown.unaccountedWeight,
-      exceptionTypes: result.exceptionTypes,
-    },
-    reason: "Reconciliation calculated",
-  });
-
-  if (result.status === "EXCEPTION") {
-    await notifyUsersWithPermission(tx, PERMISSIONS.RECONCILIATION_OVERRIDE, {
-      type: "RECONCILIATION_EXCEPTION",
-      title: `${dc.dcNumber} has a reconciliation exception`,
-      body: `Unaccounted weight: ${result.breakdown.unaccountedWeight} kg. Review and approve or investigate.`,
-      entityType: "DeliveryChallan",
-      entityId: dcId,
-    });
+  if (result.exceptionTypes.length > 0) {
+    for (const code of result.exceptionTypes) {
+      await tx.exception.create({
+        data: {
+          dcId,
+          type: code as ExceptionType,
+          description: describeException(code, result),
+        },
+      });
+    }
   }
 
   return { reconciliation, result };

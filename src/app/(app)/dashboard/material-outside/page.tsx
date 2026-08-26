@@ -22,13 +22,13 @@ export default async function MaterialOutsidePage() {
 
   const dcs = await prisma.deliveryChallan.findMany({
     where: { status: { in: DISPATCHED_ONWARD } },
-    include: { vendor: true, items: true, receipts: { include: { items: true } } },
+    include: { vendor: true, receipts: { include: { items: true } } },
     orderBy: { dcDate: "desc" },
   });
 
   const rows = dcs
     .map((dc) => {
-      const totalInput = dc.items.reduce((s, it) => s + Number(it.inputWeight), 0);
+      const totalInput = Number(dc.rmQuantity ?? 0);
       const totalReceivedNet = dc.receipts.reduce(
         (sum, r) => sum + r.items.reduce((s, l) => s + (Number(l.weightReceived) - Number(l.rejectedWeight)), 0),
         0,

@@ -1,25 +1,27 @@
 /**
  * seed.ts — development seed data.
  * Run: npm run prisma:seed
- * DEV CREDENTIALS are printed at the end (development only).
+ * DEV ONLY CREDENTIALS — NEVER USE IN PRODUCTION.
  */
 import {
   PrismaClient,
-  CalculationType,
   DcPurpose,
   DcStatus,
-  ExceptionType,
-  ExceptionStatus,
-  ReconciliationStatus,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { PERMISSIONS, DEFAULT_ROLE_PERMISSIONS, ROLES } from "../src/config/permissions";
 
 const prisma = new PrismaClient();
-const DEV_PASSWORD = "Password@123";
+// DEV ONLY CREDENTIALS — FOR LOCAL DEVELOPMENT ONLY
+const DEV_ONLY_PASSWORD = "Password@123";
 
 async function main() {
   console.log("Seeding…");
+
+  // Clean up any old demo `@example.com` accounts from local development database
+  await prisma.user.deleteMany({
+    where: { email: { endsWith: "@example.com" } },
+  });
 
   const permissionKeys = Object.values(PERMISSIONS);
   for (const key of permissionKeys) {
@@ -45,78 +47,56 @@ async function main() {
     }
   }
 
-  const realProductionUsers: Array<{ email: string; name: string; role: string; password?: string }> = [
-    { email: "darshan@vijayspheroidals.com", name: "Darshan", role: ROLES.ADMIN, password: "Vs#Darshan2026!" },
-    { email: "aravind.gurudev@vijayspheroidals.com", name: "Aravind Gurudev", role: ROLES.ADMIN, password: "Vs#Aravind2026!" },
-    { email: "data.analyst@vijayspheroidals.com", name: "Data Analyst", role: ROLES.ADMIN, password: "Vs#Data2026!" },
-    { email: "loyed@vijayspheroidals.onmicrosoft.com", name: "Loyed", role: ROLES.MANAGEMENT, password: "Vs#Manager2026!" },
-    { email: "management@vijayspheroidals.com", name: "Management", role: ROLES.MANAGEMENT, password: "Vs#Management2026!" },
-    { email: "accounts@vijayspheroidals.com", name: "Accounts", role: ROLES.ACCOUNTS, password: "Vs#Accounts2026!" },
-    { email: "quality@vijayspheroidals.com", name: "Quality", role: ROLES.QUALITY, password: "Vs#Quality2026!" },
-    { email: "purchase@vijayspheroidals.com", name: "Purchase", role: ROLES.PURCHASE, password: "Vs#Purchase2026!" },
-    { email: "stores@vijayspheroidals.com", name: "Stores", role: ROLES.STORES, password: "Vs#Stores2026!" },
-    { email: "production@vijayspheroidals.com", name: "Production Manager", role: ROLES.PRODUCTION, password: "Vs#Prod2026!" },
+  const devPasswordHash = await bcrypt.hash(DEV_ONLY_PASSWORD, 10);
+  const realCompanyUserDefs: [string, string, string][] = [
+    ["darshan@vijayspheroidals.com", "Darshan", ROLES.ADMIN],
+    ["aravind.gurudev@vijayspheroidals.com", "Aravind Gurudev", ROLES.ADMIN],
+    ["data.analyst@vijayspheroidals.com", "Data Analyst", ROLES.ADMIN],
+    ["loyed@vijayspheroidals.onmicrosoft.com", "Loyed", ROLES.MANAGEMENT],
+    ["management@vijayspheroidals.com", "Management", ROLES.MANAGEMENT],
+    ["accounts@vijayspheroidals.com", "Accounts User", ROLES.ACCOUNTS],
+    ["quality@vijayspheroidals.com", "Quality User", ROLES.QUALITY],
+    ["purchase@vijayspheroidals.com", "Purchase User", ROLES.PURCHASE],
+    ["stores@vijayspheroidals.com", "Stores User", ROLES.STORES],
+    ["production@vijayspheroidals.com", "Production User", ROLES.PRODUCTION],
   ];
 
-  const testOnlyUsers: Array<{ email: string; name: string; role: string; password?: string }> = [
-    { email: "admin@example.com", name: "[TEST ONLY] Admin User", role: ROLES.ADMIN },
-    { email: "stores@example.com", name: "[TEST ONLY] Stores User", role: ROLES.STORES },
-    { email: "purchase@example.com", name: "[TEST ONLY] Purchase User", role: ROLES.PURCHASE },
-    { email: "production@example.com", name: "[TEST ONLY] Production User", role: ROLES.PRODUCTION },
-    { email: "quality@example.com", name: "[TEST ONLY] Quality User", role: ROLES.QUALITY },
-    { email: "accounts@example.com", name: "[TEST ONLY] Accounts User", role: ROLES.ACCOUNTS },
-    { email: "management@example.com", name: "[TEST ONLY] Management User", role: ROLES.MANAGEMENT },
-    { email: "security@example.com", name: "[TEST ONLY] Security User", role: ROLES.SECURITY },
-  ];
-
-  const isProduction = process.env.NODE_ENV === "production";
-  const userSpecs = isProduction ? realProductionUsers : [...realProductionUsers, ...testOnlyUsers];
-
-  const devPasswordHash = await bcrypt.hash(DEV_PASSWORD, 10);
   const users: Record<string, string> = {};
-  for (const u of userSpecs) {
-    const passwordHash = u.password ? await bcrypt.hash(u.password, 10) : devPasswordHash;
-    const user = await prisma.user.upsert({
-      where: { email: u.email },
-      create: { email: u.email, name: u.name, passwordHash },
-      update: { passwordHash },
+  for (const [email, name, roleKey] of realCompanyUserDefs) {
+    const u = await prisma.user.upsert({
+      where: { email },
+      create: { email, name, passwordHash: devPasswordHash },
+      update: { name, passwordHash: devPasswordHash },
     });
-    users[u.role] = user.id;
-    const role = await prisma.role.findUnique({ where: { key: u.role } });
-    if (role) {
+    users[roleKey] = u.id;
+    const r = await prisma.role.findUnique({ where: { key: roleKey } });
+    if (r) {
       await prisma.userRole.upsert({
-        where: { userId_roleId: { userId: user.id, roleId: role.id } },
-        create: { userId: user.id, roleId: role.id },
+        where: { userId_roleId: { userId: u.id, roleId: r.id } },
+        create: { userId: u.id, roleId: r.id },
         update: {},
       });
     }
   }
 
-  for (const uom of [
-    { code: "KG", name: "Kilogram", isWeight: true },
-    { code: "NOS", name: "Numbers", isWeight: false },
-    { code: "MTR", name: "Metre", isWeight: false },
-  ]) {
-    await prisma.uOM.upsert({ where: { code: uom.code }, create: uom, update: {} });
-  }
-
-  for (const c of [
-    { key: "RAW_MATERIAL", name: "Raw Material" },
-    { key: "CASTING", name: "Casting" },
-    { key: "MACHINED_COMPONENT", name: "Machined Component" },
-    { key: "FINISHED_COMPONENT", name: "Finished Component" },
-    { key: "SCRAP", name: "Scrap" },
-    { key: "CONSUMABLE", name: "Consumable" },
-    { key: "OTHER", name: "Other" },
-  ]) {
-    await prisma.itemCategory.upsert({ where: { key: c.key }, create: c, update: {} });
-  }
-
   const processDefs: [string, string][] = [
-    ["CNC_MACHINING", "CNC Machining"],
-    ["TURNING", "Turning"],
     ["MILLING", "Milling"],
+    ["TURNING", "Turning"],
+    ["CNC_TURNING", "CNC Turning"],
+    ["HMC", "HMC"],
+    ["PLATING", "Plating"],
+    ["ZINC_LITTLE_PLATING", "Zinc Little Plating"],
+    ["BLACK_PASSIVATION", "Black Passivation"],
     ["HEAT_TREATMENT", "Heat Treatment"],
+    ["ANNEALING", "Annealing"],
+    ["STRESS_RELIEVING", "Stress Relieving"],
+    ["SURFACE_GRINDING", "Surface Grinding"],
+    ["SHOT_BLASTING_PAINTING", "Shot Blasting and Painting"],
+    ["PAINTING", "Painting"],
+    ["NOTCHING", "Notching"],
+    ["FOR_CMM", "For CMM"],
+    ["FOR_CUTTING", "For Cutting"],
+    ["CNC_MACHINING", "CNC Machining"],
     ["SURFACE_TREATMENT", "Surface Treatment"],
   ];
   const processes: Record<string, string> = {};
@@ -132,10 +112,8 @@ async function main() {
     ["PROCESS_SCRAP", "Process Scrap"],
     ["REJECTION_SCRAP", "Rejection Scrap"],
   ];
-  const scrapTypes: Record<string, string> = {};
   for (const [code, name] of scrapDefs) {
-    const s = await prisma.scrapType.upsert({ where: { code }, create: { code, name }, update: {} });
-    scrapTypes[code] = s.id;
+    await prisma.scrapType.upsert({ where: { code }, create: { code, name }, update: {} });
   }
 
   const vendorDefs: [string, string][] = [
@@ -154,78 +132,6 @@ async function main() {
     vendors[code] = v.id;
   }
 
-  const vendorRole = await prisma.role.findUnique({ where: { key: ROLES.VENDOR } });
-  if (vendorRole) {
-    for (const vUser of [
-      { email: "vendor@example.com", name: "Vendor ABC User", vendorId: vendors["V-ABC"] },
-      { email: "vendor2@example.com", name: "Vendor XYZ User", vendorId: vendors["V-XYZ"] },
-    ]) {
-      const u = await prisma.user.upsert({
-        where: { email: vUser.email },
-        create: { email: vUser.email, name: vUser.name, passwordHash: devPasswordHash, vendorId: vUser.vendorId },
-        update: { passwordHash: devPasswordHash, vendorId: vUser.vendorId },
-      });
-      await prisma.userRole.upsert({
-        where: { userId_roleId: { userId: u.id, roleId: vendorRole.id } },
-        create: { userId: u.id, roleId: vendorRole.id },
-        update: {},
-      });
-    }
-  }
-
-  const machined = await prisma.itemCategory.findUnique({ where: { key: "MACHINED_COMPONENT" } });
-  const itemDefs: [string, string, string, number][] = [
-    ["IT-1001", "Shaft Blank 50mm", "EN8", 12.5],
-    ["IT-1002", "Flange Casting 200mm", "SG Iron", 8.0],
-    ["IT-1003", "Housing Machined", "Aluminium", 3.2],
-  ];
-  const items: Record<string, string> = {};
-  for (const [code, name, grade, unitW] of itemDefs) {
-    const it = await prisma.item.upsert({
-      where: { itemCode: code },
-      create: {
-        itemCode: code,
-        itemName: name,
-        materialGrade: grade,
-        defaultUOM: "NOS",
-        weightUOM: "KG",
-        standardUnitWeight: unitW,
-        itemCategoryId: machined?.id,
-      },
-      update: {},
-    });
-    items[code] = it.id;
-  }
-
-  const standard = await prisma.jobWorkStandard.upsert({
-    where: {
-      itemId_processId_revision: {
-        itemId: items["IT-1001"],
-        processId: processes["CNC_MACHINING"],
-        revision: 1,
-      },
-    },
-    create: {
-      itemId: items["IT-1001"],
-      processId: processes["CNC_MACHINING"],
-      inputUOM: "KG",
-      inputWeight: 1000,
-      expectedOutputWeight: 900,
-      expectedScrapWeight: 90,
-      expectedScrapPercentage: 9,
-      allowedProcessLoss: 10,
-      allowedProcessLossPercentage: 1,
-      tolerancePercentage: 0,
-      calculationType: CalculationType.PERCENTAGE,
-      effectiveFrom: new Date("2026-04-01"),
-      revision: 1,
-      approved: true,
-      approvedBy: users[ROLES.PRODUCTION],
-      approvedAt: new Date(),
-    },
-    update: {},
-  });
-
   await prisma.numberSequence.upsert({
     where: { key_fiscalYear: { key: "DC", fiscalYear: "2026" } },
     create: { key: "DC", fiscalYear: "2026", prefix: "DC-2026-", padding: 6, current: 1 },
@@ -238,26 +144,27 @@ async function main() {
     ["GRINDING_DUST", "Grinding Dust"],
     ["OTHER", "Other Recovery"],
   ];
-  const recoveryTypes: Record<string, string> = {};
   for (const [code, name] of recoveryDefs) {
-    const rt = await prisma.recoveryType.upsert({
+    await prisma.recoveryType.upsert({
       where: { code },
       create: { code, name, unit: "KG" },
       update: {},
     });
-    recoveryTypes[code] = rt.id;
   }
 
-  // Work Orders are a typed free-text reference on the DC — no separate
-  // WorkOrder record is created up front (matches the real paper process).
   const dcNumber = "DC-2026-000001";
   const existing = await prisma.deliveryChallan.findUnique({ where: { dcNumber } });
   if (!existing) {
-    const dc = await prisma.deliveryChallan.create({
+    await prisma.deliveryChallan.create({
       data: {
         dcNumber,
         dcDate: new Date("2026-05-01"),
         woNumber: "WO-2026-00100",
+        partNumber: "PART-1001",
+        rmQuantity: 1000,
+        returnFgQuantity: 900,
+        heatNumber: "HEAT-8899",
+        expectedScrap: 90,
         vendorId: vendors["V-ABC"],
         purpose: DcPurpose.MACHINING,
         processId: processes["CNC_MACHINING"],
@@ -268,125 +175,28 @@ async function main() {
         approvedAt: new Date("2026-05-01"),
         dispatchedBy: users[ROLES.STORES],
         dispatchedAt: new Date("2026-05-01"),
+        preparedByName: "Stores User",
+        approvedByName: "Darshan",
         qrToken: "demo-qr-token-000001",
-        items: {
-          create: [
-            {
-              itemId: items["IT-1001"],
-              quantity: 80,
-              uom: "NOS",
-              inputUnitWeight: 12.5,
-              inputWeight: 1000,
-              expectedFinishedWeight: 900,
-              expectedScrapWeight: 90,
-              expectedProcessLoss: 10,
-              tolerancePercentage: 0,
-              jobWorkStandardId: standard.id,
-            },
-          ],
-        },
-        dispatch: {
-          create: {
-            dispatchedAt: new Date("2026-05-01"),
-            dispatchedBy: users[ROLES.STORES],
-            transporter: "BlueDart Logistics",
-            vehicleNumber: "KA-01-AB-1234",
-            totalInputWeight: 1000,
-            items: { create: [{ itemId: items["IT-1001"], quantity: 80, weight: 1000 }] },
-          },
-        },
-        receipts: {
-          create: [
-            {
-              receiptNumber: "RCP-2026-000001",
-              receiptDate: new Date("2026-05-12"),
-              vendorId: vendors["V-ABC"],
-              receivedBy: users[ROLES.STORES],
-              items: { create: [{ itemId: items["IT-1001"], quantityReceived: 79, weightReceived: 895 }] },
-            },
-          ],
-        },
-        scrapReceipts: {
-          create: [
-            {
-              scrapReceiptNumber: "SCR-2026-000001",
-              receiptDate: new Date("2026-05-12"),
-              vendorId: vendors["V-ABC"],
-              receivedBy: users[ROLES.STORES],
-              weighmentSlipNumber: "WS-55521",
-              items: { create: [{ scrapTypeId: scrapTypes["MACHINING_CHIPS"], weight: 87, uom: "KG" }] },
-            },
-          ],
-        },
       },
     });
-
-    await prisma.reconciliation.create({
-      data: {
-        dcId: dc.id,
-        status: ReconciliationStatus.EXCEPTION,
-        totalInputWeight: 1000,
-        totalFinishedWeight: 895,
-        totalScrapWeight: 87,
-        totalRejectedWeight: 0,
-        approvedProcessLoss: 10,
-        accountedWeight: 992,
-        unaccountedWeight: 8,
-        scrapRecoveryPercent: 96.6667,
-        calculatedBy: users[ROLES.ADMIN],
-      },
-    });
-
-    await prisma.exception.create({
-      data: {
-        dcId: dc.id,
-        type: ExceptionType.MATERIAL_SHORTAGE,
-        description: "8 kg material unaccounted after finished + scrap + approved loss.",
-        expectedValue: 1000,
-        actualValue: 992,
-        variance: 8,
-        status: ExceptionStatus.OPEN,
-        createdBy: users[ROLES.ADMIN],
-      },
-    });
-
-    await prisma.statusHistory.createMany({
-      data: [
-        { dcId: dc.id, toStatus: "APPROVED", changedBy: users[ROLES.ADMIN] },
-        { dcId: dc.id, fromStatus: "APPROVED", toStatus: "DISPATCHED", changedBy: users[ROLES.STORES] },
-        { dcId: dc.id, fromStatus: "DISPATCHED", toStatus: "RECONCILIATION", changedBy: users[ROLES.STORES] },
-      ],
-    });
-
-    console.log(`  demo DC ${dcNumber} created with 8 kg unaccounted exception`);
-  }
-
-  const settings: [string, string, string][] = [
-    ["companyName", "DC & Vendor Material Management", "company"],
-    ["defaultTimezone", "Asia/Kolkata", "locale"],
-    ["defaultCurrency", "INR", "locale"],
-    ["weightUnit", "KG", "units"],
-    ["dcNumberFormat", "DC-{FY}-{SEQ:6}", "numbering"],
-    ["fiscalYearStartMonth", "4", "locale"],
-    ["scrapTolerancePercentage", "2", "reconciliation"],
-    ["unaccountedTolerancePercentage", "0", "reconciliation"],
-  ];
-  for (const [key, value, group] of settings) {
-    await prisma.systemSetting.upsert({ where: { key }, create: { key, value, group }, update: {} });
   }
 
   console.log("Seed complete.");
   console.log("--------------------------------------------------");
-  console.log(`DEV CREDENTIALS (dev only): password = ${DEV_PASSWORD}`);
-  userSpecs.forEach((u) => console.log(`  ${u.role.padEnd(11)} ${u.email}`));
+  console.log(`[DEV ONLY] credentials: password = ${DEV_ONLY_PASSWORD}`);
+  for (const [email, , roleKey] of realCompanyUserDefs) {
+    console.log(`  ${roleKey.padEnd(11)} ${email}`);
+  }
   console.log("--------------------------------------------------");
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
+  .then(async () => {
     await prisma.$disconnect();
+  })
+  .catch(async (e) => {
+    console.error(e);
+    await prisma.$disconnect();
+    process.exit(1);
   });

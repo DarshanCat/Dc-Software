@@ -22,14 +22,17 @@ const dcLineSchema = z.object({
 const createDcSchema = z.object({
   woNumber: z.string().min(1, "WO ID is required").max(60),
   partNumber: z.string().trim().min(1, "Part Number is required.").max(60, "Part Number cannot exceed 60 characters."),
-  expectedScrap: z.coerce.number().min(0, "Expected scrap cannot be negative.").optional().default(0),
+  rmQuantity: z.coerce.number().positive("RM Qty must be > 0."),
+  returnFgQuantity: z.coerce.number().positive("Return FG Qty must be > 0."),
+  heatNumber: z.string().trim().min(1, "Heat Number is required.").max(60, "Heat Number cannot exceed 60 characters."),
+  expectedScrap: z.coerce.number().min(0, "Expected scrap cannot be negative.").optional(),
   vendorId: z.string().min(1, "Vendor is required"),
   processId: z.string().min(1, "Process is required"),
   purpose: z.enum([
     "JOB_WORK","MACHINING","HEAT_TREATMENT","SURFACE_TREATMENT",
     "REPAIR","SAMPLE","TRIAL","SUBCONTRACTING","OTHER",
   ]),
-  items: z.array(dcLineSchema).min(1, "Add at least one item line."),
+  items: z.array(dcLineSchema).optional().default([]),
   preparedByName: z.string().trim().min(1, "Prepared By Name is required.").max(100, "Prepared By Name cannot exceed 100 characters."),
   expectedReturnDate: z.string().optional(),
   ewayBillNumber: z.string().max(60).optional(),
@@ -63,70 +66,15 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
   }
   const data = parsed.data;
 
-  const duplicateItem = data.items.find((l, i) => data.items.findIndex((o) => o.itemId === l.itemId) !== i);
-  if (duplicateItem) {
-    return { ok: false, error: "Duplicate item in lines. Combine quantities into one line instead." };
-  }
-
-  const itemIds = [...new Set(data.items.map((l) => l.itemId))];
-  const itemsById = new Map(
-    (await prisma.item.findMany({ where: { id: { in: itemIds } } })).map((i) => [i.id, i]),
-  );
-  const missingItem = data.items.some((l) => !itemsById.has(l.itemId));
-  if (missingItem) {
-    return { ok: false, error: "One or more selected items were not found." };
-  }
-
-  const lineData = [] as Array<{
-    itemId: string;
-    quantity: number;
-    uom: string;
-    inputWeight: number;
-    expectedFinishedWeight: string;
-    expectedScrapWeight: string;
-    expectedProcessLoss: string;
-    tolerancePercentage: number;
-    jobWorkStandardId: string | null;
-  }>;
-  for (const line of data.items) {
-    const standard = await prisma.jobWorkStandard.findFirst({
-      where: { itemId: line.itemId, processId: data.processId, approved: true },
-      orderBy: { revision: "desc" },
-    });
-
-    const expected = standard
-      ? computeExpected(
-          {
-            inputWeight: line.inputWeight,
-            calculationType: standard.calculationType,
-            expectedScrapPercentage: standard.expectedScrapPercentage?.toString() ?? "0",
-            allowedProcessLossPercentage: standard.allowedProcessLossPercentage?.toString() ?? "0",
-            expectedOutputWeight: standard.expectedOutputWeight.toString(),
-            expectedScrapWeight: standard.expectedScrapWeight.toString(),
-            allowedProcessLoss: standard.allowedProcessLoss.toString(),
-          },
-          standard.tolerancePercentage.toString(),
-        )
-      : {
-          expectedFinishedWeight: line.inputWeight.toFixed(3),
-          expectedScrapWeight: "0.000",
-          allowedProcessLoss: "0.000",
-          expectedAccounted: line.inputWeight.toFixed(3),
-          balances: true,
-        };
-
-    lineData.push({
-      itemId: line.itemId,
-      quantity: line.quantity,
-      uom: itemsById.get(line.itemId)?.defaultUOM || "NOS",
-      inputWeight: line.inputWeight,
-      expectedFinishedWeight: expected.expectedFinishedWeight,
-      expectedScrapWeight: expected.expectedScrapWeight,
-      expectedProcessLoss: expected.allowedProcessLoss,
-      tolerancePercentage: Number(standard?.tolerancePercentage ?? 0),
-      jobWorkStandardId: standard?.id ?? null,
-    });
-  }
+  // Validate active Vendor and Process
+  const [vendor, processRec] = await Promise.all([
+    prisma.vendor.findUnique({ where: { id: data.vendorId } }),
+    prisma.process.findUnique({ where: { id: data.processId } }),
+  ]);
+  if (!vendor) return { ok: false, error: "Selected vendor was not found." };
+  if (!vendor.active) return { ok: false, error: "Selected vendor is inactive and cannot be selected for new DCs." };
+  if (!processRec) return { ok: false, error: "Selected process was not found." };
+  if (!processRec.active) return { ok: false, error: "Selected process is inactive and cannot be selected for new DCs." };
 
   const now = new Date();
   const fy = fiscalYearOf(now);
@@ -140,6 +88,9 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         dcDate: now,
         woNumber: data.woNumber,
         partNumber: data.partNumber.trim(),
+        rmQuantity: new Prisma.Decimal(data.rmQuantity),
+        returnFgQuantity: new Prisma.Decimal(data.returnFgQuantity),
+        heatNumber: data.heatNumber.trim(),
         expectedScrap: data.expectedScrap != null ? new Prisma.Decimal(data.expectedScrap) : null,
         vendorId: data.vendorId,
         purpose: data.purpose,
@@ -152,9 +103,6 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         createdBy: user!.id,
         preparedByName: data.preparedByName.trim(),
         qrToken: generateQrToken(),
-        items: {
-          create: lineData,
-        },
       },
     });
 
@@ -175,8 +123,8 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         partNumber: data.partNumber.trim(),
         expectedScrap: data.expectedScrap,
         preparedByName: data.preparedByName.trim(),
-        lineCount: lineData.length,
-        totalInputWeight: lineData.reduce((s, l) => s + l.inputWeight, 0),
+        rmQuantity: data.rmQuantity,
+        returnFgQuantity: data.returnFgQuantity,
       },
       reason: "DC created as DRAFT",
     });
@@ -214,6 +162,7 @@ export async function submitForApproval(dcId: string): Promise<ActionResult> {
         body: "Submitted and waiting for approval before dispatch.",
         entityType: "DeliveryChallan",
         entityId: dcId,
+        targetUrl: `/dcs/${dcId}`,
       },
       user!.id,
     );
@@ -252,7 +201,7 @@ export async function dispatchDc(dcId: string, input: DispatchInput = {}): Promi
 
   const dc = await prisma.deliveryChallan.findUnique({
     where: { id: dcId },
-    include: { items: true, dispatch: true },
+    include: { dispatch: true },
   });
   if (!dc) return { ok: false, error: "DC not found." };
   assertVendorScope(user!, dc.vendorId);
@@ -263,15 +212,8 @@ export async function dispatchDc(dcId: string, input: DispatchInput = {}): Promi
   if (dc.dispatch) {
     return { ok: false, error: "This DC has already been dispatched." };
   }
-  if (dc.items.length === 0) {
-    return { ok: false, error: "DC has no line items." };
-  }
-  const invalidLine = dc.items.some((it) => Number(it.quantity) <= 0 || Number(it.inputWeight) <= 0);
-  if (invalidLine) {
-    return { ok: false, error: "One or more DC lines have an invalid quantity or weight." };
-  }
 
-  const totalInputWeight = dc.items.reduce((sum, it) => sum + Number(it.inputWeight), 0);
+  const totalInputWeight = Number(dc.rmQuantity ?? 0);
   const now = new Date();
 
   await prisma.$transaction(async (tx) => {
@@ -283,13 +225,6 @@ export async function dispatchDc(dcId: string, input: DispatchInput = {}): Promi
         vehicleNumber: data.vehicleNumber || null,
         transporter: data.transporter || null,
         totalInputWeight,
-        items: {
-          create: dc.items.map((it) => ({
-            itemId: it.itemId,
-            quantity: it.quantity,
-            weight: it.inputWeight,
-          })),
-        },
       },
     });
 

@@ -31,7 +31,6 @@ export async function getVendorOutstandingRows(): Promise<VendorOutstandingRow[]
   const dcs = await prisma.deliveryChallan.findMany({
     where: { status: { not: "CANCELLED" } },
     include: {
-      items: true,
       dispatch: true,
       receipts: { include: { items: true }, orderBy: { receiptDate: "desc" } },
       scrapReceipts: { include: { items: true } },
@@ -63,7 +62,7 @@ export async function getVendorOutstandingRows(): Promise<VendorOutstandingRow[]
       if (isOverdue) overdueDcCount++;
 
       if (DISPATCHED_ONWARD.includes(dc.status)) {
-        const totalInput = dc.items.reduce((s, it) => s + Number(it.inputWeight), 0);
+        const totalInput = Number(dc.rmQuantity ?? 0);
         const totalReceivedNet = dc.receipts.reduce(
           (sum, r) => sum + r.items.reduce((s, l) => s + (Number(l.weightReceived) - Number(l.rejectedWeight)), 0),
           0,
@@ -72,7 +71,7 @@ export async function getVendorOutstandingRows(): Promise<VendorOutstandingRow[]
       }
 
       if (SCRAP_PENDING_STATUSES.includes(dc.status)) {
-        const expectedScrap = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+        const expectedScrap = Number(dc.expectedScrap ?? 0);
         const receivedScrap = dc.scrapReceipts.reduce(
           (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),
           0,
@@ -80,7 +79,7 @@ export async function getVendorOutstandingRows(): Promise<VendorOutstandingRow[]
         scrapPendingKg += Math.max(expectedScrap - receivedScrap, 0);
       }
 
-      const expectedScrapAll = dc.items.reduce((s, it) => s + Number(it.expectedScrapWeight), 0);
+      const expectedScrapAll = Number(dc.expectedScrap ?? 0);
       totalExpectedScrap += expectedScrapAll;
       totalReceivedScrap += dc.scrapReceipts.reduce(
         (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),
