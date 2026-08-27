@@ -5,51 +5,36 @@ import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { buildDcPublicUrl } from "@/services/dispatch.service";
+import { filterDcDataForRole } from "@/server/dcs/sanitizer";
+import { DcActions } from "./dc-actions";
+import { DocumentsPanel } from "@/components/documents-panel";
 
 export const dynamic = "force-dynamic";
-import { evaluateScrap } from "@/services/scrap.service";
-import { computeRecovery } from "@/services/recovery.service";
-import { DcActions } from "./dc-actions";
-import { ReceiveMaterialForm } from "./receive-material-form";
-import { ReceiveScrapForm } from "./receive-scrap-form";
-import { ReconciliationPanel } from "./reconciliation-panel";
-import { DocumentsPanel } from "@/components/documents-panel";
-import { AmendmentPanel } from "./amendment-panel";
-import { RecoveryPanel } from "./recovery-panel";
-import { ClassificationPanel } from "./classification-panel";
-import { EditTransportDialog } from "./edit-transport-dialog";
 
 export default async function DcDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await getSessionUser();
 
-  const dc = await prisma.deliveryChallan.findUnique({
+  const dcRaw = await prisma.deliveryChallan.findUnique({
     where: { id },
     include: {
       vendor: true,
       process: true,
       statusHistory: { orderBy: { createdAt: "asc" } },
-      dispatch: true,
-      receipts: { include: { items: true }, orderBy: { receiptDate: "asc" } },
-      scrapReceipts: { include: { items: { include: { scrapType: true } } }, orderBy: { receiptDate: "asc" } },
-      reconciliation: true,
-      exceptions: { orderBy: { createdAt: "asc" } },
-      recoveryRequirements: { include: { recoveryType: true } },
-      recoveryReceipts: { include: { recoveryType: true }, orderBy: { receiptDate: "asc" } },
-      classifications: { include: { items: { include: { scrapType: true } } }, orderBy: { classifiedAt: "asc" } },
     },
   });
-  if (!dc) {
+
+  if (!dcRaw) {
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-amber-200 bg-amber-50 p-6 text-center shadow-sm my-12">
-        <h2 className="text-lg font-bold text-amber-900">Record Not Available</h2>
-        <p className="mt-2 text-sm text-amber-800">
+        <h2 className="text-lg font-bold text-amber-900 font-sans">Record Not Available</h2>
+        <p className="mt-2 text-sm text-amber-800 font-sans">
           This record is no longer available. It may have been removed or you may have followed an outdated link.
         </p>
         <div className="mt-6">
           <a
             href="/dcs"
-            className="inline-flex items-center rounded-md bg-amber-900 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800 transition-colors"
+            className="inline-flex items-center rounded-md bg-amber-900 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-800 transition-colors font-sans"
           >
             Back to Delivery Challans
           </a>
@@ -58,38 +43,24 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
     );
   }
 
-  const recoveryTypes = await prisma.recoveryType.findMany({ where: { active: true }, orderBy: { name: "asc" } });
-  const canReceiveRecovery = user ? await hasPermission(user.id, PERMISSIONS.SCRAP_CREATE) : false;
-  const recoveryRollup = dc.recoveryRequirements.map((req) => {
-    const received = dc.recoveryReceipts
-      .filter((r) => r.recoveryTypeId === req.recoveryTypeId)
-      .reduce((s, r) => s + Number(r.weight), 0);
-    const r = computeRecovery({ sentWeight: Number(req.expectedWeight), receivedWeight: received });
-    return { recoveryTypeId: req.recoveryTypeId, name: req.recoveryType.name, ...r };
-  });
+  // Server-side blind payload sanitization
+  const userRole = user?.roleKeys?.[0] || "GUEST";
+  const dc = filterDcDataForRole(dcRaw, userRole);
 
-  const canClassify = user ? await hasPermission(user.id, PERMISSIONS.RECEIPT_EDIT) : false;
-  let totalClassifiedQty = 0;
-  for (const c of dc.classifications) {
-    for (const line of c.items) {
-      totalClassifiedQty += Number(line.goodQty) + Number(line.scrapQty);
-    }
-  }
-  const scrapTypesForClassification = canClassify
-    ? await prisma.scrapType.findMany({ where: { active: true }, orderBy: { name: "asc" } })
-    : [];
-
-  const canApprove = user ? await hasPermission(user.id, PERMISSIONS.DC_APPROVE) : false;
+  // Permission Checks
   const canSubmit = user ? await hasPermission(user.id, PERMISSIONS.DC_CREATE) : false;
-  const canDispatch = user ? await hasPermission(user.id, PERMISSIONS.DC_DISPATCH) : false;
-  const canReceive = user ? await hasPermission(user.id, PERMISSIONS.RECEIPT_CREATE) : false;
-  const canScrap = user ? await hasPermission(user.id, PERMISSIONS.SCRAP_CREATE) : false;
-  const canCloseDc = user ? await hasPermission(user.id, PERMISSIONS.RECONCILIATION_CLOSE) : false;
-  const canOverrideException = user ? await hasPermission(user.id, PERMISSIONS.RECONCILIATION_OVERRIDE) : false;
+  const canApprove = user ? await hasPermission(user.id, PERMISSIONS.DC_APPROVE) : false;
+  const canSecurityDispatch = user ? await hasPermission(user.id, PERMISSIONS.SECURITY_DISPATCH) : false;
+  const canConfirmVendor = user ? await hasPermission(user.id, PERMISSIONS.DC_VIEW) : false;
+  const canSecurityReturn = user ? await hasPermission(user.id, PERMISSIONS.SECURITY_RETURN) : false;
+  const canStoreVerify = user ? await hasPermission(user.id, PERMISSIONS.STORE_VERIFY) : false;
+  const canManagerFinalApprove = user ? await hasPermission(user.id, PERMISSIONS.MANAGER_FINAL_APPROVE) : false;
+  const canPaymentApprove = user ? await hasPermission(user.id, PERMISSIONS.PAYMENT_APPROVE) : false;
+  const canAccountsEntry = user ? await hasPermission(user.id, PERMISSIONS.ACCOUNTS_PAYMENT_ENTRY) : false;
+  const canClose = user ? await hasPermission(user.id, PERMISSIONS.DC_CLOSE) : false;
+  const canViewHistory = user ? await hasPermission(user.id, PERMISSIONS.DC_HISTORY_FULL) : false;
   const canUploadDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_UPLOAD) : false;
   const canDeleteDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_DELETE) : false;
-  const canRequestAmendment = user ? await hasPermission(user.id, PERMISSIONS.DC_EDIT) : false;
-  const canDecideAmendment = user ? await hasPermission(user.id, PERMISSIONS.DC_APPROVE) : false;
 
   const qrDataUrl = dc.qrToken ? await QRCode.toDataURL(buildDcPublicUrl(dc.qrToken), { margin: 1, width: 160 }) : null;
 
@@ -97,408 +68,445 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
     where: { entityType: "DeliveryChallan", entityId: dc.id },
     orderBy: { uploadedAt: "desc" },
   });
-  const uploaderIds = [...new Set(documents.map((d) => d.uploadedBy).filter((v): v is string => !!v))];
-  const uploaders = uploaderIds.length
-    ? await prisma.user.findMany({ where: { id: { in: uploaderIds } }, select: { id: true, name: true } })
-    : [];
-  const uploaderNameById = new Map(uploaders.map((u) => [u.id, u.name]));
 
-  const auditUserIds = [...new Set([dc.createdBy, dc.approvedBy].filter((v): v is string => !!v))];
+  const auditUserIds = [
+    ...new Set(
+      [
+        dc.createdBy,
+        dc.approvedBy,
+        dc.securityDispatchedBy,
+        dc.securityEnteredBy,
+        dc.storeVerifiedBy,
+        dc.finalApprovedBy,
+        dc.approvedForPaymentBy,
+        dc.closedBy,
+      ].filter((v): v is string => !!v),
+    ),
+  ];
+
   const auditUsers = auditUserIds.length
     ? await prisma.user.findMany({ where: { id: { in: auditUserIds } }, select: { id: true, name: true, email: true } })
     : [];
   const auditUserMap = new Map(auditUsers.map((u) => [u.id, u.name || u.email]));
 
-  const amendments = await prisma.dcAmendment.findMany({
-    where: { dcId: dc.id },
-    orderBy: { requestedAt: "desc" },
-  });
-  const amendmentUserIds = [
-    ...new Set(
-      amendments.flatMap((a) => [a.requestedBy, a.decidedBy].filter((v): v is string => !!v)),
-    ),
-  ];
-  const amendmentUsers = amendmentUserIds.length
-    ? await prisma.user.findMany({ where: { id: { in: amendmentUserIds } }, select: { id: true, name: true } })
-    : [];
-  const amendmentUserNameById = new Map(amendmentUsers.map((u) => [u.id, u.name]));
+  // Discrepancy Detection logic for Manager/Admin comparison
+  const secTotal = Number(dc.securityFgQuantity ?? 0) + Number(dc.securityRejectionQuantity ?? 0) + Number(dc.securityScrapQuantity ?? 0);
+  const storeTotal = Number(dc.storeVerifiedFgQuantity ?? 0) + Number(dc.storeVerifiedRejectionQuantity ?? 0) + Number(dc.storeVerifiedScrapQuantity ?? 0);
+  const expFg = Number(dc.returnFgQuantity ?? 0);
+  const hasDiscrepancy = (dc.securityFgQuantity != null && dc.storeVerifiedFgQuantity != null && secTotal !== storeTotal) || (storeTotal > 0 && storeTotal !== expFg);
 
-  const receivableStatuses = ["DRAFT", "APPROVED", "DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED"];
-  const canReceiveNow = canReceive && receivableStatuses.includes(dc.status);
-  const receiveLines = [
-    {
-      itemId: "default",
-      itemCode: dc.partNumber ?? "PART",
-      itemName: "Part Material",
-      sentQuantity: Number(dc.returnFgQuantity ?? 0),
-      alreadyReceived: dc.receipts.reduce(
-        (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.quantityReceived), 0),
-        0,
-      ),
-    },
-  ];
+  // Next required action prompt text
+  let nextActionPrompt = "";
+  let responsibleRoleText = "";
 
-  const expectedScrapWeight = Number(dc.expectedScrap ?? 0);
-  const receivedScrapWeight = dc.scrapReceipts.reduce(
-    (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),
-    0,
-  );
-  const scrapTolerance = 0;
-  const scrapEval = evaluateScrap(expectedScrapWeight, receivedScrapWeight, scrapTolerance);
-  const scrapReceivableStatuses = ["MATERIAL_RETURNED", "SCRAP_PENDING"];
-  const canScrapNow = canScrap && scrapReceivableStatuses.includes(dc.status);
-  const scrapTypes = canScrapNow
-    ? await prisma.scrapType.findMany({ where: { active: true }, orderBy: { code: "asc" } })
-    : [];
-
-  const totalInput = Number(dc.rmQuantity ?? 0);
-  const totalFinished = Number(dc.returnFgQuantity ?? 0);
-  const totalScrap = Number(dc.expectedScrap ?? 0);
-  const totalLoss = 0;
+  switch (dc.status) {
+    case "DRAFT":
+      nextActionPrompt = "DC Created (DRAFT). Click 'Submit for Approval' to send to Manager.";
+      responsibleRoleText = "Creator / Stores";
+      break;
+    case "PENDING_APPROVAL":
+      nextActionPrompt = "Pending Manager Approval. Authorized Approver must review and Approve or Return to Draft.";
+      responsibleRoleText = "Manager / Approver";
+      break;
+    case "APPROVED":
+      nextActionPrompt = "Approved. Security must perform dispatch entry when material leaves gate.";
+      responsibleRoleText = "Security";
+      break;
+    case "DISPATCHED":
+      nextActionPrompt = "Dispatched. Confirm vendor receipt when material reaches vendor.";
+      responsibleRoleText = "Stores / Manager";
+      break;
+    case "AT_VENDOR":
+      nextActionPrompt = "Material is at Vendor for processing. Security return entry required when material returns.";
+      responsibleRoleText = "Security";
+      break;
+    case "SECURITY_RETURNED":
+      nextActionPrompt = "Security Return recorded. Store must inspect and record Store Verification quantities.";
+      responsibleRoleText = "Stores";
+      break;
+    case "STORE_VERIFIED":
+      nextActionPrompt = "Store Verification complete. Manager must compare entries and set Final Approved Quantities.";
+      responsibleRoleText = "Manager / Admin";
+      break;
+    case "FINAL_APPROVED":
+      nextActionPrompt = "Final Approved quantities set. Manager/Admin must mark 'Approve for Payment'.";
+      responsibleRoleText = "Manager / Admin";
+      break;
+    case "APPROVED_FOR_PAYMENT":
+      nextActionPrompt = "Approved for Payment. Accounts must record Invoice/Payment details and click CLOSE DC.";
+      responsibleRoleText = "Accounts";
+      break;
+    case "CLOSED":
+      nextActionPrompt = "DC is CLOSED. All operational and financial entries are locked.";
+      responsibleRoleText = "Completed";
+      break;
+  }
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div className="flex items-start justify-between">
+    <div className="max-w-5xl space-y-6">
+      {/* 1. HEADER & STATUS */}
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div>
-          <h1 className="font-mono text-lg font-semibold text-slate-900">{dc.dcNumber}</h1>
-          <p className="text-sm text-slate-500">
-            <a href={`/work-orders?wo=${encodeURIComponent(dc.woNumber)}`} className="font-mono text-blue-700 hover:underline">
-              {dc.woNumber}
-            </a>
+          <div className="flex items-center gap-3">
+            <h1 className="font-mono text-xl font-bold text-slate-900">{dc.dcNumber}</h1>
+            <span className="rounded-full bg-blue-100 px-3 py-0.5 text-xs font-semibold text-blue-800">
+              {dc.status.replace(/_/g, " ")}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-slate-500 font-sans">
+            Work Order: <span className="font-mono font-semibold text-slate-800">{dc.woNumber}</span>
             {dc.partNumber ? ` · Part No: ${dc.partNumber}` : ""}
             {" · "}
-            {dc.vendor.vendorName} · {dc.process?.name ?? "—"} · {dc.purpose.replace(/_/g, " ")}
+            {dc.vendor.vendorName} · {dc.process?.name ?? "—"}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-            {dc.status.replace(/_/g, " ")}
-          </span>
-          <a href={"/dcs/" + dc.id + "/pdf"} target="_blank" rel="noopener noreferrer" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Print / PDF</a>
+          <a
+            href={"/dcs/" + dc.id + "/pdf"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-md border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
+          >
+            Print / Download PDF
+          </a>
         </div>
       </div>
 
+      {/* NEXT ACTION BANNER */}
+      <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-4 flex items-center justify-between">
+        <div className="space-y-0.5">
+          <p className="text-xs font-bold text-blue-900 uppercase tracking-wider">Next Required Action</p>
+          <p className="text-sm font-semibold text-blue-950">{nextActionPrompt}</p>
+        </div>
+        <div className="text-right">
+          <span className="text-[10px] text-blue-600 uppercase block tracking-wider font-semibold">Responsible Role</span>
+          <span className="rounded bg-blue-200/80 px-2 py-0.5 text-xs font-bold text-blue-900">{responsibleRoleText}</span>
+        </div>
+      </div>
+
+      {/* ACTION PANEL */}
       <DcActions
         dcId={dc.id}
         status={dc.status}
-        canApprove={canApprove}
-        canSubmit={canSubmit}
-        canDispatch={canDispatch}
+        userRole={userRole}
+        permissions={{
+          canSubmit,
+          canApprove,
+          canSecurityDispatch,
+          canConfirmVendor,
+          canSecurityReturn,
+          canStoreVerify,
+          canManagerFinalApprove,
+          canPaymentApprove,
+          canAccountsEntry,
+          canClose,
+        }}
+        dcData={{
+          rmQuantity: dc.rmQuantity ? Number(dc.rmQuantity) : null,
+          returnFgQuantity: dc.returnFgQuantity ? Number(dc.returnFgQuantity) : null,
+          securityDispatchQuantity: dc.securityDispatchQuantity ? Number(dc.securityDispatchQuantity) : null,
+          securityFgQuantity: dc.securityFgQuantity ? Number(dc.securityFgQuantity) : null,
+          securityRejectionQuantity: dc.securityRejectionQuantity ? Number(dc.securityRejectionQuantity) : null,
+          securityScrapQuantity: dc.securityScrapQuantity ? Number(dc.securityScrapQuantity) : null,
+          storeVerifiedFgQuantity: dc.storeVerifiedFgQuantity ? Number(dc.storeVerifiedFgQuantity) : null,
+          storeVerifiedRejectionQuantity: dc.storeVerifiedRejectionQuantity ? Number(dc.storeVerifiedRejectionQuantity) : null,
+          storeVerifiedScrapQuantity: dc.storeVerifiedScrapQuantity ? Number(dc.storeVerifiedScrapQuantity) : null,
+          invoiceNumber: dc.invoiceNumber,
+          invoiceAmount: dc.invoiceAmount ? Number(dc.invoiceAmount) : null,
+          paymentReferenceNumber: dc.paymentReferenceNumber,
+        }}
       />
 
-      {qrDataUrl && (
-        <div className="flex items-center justify-between rounded-lg border border-slate-200 p-4">
+      {/* 2. BASIC INFORMATION */}
+      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+        <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+          1. Basic Information
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-sans">
           <div>
-            <h2 className="text-sm font-semibold text-slate-900">Scan to View / Download</h2>
-            <p className="mt-1 max-w-md text-xs text-slate-500">
-              Anyone who scans this QR code — no login required — gets a PDF of this DC that they
-              can view or download on their phone.
-            </p>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">DC Number</span>
+            <span className="font-mono font-bold text-slate-900 text-sm">{dc.dcNumber}</span>
           </div>
-          <div className="flex flex-col items-center gap-1">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrDataUrl} alt="DC QR code" width={120} height={120} />
-            <span className="text-[10px] text-slate-400">{dc.dcNumber}</span>
+          <div>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">DC Date</span>
+            <span className="font-semibold text-slate-900">{dc.dcDate.toLocaleDateString()}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Work Order No.</span>
+            <span className="font-mono font-bold text-slate-900">{dc.woNumber}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Part Number</span>
+            <span className="font-mono font-bold text-slate-900">{dc.partNumber || "—"}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Vendor Name</span>
+            <span className="font-bold text-slate-900">{dc.vendor.vendorName}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Process</span>
+            <span className="font-semibold text-slate-900">{dc.process?.name || "—"}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Purpose</span>
+            <span className="font-semibold text-slate-900">{dc.purpose.replace(/_/g, " ")}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Heat Number</span>
+            <span className="font-mono font-semibold text-slate-900">{dc.heatNumber || "—"}</span>
           </div>
         </div>
-      )}
+      </div>
 
-      {dc.dispatch && (
-        <div className="rounded-lg border border-slate-200 p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Dispatch Details</h2>
-          <div className="flex items-start justify-between gap-4">
-            <div className="grid grid-cols-2 gap-1 text-sm text-slate-700">
-              <span>Dispatched At</span><span className="text-right font-mono">{dc.dispatch.dispatchedAt.toLocaleString()}</span>
-              <span>Vehicle Number</span><span className="text-right font-mono">{dc.dispatch.vehicleNumber ?? "—"}</span>
-              <span>Transporter</span><span className="text-right font-mono">{dc.dispatch.transporter ?? "—"}</span>
-              <span>Total Input Weight</span><span className="text-right font-mono">{Number(dc.dispatch.totalInputWeight).toFixed(3)} kg</span>
+      {/* 3. MATERIAL SPECIFICATIONS & 4. MANDATORY PRICING */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+            2. Material Quantities
+          </h2>
+          <div className="grid grid-cols-2 gap-4 text-xs">
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">RM Quantity (Sent)</span>
+              <span className="font-mono font-bold text-slate-900 text-base">
+                {dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Expected Return FG Qty</span>
+              <span className="font-mono font-bold text-slate-900 text-base">
+                {dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"}
+              </span>
             </div>
           </div>
         </div>
-      )}
 
-      <div className="rounded-lg border border-slate-200 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-slate-900">Transport &amp; Compliance Details</h2>
-          {canRequestAmendment && (
-            <EditTransportDialog
-              dcId={dc.id}
-              vehicleNumber={dc.vehicleNumber}
-              transporter={dc.transporter}
-              ewayBillNumber={dc.ewayBillNumber}
-              eSugamNumber={dc.eSugamNumber}
-            />
+        <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-5 space-y-3">
+          <h2 className="text-sm font-bold text-blue-900 uppercase tracking-wider border-b border-blue-200/60 pb-2">
+            3. Pricing &amp; Commercial Terms
+          </h2>
+          <div className="grid grid-cols-2 gap-4 text-xs">
+            <div>
+              <span className="text-blue-600 block text-[10px] uppercase font-bold">Pricing Basis</span>
+              <span className="font-bold text-blue-950 text-sm">
+                {dc.pricingBasis === "RM" ? "RM Quantity" : dc.pricingBasis === "FG" ? "FG Quantity" : "—"}
+              </span>
+            </div>
+            <div>
+              <span className="text-blue-600 block text-[10px] uppercase font-bold">Rate Per Quantity</span>
+              <span className="font-mono font-bold text-blue-950 text-sm">
+                ₹{dc.ratePerQuantity != null ? Number(dc.ratePerQuantity).toFixed(2) : "—"}
+              </span>
+            </div>
+            <div>
+              <span className="text-blue-600 block text-[10px] uppercase font-bold">Original Expected Amount</span>
+              <span className="font-mono font-bold text-blue-950">
+                ₹{dc.expectedAmount != null ? Number(dc.expectedAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 }) : "—"}
+              </span>
+            </div>
+            <div>
+              <span className="text-emerald-700 block text-[10px] uppercase font-bold">Final Payable Amount</span>
+              <span className="font-mono font-bold text-emerald-900 text-sm">
+                ₹{dc.finalPayableAmount != null ? Number(dc.finalPayableAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 }) : "Pending Manager Approval"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. DISPATCH DETAILS */}
+      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+        <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+          4. Security Dispatch Details
+        </h2>
+        {dc.securityDispatchedAt ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-sans">
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Actual Dispatched Qty</span>
+              <span className="font-mono font-bold text-slate-900">{Number(dc.securityDispatchQuantity).toFixed(3)}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Dispatch Date &amp; Time</span>
+              <span className="font-semibold text-slate-900">{dc.securityDispatchDate ? dc.securityDispatchDate.toLocaleDateString() : "—"} {dc.securityDispatchTime || ""}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Vehicle Number</span>
+              <span className="font-mono font-semibold text-slate-900">{dc.securityDispatchVehicleNumber || dc.vehicleNumber || "—"}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Transporter</span>
+              <span className="font-semibold text-slate-900">{dc.securityDispatchTransporter || dc.transporter || "—"}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400 italic">Security dispatch entry pending.</p>
+        )}
+      </div>
+
+      {/* 6. SECURITY RETURN & 7. STORE VERIFICATION */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Security Return (Hidden for Stores) */}
+        {userRole !== "STORES" && (
+          <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+              5. Security Return Gate Entry
+            </h2>
+            {dc.securityEnteredAt ? (
+              <div className="space-y-3 text-xs">
+                <div className="grid grid-cols-3 gap-2 font-mono">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Returned FG</span>
+                    <span className="font-bold text-slate-900">{Number(dc.securityFgQuantity).toFixed(3)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Rejection Qty</span>
+                    <span className="font-bold text-amber-700">{Number(dc.securityRejectionQuantity).toFixed(3)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Scrap Qty</span>
+                    <span className="font-bold text-slate-700">{Number(dc.securityScrapQuantity).toFixed(3)}</span>
+                  </div>
+                </div>
+                {dc.securityReturnRemarks && (
+                  <p className="text-slate-600 bg-slate-50 p-2 rounded text-[11px]">
+                    <span className="font-semibold">Gate Remarks:</span> {dc.securityReturnRemarks}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 italic">Security return entry pending.</p>
+            )}
+          </div>
+        )}
+
+        {/* Store Verification (Hidden for Security) */}
+        {userRole !== "SECURITY" && (
+          <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+              6. Store Material Verification
+            </h2>
+            {dc.storeVerifiedAt ? (
+              <div className="space-y-3 text-xs">
+                <div className="grid grid-cols-3 gap-2 font-mono">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Verified FG</span>
+                    <span className="font-bold text-slate-900">{Number(dc.storeVerifiedFgQuantity).toFixed(3)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Verified Rejection</span>
+                    <span className="font-bold text-amber-700">{Number(dc.storeVerifiedRejectionQuantity).toFixed(3)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Verified Scrap</span>
+                    <span className="font-bold text-slate-700">{Number(dc.storeVerifiedScrapQuantity).toFixed(3)}</span>
+                  </div>
+                </div>
+                {dc.storeRemarks && (
+                  <p className="text-slate-600 bg-slate-50 p-2 rounded text-[11px]">
+                    <span className="font-semibold">Store Remarks:</span> {dc.storeRemarks}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 italic">Store verification pending.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 8. MANAGER COMPARISON & FINAL APPROVED QUANTITIES */}
+      {["ADMIN", "MANAGEMENT", "ACCOUNTS"].includes(userRole) && (
+        <div className="rounded-lg border border-teal-200 bg-teal-50/30 p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-teal-200/60 pb-2">
+            <h2 className="text-sm font-bold text-teal-950 uppercase tracking-wider">
+              7. Manager Comparison &amp; Final Approved Quantities
+            </h2>
+            {hasDiscrepancy && (
+              <span className="rounded bg-amber-100 border border-amber-300 px-2 py-0.5 text-xs font-bold text-amber-900">
+                ⚠ Quantity Discrepancy Detected
+              </span>
+            )}
+          </div>
+
+          <table className="w-full text-left text-xs bg-white rounded border border-slate-200 overflow-hidden">
+            <thead className="bg-slate-100 text-[10px] uppercase tracking-wider text-slate-600 border-b border-slate-200">
+              <tr>
+                <th className="px-3 py-2">Entry Stage</th>
+                <th className="px-3 py-2 text-right">FG Quantity</th>
+                <th className="px-3 py-2 text-right">Rejection Qty</th>
+                <th className="px-3 py-2 text-right">Scrap Qty</th>
+                <th className="px-3 py-2 text-right">Total Returned</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 font-mono">
+              <tr>
+                <td className="px-3 py-2 font-sans font-semibold text-slate-700">Security Gate Return</td>
+                <td className="px-3 py-2 text-right">{dc.securityFgQuantity != null ? Number(dc.securityFgQuantity).toFixed(3) : "—"}</td>
+                <td className="px-3 py-2 text-right text-amber-700">{dc.securityRejectionQuantity != null ? Number(dc.securityRejectionQuantity).toFixed(3) : "—"}</td>
+                <td className="px-3 py-2 text-right text-slate-600">{dc.securityScrapQuantity != null ? Number(dc.securityScrapQuantity).toFixed(3) : "—"}</td>
+                <td className="px-3 py-2 text-right font-bold">{dc.securityFgQuantity != null ? secTotal.toFixed(3) : "—"}</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-sans font-semibold text-slate-700">Store Verification</td>
+                <td className="px-3 py-2 text-right">{dc.storeVerifiedFgQuantity != null ? Number(dc.storeVerifiedFgQuantity).toFixed(3) : "—"}</td>
+                <td className="px-3 py-2 text-right text-amber-700">{dc.storeVerifiedRejectionQuantity != null ? Number(dc.storeVerifiedRejectionQuantity).toFixed(3) : "—"}</td>
+                <td className="px-3 py-2 text-right text-slate-600">{dc.storeVerifiedScrapQuantity != null ? Number(dc.storeVerifiedScrapQuantity).toFixed(3) : "—"}</td>
+                <td className="px-3 py-2 text-right font-bold">{dc.storeVerifiedFgQuantity != null ? storeTotal.toFixed(3) : "—"}</td>
+              </tr>
+              <tr className="bg-teal-50/70 font-bold">
+                <td className="px-3 py-2.5 font-sans text-teal-950 uppercase text-[11px]">Final Approved (Manager)</td>
+                <td className="px-3 py-2.5 text-right text-teal-950">{dc.finalApprovedFgQuantity != null ? Number(dc.finalApprovedFgQuantity).toFixed(3) : "—"}</td>
+                <td className="px-3 py-2.5 text-right text-amber-900">{dc.finalApprovedRejectionQuantity != null ? Number(dc.finalApprovedRejectionQuantity).toFixed(3) : "—"}</td>
+                <td className="px-3 py-2.5 text-right text-slate-800">{dc.finalApprovedScrapQuantity != null ? Number(dc.finalApprovedScrapQuantity).toFixed(3) : "—"}</td>
+                <td className="px-3 py-2.5 text-right text-teal-950">
+                  {dc.finalApprovedFgQuantity != null
+                    ? (Number(dc.finalApprovedFgQuantity) + Number(dc.finalApprovedRejectionQuantity ?? 0) + Number(dc.finalApprovedScrapQuantity ?? 0)).toFixed(3)
+                    : "—"}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          {dc.managerCorrectionRemarks && (
+            <div className="bg-white p-3 rounded border border-teal-200 text-xs">
+              <span className="font-bold text-teal-950 block">Manager Correction Remarks:</span>
+              <p className="text-slate-700 mt-0.5">{dc.managerCorrectionRemarks}</p>
+            </div>
           )}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Vehicle Number</p>
-            <p className="font-mono text-slate-900 font-medium">{dc.vehicleNumber || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Transporter</p>
-            <p className="font-mono text-slate-900 font-medium">{dc.transporter || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">E-Way Bill Number</p>
-            <p className="font-mono text-slate-900 font-medium">{dc.ewayBillNumber || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">E-Sugam Number</p>
-            <p className="font-mono text-slate-900 font-medium">{dc.eSugamNumber || "—"}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-slate-200 p-4 bg-white space-y-3">
-        <h2 className="text-sm font-semibold text-slate-900">DC Movement Specifications</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Part Number</p>
-            <p className="font-mono text-slate-900 font-semibold">{dc.partNumber || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">RM Qty</p>
-            <p className="font-mono text-slate-900 font-semibold">
-              {dc.rmQuantity !== null && dc.rmQuantity !== undefined
-                ? Number(dc.rmQuantity).toFixed(3)
-                : "—"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Return FG Qty</p>
-            <p className="font-mono text-slate-900 font-semibold">
-              {dc.returnFgQuantity !== null && dc.returnFgQuantity !== undefined
-                ? Number(dc.returnFgQuantity).toFixed(3)
-                : "—"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Heat Number</p>
-            <p className="font-mono text-slate-900 font-semibold">{dc.heatNumber || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Process</p>
-            <p className="font-mono text-slate-900 font-medium">{dc.process?.name || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Work Order ID</p>
-            <p className="font-mono text-slate-900 font-medium">{dc.woNumber}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">DC Purpose</p>
-            <p className="font-mono text-slate-900 font-medium">{dc.purpose.replace(/_/g, " ")}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-slate-200 p-4 bg-white space-y-3">
-        <h2 className="text-sm font-semibold text-slate-900">Signatures &amp; Authorization Details</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Prepared By (Printed)</p>
-            <p className="font-semibold text-slate-900">{dc.preparedByName || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Approved By (Printed)</p>
-            <p className="font-semibold text-slate-900">{dc.approvedByName || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Created By (Audit User)</p>
-            <p className="text-slate-700">{dc.createdBy ? (auditUserMap.get(dc.createdBy) || dc.createdBy) : "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Approved By (Audit User)</p>
-            <p className="text-slate-700">{dc.approvedBy ? (auditUserMap.get(dc.approvedBy) || dc.approvedBy) : "—"}</p>
-          </div>
-        </div>
-      </div>
-
-      <RecoveryPanel
-        dcId={dc.id}
-        recoveryTypes={recoveryTypes.map((rt) => ({ id: rt.id, code: rt.code, name: rt.name }))}
-        rollup={recoveryRollup}
-        receipts={dc.recoveryReceipts.map((r) => ({
-          id: r.id,
-          recoveryTypeName: r.recoveryType.name,
-          weight: Number(r.weight),
-          receiptDate: r.receiptDate.toISOString(),
-          remarks: r.remarks,
-        }))}
-        canReceive={canReceiveRecovery}
-      />
-
-      <ClassificationPanel
-        dcId={dc.id}
-        items={[
-          {
-            receivedQty: dc.receipts.reduce(
-              (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.quantityReceived), 0),
-              0,
-            ),
-            alreadyClassifiedQty: totalClassifiedQty,
-          },
-        ]}
-        scrapTypes={scrapTypesForClassification.map((s) => ({ id: s.id, name: s.name }))}
-        history={dc.classifications.map((c) => ({
-          id: c.id,
-          classifiedAt: c.classifiedAt.toISOString(),
-          lines: c.items.map((l) => ({
-            receivedQty: Number(l.receivedQty),
-            goodQty: Number(l.goodQty),
-            scrapQty: Number(l.scrapQty),
-            scrapTypeName: l.scrapType?.name ?? null,
-          })),
-        }))}
-        canClassify={canClassify}
-      />
-
-      <AmendmentPanel
-        dcId={dc.id}
-        amendments={amendments.map((a) => ({
-          id: a.id,
-          requestedByName: amendmentUserNameById.get(a.requestedBy) ?? "Unknown",
-          requestedAt: a.requestedAt.toISOString(),
-          reason: a.reason,
-          previousQuantity: Number(a.previousQuantity),
-          previousWeight: Number(a.previousWeight),
-          newQuantity: Number(a.newQuantity),
-          newWeight: Number(a.newWeight),
-          status: a.status,
-          decidedByName: a.decidedBy ? (amendmentUserNameById.get(a.decidedBy) ?? null) : null,
-          decisionReason: a.decisionReason,
-        }))}
-        canRequest={canRequestAmendment}
-        canDecide={canDecideAmendment}
-      />
-
-      {canReceiveNow && (
-        <ReceiveMaterialForm dcId={dc.id} lines={receiveLines} />
       )}
 
-      <div className="rounded-lg border border-slate-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900">Material Returns</h2>
-        {dc.receipts.length === 0 ? (
-          <p className="text-sm text-slate-400">No material received yet.</p>
+      {/* 9. ACCOUNTS PAYMENT INFORMATION */}
+      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+        <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+          8. Accounts Invoice &amp; Payment Details
+        </h2>
+        {dc.invoiceNumber ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-sans">
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Invoice Number</span>
+              <span className="font-mono font-bold text-slate-900">{dc.invoiceNumber}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Invoice Date</span>
+              <span className="font-semibold text-slate-900">{dc.invoiceDate ? dc.invoiceDate.toLocaleDateString() : "—"}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Invoice Amount</span>
+              <span className="font-mono font-bold text-emerald-800">
+                ₹{dc.invoiceAmount != null ? Number(dc.invoiceAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 }) : "—"}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Payment Reference</span>
+              <span className="font-mono font-semibold text-slate-900">{dc.paymentReferenceNumber || "—"}</span>
+            </div>
+          </div>
         ) : (
-          <div className="space-y-3">
-            {dc.receipts.map((r) => (
-              <div key={r.id} className="rounded-md border border-slate-100 p-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-mono font-medium text-slate-800">{r.receiptNumber}</span>
-                  <span className="text-slate-500">{r.receiptDate.toLocaleDateString()}</span>
-                </div>
-                <table className="mt-2 w-full text-sm">
-                  <thead className="text-left text-xs uppercase text-slate-500">
-                    <tr><th className="py-1">Item</th><th className="text-right">Qty Received</th><th className="text-right">Weight Received</th><th className="text-right">Rejected Qty</th></tr>
-                  </thead>
-                  <tbody>
-                    {r.items.map((line) => {
-                      return (
-                        <tr key={line.id} className="border-t border-slate-100">
-                          <td className="py-1">{dc.partNumber ?? "Part Material"}</td>
-                          <td className="text-right font-mono">{Number(line.quantityReceived)}</td>
-                          <td className="text-right font-mono">{Number(line.weightReceived).toFixed(3)}</td>
-                          <td className="text-right font-mono">{Number(line.rejectedQuantity)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-          </div>
+          <p className="text-xs text-slate-400 italic">Invoice and payment details pending Accounts entry.</p>
         )}
       </div>
 
-      <div className="rounded-lg border border-slate-200 p-4 bg-white space-y-3">
-        <h2 className="text-sm font-semibold text-slate-900">Scrap Recovery &amp; Variance Analysis</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm font-mono text-slate-700">
-          <div>
-            <p className="text-xs font-sans text-slate-500 uppercase tracking-wider">Expected Scrap (DC Creation)</p>
-            <p className="font-semibold text-slate-900">{expectedScrapWeight.toFixed(3)} kg</p>
-          </div>
-          <div>
-            <p className="text-xs font-sans text-slate-500 uppercase tracking-wider">Actual Scrap Returned</p>
-            <p className="font-semibold text-slate-900">{receivedScrapWeight.toFixed(3)} kg</p>
-          </div>
-          <div>
-            <p className="text-xs font-sans text-slate-500 uppercase tracking-wider">Scrap Difference</p>
-            <p className={`font-semibold ${expectedScrapWeight - receivedScrapWeight > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-              {Math.max(expectedScrapWeight - receivedScrapWeight, 0).toFixed(3)} kg
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-sans text-slate-500 uppercase tracking-wider">Recovery Status</p>
-            <span
-              className={
-                scrapEval.status === "SCRAP_SHORT"
-                  ? "rounded-full bg-red-100 px-2 py-0.5 text-xs font-sans text-red-700"
-                  : scrapEval.status === "EXCESS_SCRAP"
-                    ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-sans text-amber-700"
-                    : scrapEval.status === "NOT_APPLICABLE"
-                      ? "rounded-full bg-slate-100 px-2 py-0.5 text-xs font-sans text-slate-500"
-                      : "rounded-full bg-green-100 px-2 py-0.5 text-xs font-sans text-green-700"
-              }
-            >
-              {scrapEval.status.replace(/_/g, " ")}
-            </span>
-          </div>
-        </div>
-
-        {dc.scrapReceipts.length > 0 && (
-          <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-            {dc.scrapReceipts.map((r) => (
-              <div key={r.id} className="rounded-md border border-slate-100 p-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-medium text-slate-800">{r.scrapReceiptNumber}</span>
-                  <span className="text-slate-500">{r.receiptDate.toLocaleDateString()}</span>
-                </div>
-                <ul className="mt-1 space-y-0.5">
-                  {r.items.map((line) => (
-                    <li key={line.id} className="flex justify-between font-mono text-xs text-slate-600">
-                      <span>{line.scrapType.name}</span>
-                      <span>{Number(line.weight).toFixed(3)} kg</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {dc.reconciliation && (
-        <ReconciliationPanel
-          dcId={dc.id}
-          reconciliation={{
-            status: dc.reconciliation.status,
-            totalInputWeight: Number(dc.reconciliation.totalInputWeight),
-            totalFinishedWeight: Number(dc.reconciliation.totalFinishedWeight),
-            totalScrapWeight: Number(dc.reconciliation.totalScrapWeight),
-            approvedProcessLoss: Number(dc.reconciliation.approvedProcessLoss),
-            accountedWeight: Number(dc.reconciliation.accountedWeight),
-            unaccountedWeight: Number(dc.reconciliation.unaccountedWeight),
-          }}
-          exceptions={dc.exceptions.map((e) => ({
-            id: e.id,
-            type: e.type,
-            description: e.description,
-            variance: e.variance ? Number(e.variance) : null,
-            status: e.status,
-          }))}
-          canClose={canCloseDc}
-          canOverride={canOverrideException}
-        />
-      )}
-
-      {canScrapNow && scrapTypes.length > 0 && (
-        <ReceiveScrapForm
-          dcId={dc.id}
-          scrapTypes={scrapTypes.map((s) => ({ id: s.id, code: s.code, name: s.name }))}
-        />
-      )}
-
+      {/* DOCUMENTS PANEL */}
       <DocumentsPanel
         entityType="DeliveryChallan"
         entityId={dc.id}
@@ -507,7 +515,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
           fileName: d.fileName,
           fileType: d.fileType,
           fileSize: d.fileSize,
-          uploadedByName: d.uploadedBy ? (uploaderNameById.get(d.uploadedBy) ?? null) : null,
+          uploadedByName: d.uploadedBy ? (auditUserMap.get(d.uploadedBy) ?? null) : null,
           uploadedAt: d.uploadedAt.toISOString(),
         }))}
         canUpload={canUploadDocs}
@@ -515,26 +523,25 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
         revalidateTo={"/dcs/" + dc.id}
       />
 
-      <div className="rounded-lg border border-slate-200 p-4 bg-slate-50">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900 uppercase tracking-wider">Movement Specifications</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-          <div><span className="text-slate-500 block text-xs">Part Number</span><span className="font-semibold text-slate-900">{dc.partNumber || "—"}</span></div>
-          <div><span className="text-slate-500 block text-xs">Heat Number</span><span className="font-semibold text-slate-900">{dc.heatNumber || "—"}</span></div>
-          <div><span className="text-slate-500 block text-xs">RM Qty</span><span className="font-semibold text-slate-900">{dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"}</span></div>
-          <div><span className="text-slate-500 block text-xs">Return FG Qty</span><span className="font-semibold text-slate-900">{dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"}</span></div>
+      {/* 10. AUDIT & STATUS HISTORY (RESTRICTED SERVER-SIDE TO ADMIN, MANAGEMENT, ACCOUNTS) */}
+      {canViewHistory && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 space-y-3">
+          <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-2">
+            Audit Trail &amp; Status Lifecycle History
+          </h2>
+          <ul className="space-y-1.5 text-xs text-slate-600 font-mono">
+            {dc.statusHistory.map((h) => (
+              <li key={h.id} className="flex items-center justify-between border-b border-slate-100 pb-1">
+                <span>
+                  {h.createdAt.toLocaleString("en-IN")} — <span className="font-bold text-slate-800">{h.toStatus}</span>
+                  {h.reason ? ` (${h.reason})` : ""}
+                </span>
+                <span className="text-[10px] text-slate-400">{h.changedBy ? (auditUserMap.get(h.changedBy) || h.changedBy) : "System"}</span>
+              </li>
+            ))}
+          </ul>
         </div>
-      </div>
-
-      <div className="rounded-lg border border-slate-200 p-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-900">Status History</h2>
-        <ul className="space-y-1 text-sm text-slate-600">
-          {dc.statusHistory.map((h) => (
-            <li key={h.id} className="font-mono">
-              {h.createdAt.toLocaleString()} — {h.fromStatus ? `${h.fromStatus} → ` : ""}{h.toStatus}
-            </li>
-          ))}
-        </ul>
-      </div>
+      )}
     </div>
   );
 }

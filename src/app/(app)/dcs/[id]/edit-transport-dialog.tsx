@@ -43,7 +43,7 @@ export function EditTransportDialog({
     setLoading(false);
 
     if (!res.ok) {
-      setError(res.error);
+      setError(res.error || "Failed to update transport details.");
       return;
     }
 

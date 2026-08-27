@@ -24,6 +24,9 @@ export interface DcPdfData {
   rmQuantity: string;
   returnFgQuantity: string;
   heatNumber: string;
+  pricingBasis?: string | null;
+  ratePerQuantity?: string | null;
+  expectedAmount?: string | null;
   remarks?: string | null;
   vehicleNumber: string;
   transporter: string;
@@ -246,10 +249,6 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   });
 
   // Table Columns Width
-  // Col 1: Part Number (34%)
-  // Col 2: RM Qty (22%)
-  // Col 3: Return FG Qty (22%)
-  // Col 4: Heat Number (22%)
   const col1W = CONTENT_WIDTH * 0.34;
   const col2W = CONTENT_WIDTH * 0.22;
   const col3W = CONTENT_WIDTH * 0.22;
@@ -304,9 +303,47 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
     });
   });
 
-  y = dataRowY - dataRowHeight - 14;
+  y = dataRowY - dataRowHeight - 12;
 
-  // ================= 4. TRANSPORT & COMPLIANCE DETAILS =================
+  // ================= 4. PRICING & COMMERCIAL TERMS BLOCK =================
+  const priceBoxTop = y;
+  const priceBoxHeight = 32;
+
+  page.drawRectangle({
+    x: MARGIN,
+    y: priceBoxTop - priceBoxHeight,
+    width: CONTENT_WIDTH,
+    height: priceBoxHeight,
+    color: rgb(0.96, 0.98, 1.0),
+    borderColor: LINE,
+    borderWidth: 0.75,
+  });
+
+  const pColW = CONTENT_WIDTH / 3;
+  const pricingFields: [string, string][] = [
+    ["PRICING BASIS", data.pricingBasis || "—"],
+    ["RATE PER QUANTITY", data.ratePerQuantity && data.ratePerQuantity !== "—" ? `INR ${data.ratePerQuantity}` : "—"],
+    ["EXPECTED TOTAL AMOUNT", data.expectedAmount && data.expectedAmount !== "—" ? `INR ${data.expectedAmount}` : "—"],
+  ];
+
+  pricingFields.forEach(([label, val], idx) => {
+    const px = MARGIN + idx * pColW;
+    page.drawText(label, { x: px + 6, y: priceBoxTop - 11, size: 6.5, font: bold, color: LIGHT_GREY });
+    page.drawText(val || "—", { x: px + 6, y: priceBoxTop - 24, size: 8.5, font: bold, color: DARK });
+
+    if (idx > 0) {
+      page.drawLine({
+        start: { x: px, y: priceBoxTop },
+        end: { x: px, y: priceBoxTop - priceBoxHeight },
+        thickness: 0.75,
+        color: LINE,
+      });
+    }
+  });
+
+  y = priceBoxTop - priceBoxHeight - 12;
+
+  // ================= 5. TRANSPORT & COMPLIANCE DETAILS =================
   const transportBoxTop = y;
   const transportBoxHeight = 36;
 

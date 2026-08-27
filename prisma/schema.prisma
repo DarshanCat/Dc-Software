@@ -190,19 +190,28 @@ model ScrapType {
 
 // ---------------------- DELIVERY CHALLAN ----------------------
 
+enum PricingBasis {
+  RM
+  FG
+}
+
 enum DcStatus {
   DRAFT
   PENDING_APPROVAL
   APPROVED
   DISPATCHED
   AT_VENDOR
+  SECURITY_RETURNED
+  STORE_VERIFIED
+  FINAL_APPROVED
+  APPROVED_FOR_PAYMENT
+  CLOSED
+  CANCELLED
   PARTIALLY_RETURNED
   MATERIAL_RETURNED
   SCRAP_PENDING
   RECONCILIATION
   RECONCILED
-  CLOSED
-  CANCELLED
 }
 
 enum DcPurpose {
@@ -227,6 +236,63 @@ model DeliveryChallan {
   returnFgQuantity   Decimal?  @db.Decimal(12, 3)
   heatNumber         String?
   expectedScrap      Decimal?  @db.Decimal(12, 3)
+
+  // Mandatory Pricing Fields
+  pricingBasis                 PricingBasis?
+  ratePerQuantity              Decimal?  @db.Decimal(12, 2)
+  expectedAmount               Decimal?  @db.Decimal(14, 2)
+
+  // Security Dispatch Fields
+  securityDispatchQuantity     Decimal?  @db.Decimal(12, 3)
+  securityDispatchDate         DateTime?
+  securityDispatchTime         String?
+  securityDispatchVehicleNumber String?
+  securityDispatchTransporter  String?
+  securityDispatchRemarks      String?
+  securityDispatchedBy         String?
+  securityDispatchedAt         DateTime?
+
+  // Security Return Fields
+  securityFgQuantity           Decimal?  @db.Decimal(12, 3)
+  securityRejectionQuantity    Decimal?  @db.Decimal(12, 3)
+  securityScrapQuantity        Decimal?  @db.Decimal(12, 3)
+  securityReturnDate           DateTime?
+  securityReturnTime           String?
+  securityVehicleNumber        String?
+  securityTransporter          String?
+  securityReturnRemarks        String?
+  securityEnteredBy            String?
+  securityEnteredAt            DateTime?
+
+  // Store Verification Fields
+  storeVerifiedFgQuantity      Decimal?  @db.Decimal(12, 3)
+  storeVerifiedRejectionQuantity Decimal? @db.Decimal(12, 3)
+  storeVerifiedScrapQuantity   Decimal?  @db.Decimal(12, 3)
+  storeRemarks                 String?
+  storeVerifiedBy              String?
+  storeVerifiedAt              DateTime?
+
+  // Manager/Admin Final Approval Fields
+  finalApprovedFgQuantity      Decimal?  @db.Decimal(12, 3)
+  finalApprovedRejectionQuantity Decimal? @db.Decimal(12, 3)
+  finalApprovedScrapQuantity   Decimal?  @db.Decimal(12, 3)
+  managerCorrectionRemarks     String?
+  finalApprovedBy              String?
+  finalApprovedAt              DateTime?
+  approvedForPaymentBy         String?
+  approvedForPaymentAt         DateTime?
+  finalPayableAmount           Decimal?  @db.Decimal(14, 2)
+
+  // Accounts Invoice & Payment Fields
+  invoiceNumber                String?
+  invoiceDate                  DateTime?
+  invoiceAmount                Decimal?  @db.Decimal(14, 2)
+  paymentReferenceNumber       String?
+  paymentDate                  DateTime?
+  paymentRemarks               String?
+  closedBy                     String?
+  closedAt                     DateTime?
+
   vendorId           String
   vendor             Vendor    @relation(fields: [vendorId], references: [id])
   purpose            DcPurpose
@@ -430,6 +496,8 @@ model Reconciliation {
   closedAt             DateTime?
   closedBy             String?
   closureReason        String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
   @@index([dcId])
   @@index([status])
 }

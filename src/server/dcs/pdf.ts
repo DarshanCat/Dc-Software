@@ -58,6 +58,9 @@ export interface DcPdfData {
   rmQuantity: string;
   returnFgQuantity: string;
   heatNumber: string;
+  pricingBasis: string | null;
+  ratePerQuantity: string | null;
+  expectedAmount: string | null;
   remarks: string | null;
   vehicleNumber: string;
   transporter: string;
@@ -81,7 +84,7 @@ async function fetchCompanySettings() {
   };
 }
 
-async function buildPdfData(dc: DcRowLike): Promise<DcPdfData> {
+async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; ratePerQuantity?: unknown; expectedAmount?: unknown }): Promise<DcPdfData> {
   const [company, qrDataUrl, logo] = await Promise.all([
     fetchCompanySettings(),
     dc.qrToken
@@ -109,6 +112,9 @@ async function buildPdfData(dc: DcRowLike): Promise<DcPdfData> {
     rmQuantity: dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—",
     returnFgQuantity: dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—",
     heatNumber: dc.heatNumber || "—",
+    pricingBasis: dc.pricingBasis ? (dc.pricingBasis === "RM" ? "Price Based On: RM Quantity" : "Price Based On: FG Quantity") : "—",
+    ratePerQuantity: dc.ratePerQuantity != null ? Number(dc.ratePerQuantity).toFixed(2) : "—",
+    expectedAmount: dc.expectedAmount != null ? Number(dc.expectedAmount).toFixed(2) : "—",
     remarks: dc.remarks || null,
     vehicleNumber: dc.vehicleNumber || "—",
     transporter: dc.transporter || "—",
