@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  serverExternalPackages: ["jose"],
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {
@@ -11,8 +12,6 @@ const nextConfig: NextConfig = {
         ignored: [
           "**/.git/**",
           "**/.next/**",
-          "**/node_modules/**",
-          "C:/**",
         ],
       };
     }
