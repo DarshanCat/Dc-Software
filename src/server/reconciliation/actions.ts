@@ -12,9 +12,7 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 
 const BLOCKING_EXCEPTION_STATUSES = ["OPEN", "UNDER_REVIEW", "REJECTED"] as const;
 
-class UserFacingError extends Error {}
-
-export async function closeDc(dcId: string, closureReason?: string): Promise<ActionResult> {
+export async function closeReconciliationDc(dcId: string, closureReason?: string): Promise<ActionResult> {
   const user = await getSessionUser();
   try {
     await requirePermission(user, PERMISSIONS.RECONCILIATION_CLOSE);
@@ -30,20 +28,20 @@ export async function closeDc(dcId: string, closureReason?: string): Promise<Act
         where: { id: dcId },
         include: { reconciliation: true },
       });
-      if (!dc) throw new UserFacingError("DC not found.");
+      if (!dc) throw new Error("DC not found.");
       assertVendorScope(user!, dc.vendorId);
       if (dc.status !== "RECONCILIATION") {
-        throw new UserFacingError(`Only a DC in RECONCILIATION can be closed (current: ${dc.status}).`);
+        throw new Error(`Only a DC in RECONCILIATION can be closed (current: ${dc.status}).`);
       }
       if (!dc.reconciliation) {
-        throw new UserFacingError("Reconciliation has not been calculated for this DC yet.");
+        throw new Error("Reconciliation has not been calculated for this DC yet.");
       }
 
       const openExceptions = await tx.exception.findMany({
         where: { dcId, status: { in: [...BLOCKING_EXCEPTION_STATUSES] } },
       });
       if (openExceptions.length > 0) {
-        throw new UserFacingError(
+        throw new Error(
           `Cannot close: ${openExceptions.length} unresolved exception(s) remain. Approve each one first.`,
         );
       }
@@ -70,8 +68,8 @@ export async function closeDc(dcId: string, closureReason?: string): Promise<Act
     revalidatePath(`/dcs/${dcId}`);
     return { ok: true };
   } catch (e) {
-    if (e instanceof UserFacingError) return { ok: false, error: e.message };
-    throw e;
+    if (e instanceof Error) return { ok: false, error: e.message };
+    return { ok: false, error: "Failed to close DC." };
   }
 }
 
@@ -92,9 +90,9 @@ export async function approveException(exceptionId: string, reason: string): Pro
   try {
     const dcId = await prisma.$transaction(async (tx) => {
       const exception = await tx.exception.findUnique({ where: { id: exceptionId } });
-      if (!exception) throw new UserFacingError("Exception not found.");
+      if (!exception) throw new Error("Exception not found.");
       if (!BLOCKING_EXCEPTION_STATUSES.includes(exception.status as (typeof BLOCKING_EXCEPTION_STATUSES)[number])) {
-        throw new UserFacingError(`This exception is already ${exception.status.toLowerCase()}.`);
+        throw new Error(`This exception is already ${exception.status.toLowerCase()}.`);
       }
 
       await tx.exceptionApproval.create({
@@ -126,8 +124,8 @@ export async function approveException(exceptionId: string, reason: string): Pro
     revalidatePath(`/dcs/${dcId}`);
     return { ok: true };
   } catch (e) {
-    if (e instanceof UserFacingError) return { ok: false, error: e.message };
-    throw e;
+    if (e instanceof Error) return { ok: false, error: e.message };
+    return { ok: false, error: "Failed to approve exception." };
   }
 }
 
@@ -144,9 +142,9 @@ export async function recalculateReconciliation(dcId: string): Promise<ActionRes
   try {
     await prisma.$transaction(async (tx) => {
       const dc = await tx.deliveryChallan.findUnique({ where: { id: dcId } });
-      if (!dc) throw new UserFacingError("DC not found.");
+      if (!dc) throw new Error("DC not found.");
       if (dc.status !== "RECONCILIATION") {
-        throw new UserFacingError(`Can only recalculate a DC in RECONCILIATION (current: ${dc.status}).`);
+        throw new Error(`Can only recalculate a DC in RECONCILIATION (current: ${dc.status}).`);
       }
       await calculateReconciliation(tx, dcId, user!.id);
     });
@@ -154,7 +152,7 @@ export async function recalculateReconciliation(dcId: string): Promise<ActionRes
     revalidatePath(`/dcs/${dcId}`);
     return { ok: true };
   } catch (e) {
-    if (e instanceof UserFacingError) return { ok: false, error: e.message };
-    throw e;
+    if (e instanceof Error) return { ok: false, error: e.message };
+    return { ok: false, error: "Failed to recalculate reconciliation." };
   }
 }

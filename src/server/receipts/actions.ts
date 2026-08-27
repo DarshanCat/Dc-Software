@@ -30,8 +30,6 @@ const createReceiptSchema = z.object({
 export type CreateReceiptInput = z.infer<typeof createReceiptSchema>;
 export type ActionResult = { ok: true; receiptId: string } | { ok: false; error: string };
 
-class UserFacingError extends Error {}
-
 const RECEIVABLE_STATUSES = ["DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED"] as const;
 
 export async function createReceipt(input: CreateReceiptInput): Promise<ActionResult> {
@@ -58,11 +56,11 @@ export async function createReceipt(input: CreateReceiptInput): Promise<ActionRe
         where: { id: data.dcId },
         include: { receipts: { include: { items: true } } },
       });
-      if (!dc) throw new UserFacingError("DC not found.");
+      if (!dc) throw new Error("DC not found.");
       assertVendorScope(user!, dc.vendorId);
 
       if (!RECEIVABLE_STATUSES.includes(dc.status as (typeof RECEIVABLE_STATUSES)[number])) {
-        throw new UserFacingError(
+        throw new Error(
           `Cannot receive material against a DC in status ${dc.status}. It must be dispatched and not already fully returned.`,
         );
       }
@@ -161,7 +159,7 @@ export async function createReceipt(input: CreateReceiptInput): Promise<ActionRe
     revalidatePath("/receipts");
     return { ok: true, receiptId: result };
   } catch (e) {
-    if (e instanceof UserFacingError) return { ok: false, error: e.message };
-    throw e;
+    if (e instanceof Error) return { ok: false, error: e.message };
+    return { ok: false, error: "Failed to create receipt." };
   }
 }

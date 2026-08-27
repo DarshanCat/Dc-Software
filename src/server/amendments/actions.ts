@@ -16,8 +16,6 @@ const AMENDABLE_STATUSES = [
   "APPROVED", "DISPATCHED", "AT_VENDOR", "PARTIALLY_RETURNED", "MATERIAL_RETURNED", "SCRAP_PENDING",
 ];
 
-class UserFacingError extends Error {}
-
 export async function requestAmendment(input: RequestAmendmentInput): Promise<ActionResult> {
   const user = await getSessionUser();
   try {
@@ -41,16 +39,16 @@ export async function requestAmendment(input: RequestAmendmentInput): Promise<Ac
   try {
     const result = await prisma.$transaction(async (tx) => {
       const dc = await tx.deliveryChallan.findUnique({ where: { id: data.dcId } });
-      if (!dc) throw new UserFacingError("DC not found.");
+      if (!dc) throw new Error("DC not found.");
       if (!AMENDABLE_STATUSES.includes(dc.status)) {
-        throw new UserFacingError(`Cannot amend a DC in status ${dc.status}.`);
+        throw new Error(`Cannot amend a DC in status ${dc.status}.`);
       }
 
       const existingPending = await tx.dcAmendment.findFirst({
         where: { dcId: data.dcId, status: "PENDING" },
       });
       if (existingPending) {
-        throw new UserFacingError("There is already a pending amendment request for this DC.");
+        throw new Error("There is already a pending amendment request for this DC.");
       }
 
       const prevQty = Number(dc.returnFgQuantity ?? 0);
@@ -99,8 +97,8 @@ export async function requestAmendment(input: RequestAmendmentInput): Promise<Ac
     revalidatePath(`/dcs/${data.dcId}`);
     return { ok: true, id: result };
   } catch (e) {
-    if (e instanceof UserFacingError) return { ok: false, error: e.message };
-    throw e;
+    if (e instanceof Error) return { ok: false, error: e.message };
+    return { ok: false, error: "Failed to request amendment." };
   }
 }
 
@@ -117,8 +115,8 @@ export async function approveAmendment(amendmentId: string): Promise<ActionResul
   try {
     const dcId = await prisma.$transaction(async (tx) => {
       const amendment = await tx.dcAmendment.findUnique({ where: { id: amendmentId } });
-      if (!amendment) throw new UserFacingError("Amendment not found.");
-      if (amendment.status !== "PENDING") throw new UserFacingError(`This amendment is already ${amendment.status.toLowerCase()}.`);
+      if (!amendment) throw new Error("Amendment not found.");
+      if (amendment.status !== "PENDING") throw new Error(`This amendment is already ${amendment.status.toLowerCase()}.`);
 
       const alreadyReceived = await tx.materialReceiptItem.aggregate({
         where: { receipt: { dcId: amendment.dcId } },
@@ -126,7 +124,7 @@ export async function approveAmendment(amendmentId: string): Promise<ActionResul
       });
       const receivedSoFar = Number(alreadyReceived._sum.quantityReceived ?? 0);
       if (Number(amendment.newQuantity) < receivedSoFar) {
-        throw new UserFacingError(
+        throw new Error(
           `Cannot approve: new quantity (${amendment.newQuantity}) is less than what's already been received (${receivedSoFar}).`,
         );
       }
@@ -175,8 +173,8 @@ export async function approveAmendment(amendmentId: string): Promise<ActionResul
     revalidatePath(`/dcs/${dcId}`);
     return { ok: true, id: dcId };
   } catch (e) {
-    if (e instanceof UserFacingError) return { ok: false, error: e.message };
-    throw e;
+    if (e instanceof Error) return { ok: false, error: e.message };
+    return { ok: false, error: "Failed to approve amendment." };
   }
 }
 
@@ -196,8 +194,8 @@ export async function rejectAmendment(amendmentId: string, reason: string): Prom
   try {
     const dcId = await prisma.$transaction(async (tx) => {
       const amendment = await tx.dcAmendment.findUnique({ where: { id: amendmentId } });
-      if (!amendment) throw new UserFacingError("Amendment not found.");
-      if (amendment.status !== "PENDING") throw new UserFacingError(`This amendment is already ${amendment.status.toLowerCase()}.`);
+      if (!amendment) throw new Error("Amendment not found.");
+      if (amendment.status !== "PENDING") throw new Error(`This amendment is already ${amendment.status.toLowerCase()}.`);
 
       await tx.dcAmendment.update({
         where: { id: amendmentId },
@@ -234,7 +232,7 @@ export async function rejectAmendment(amendmentId: string, reason: string): Prom
     revalidatePath(`/dcs/${dcId}`);
     return { ok: true, id: dcId };
   } catch (e) {
-    if (e instanceof UserFacingError) return { ok: false, error: e.message };
-    throw e;
+    if (e instanceof Error) return { ok: false, error: e.message };
+    return { ok: false, error: "Failed to reject amendment." };
   }
 }

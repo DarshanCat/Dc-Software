@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { closeDc, approveException, recalculateReconciliation } from "@/server/reconciliation/actions";
+import { closeReconciliationDc, approveException, recalculateReconciliation } from "@/server/reconciliation/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -66,7 +66,7 @@ export function ReconciliationPanel({
   async function handleClose() {
     setError(null);
     setBusy(true);
-    const res = await closeDc(dcId, closeReason || undefined);
+    const res = await closeReconciliationDc(dcId, closeReason || undefined);
     setBusy(false);
     if (!res.ok) {
       setError(res.error);

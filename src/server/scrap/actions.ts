@@ -17,8 +17,6 @@ export type ActionResult =
 
 const SCRAP_RECEIVABLE_STATUSES = ["MATERIAL_RETURNED", "SCRAP_PENDING"] as const;
 
-class UserFacingError extends Error {}
-
 export async function createScrapReceipt(input: ScrapReceiptInput): Promise<ActionResult> {
   const user = await getSessionUser();
   try {
@@ -47,11 +45,11 @@ export async function createScrapReceipt(input: ScrapReceiptInput): Promise<Acti
         where: { id: data.dcId },
         include: { scrapReceipts: { include: { items: true } } },
       });
-      if (!dc) throw new UserFacingError("DC not found.");
+      if (!dc) throw new Error("DC not found.");
       assertVendorScope(user!, dc.vendorId);
 
       if (!SCRAP_RECEIVABLE_STATUSES.includes(dc.status as (typeof SCRAP_RECEIVABLE_STATUSES)[number])) {
-        throw new UserFacingError(
+        throw new Error(
           `Cannot receive scrap against a DC in status ${dc.status}. Finished material must be fully returned first.`,
         );
       }
@@ -133,7 +131,7 @@ export async function createScrapReceipt(input: ScrapReceiptInput): Promise<Acti
     revalidatePath(`/dcs/${data.dcId}`);
     return { ok: true, ...result };
   } catch (e) {
-    if (e instanceof UserFacingError) return { ok: false, error: e.message };
-    throw e;
+    if (e instanceof Error) return { ok: false, error: e.message };
+    return { ok: false, error: "Failed to create scrap receipt." };
   }
 }
