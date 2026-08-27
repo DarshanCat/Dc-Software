@@ -114,7 +114,7 @@ export default async function QrScanPage({ params }: { params: Promise<{ token: 
               <tr>
                 <th className="px-3 py-2">Part Number</th>
                 <th className="px-3 py-2">RM Qty (Raw Mat.)</th>
-                <th className="px-3 py-2">Return FG Qty (Expected)</th>
+                <th className="px-3 py-2">Return FG Qty</th>
                 <th className="px-3 py-2">Heat Number</th>
               </tr>
             </thead>

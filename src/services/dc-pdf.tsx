@@ -262,7 +262,7 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   // Table Header Labels
   page.drawText("PART NUMBER", { x: c1X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
   page.drawText("RM QTY (RAW MAT.)", { x: c2X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
-  page.drawText("RETURN FG QTY (EXPECTED)", { x: c3X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
+  page.drawText("RETURN FG QTY", { x: c3X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
   page.drawText("HEAT NUMBER", { x: c4X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
 
   // Column Separators for Header
