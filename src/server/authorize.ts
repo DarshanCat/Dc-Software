@@ -30,6 +30,12 @@ export async function getUserPermissions(userId: string): Promise<Set<string>> {
 }
 
 export async function hasPermission(userId: string, permission: string): Promise<boolean> {
+  const userRoles = await prisma.userRole.findMany({
+    where: { userId },
+    select: { role: { select: { key: true } } },
+  });
+  if (userRoles.some((ur) => ur.role.key === "ADMIN")) return true;
+
   const perms = await getUserPermissions(userId);
   return perms.has(permission);
 }
@@ -40,12 +46,16 @@ export async function requirePermission(
 ): Promise<SessionUser> {
   if (!user) throw new UnauthenticatedError();
   if (user.mustChangePassword) throw new ForbiddenError("MUST_CHANGE_PASSWORD");
+
+  if (user.roleKeys?.includes("ADMIN")) return user;
+
   const ok = await hasPermission(user.id, permission);
   if (!ok) throw new ForbiddenError(permission);
   return user;
 }
 
 export function assertVendorScope(user: SessionUser, dcVendorId: string): void {
+  if (user.roleKeys.includes("ADMIN")) return; // Admin bypasses vendor scope restriction
   if (user.roleKeys.includes("VENDOR") && user.vendorId !== dcVendorId) {
     throw new ForbiddenError("VENDOR_SCOPE");
   }

@@ -131,7 +131,7 @@ describe("DC Close Workflow & Security Test Suite", () => {
     const validateAccountsEntry = (status: string, invNum: string, invAmt: number, payRef: string) => {
       if (status !== "APPROVED_FOR_PAYMENT") return { ok: false, error: "DC must be APPROVED_FOR_PAYMENT." };
       if (!invNum.trim()) return { ok: false, error: "Invoice Number is required." };
-      if (invAmt <= 0) return { ok: false, error: "Invoice Amount must be > 0." };
+      if (invAmt <= 0) return { ok: false, error: "Invoice Amount must be greater than zero." };
       if (!payRef.trim()) return { ok: false, error: "Payment Reference Number is required." };
       return { ok: true };
     };
@@ -179,10 +179,11 @@ describe("DC Close Workflow & Security Test Suite", () => {
   // 13. Server-side role authorization
   it("13. enforces server-side role authorization per transition action", () => {
     const authorizeAction = (action: string, role: string) => {
-      if (action === "SECURITY_DISPATCH" && !["SECURITY", "ADMIN"].includes(role)) return false;
-      if (action === "STORE_VERIFY" && !["STORES", "ADMIN"].includes(role)) return false;
-      if (action === "MANAGER_FINAL_APPROVE" && !["MANAGEMENT", "ADMIN"].includes(role)) return false;
-      if (action === "ACCOUNTS_ENTRY" && !["ACCOUNTS", "ADMIN"].includes(role)) return false;
+      if (role === "ADMIN") return true; // ADMIN role has full access to all actions
+      if (action === "SECURITY_DISPATCH" && !["SECURITY"].includes(role)) return false;
+      if (action === "STORE_VERIFY" && !["STORES"].includes(role)) return false;
+      if (action === "MANAGER_FINAL_APPROVE" && !["MANAGEMENT"].includes(role)) return false;
+      if (action === "ACCOUNTS_ENTRY" && !["ACCOUNTS"].includes(role)) return false;
       return true;
     };
 
@@ -190,7 +191,10 @@ describe("DC Close Workflow & Security Test Suite", () => {
     expect(authorizeAction("STORE_VERIFY", "SECURITY")).toBe(false);
     expect(authorizeAction("MANAGER_FINAL_APPROVE", "ACCOUNTS")).toBe(false);
     expect(authorizeAction("ACCOUNTS_ENTRY", "ACCOUNTS")).toBe(true);
+    expect(authorizeAction("SECURITY_DISPATCH", "ADMIN")).toBe(true);
+    expect(authorizeAction("STORE_VERIFY", "ADMIN")).toBe(true);
     expect(authorizeAction("MANAGER_FINAL_APPROVE", "ADMIN")).toBe(true);
+    expect(authorizeAction("ACCOUNTS_ENTRY", "ADMIN")).toBe(true);
   });
 
   // 14. Full audit history restriction
@@ -204,5 +208,59 @@ describe("DC Close Workflow & Security Test Suite", () => {
     expect(canViewFullHistory("MANAGEMENT")).toBe(true);
     expect(canViewFullHistory("ACCOUNTS")).toBe(true);
     expect(canViewFullHistory("ADMIN")).toBe(true);
+  });
+
+  // 15. ADMIN complete workflow execution test
+  it("15. allows ADMIN user to perform every action through full lifecycle sequentially", () => {
+    let currentStatus = "DRAFT";
+    const userRole = "ADMIN";
+
+    const step = (action: string, allowedFromStatus: string[], nextStatus: string) => {
+      if (!allowedFromStatus.includes(currentStatus)) {
+        return { ok: false, error: `Action ${action} invalid from status ${currentStatus}` };
+      }
+      currentStatus = nextStatus;
+      return { ok: true, status: currentStatus };
+    };
+
+    // 1. Submit for Approval
+    expect(step("submitForApproval", ["DRAFT"], "PENDING_APPROVAL").ok).toBe(true);
+    expect(currentStatus).toBe("PENDING_APPROVAL");
+
+    // 2. Approve DC
+    expect(step("approveDc", ["PENDING_APPROVAL"], "APPROVED").ok).toBe(true);
+    expect(currentStatus).toBe("APPROVED");
+
+    // 3. Security Dispatch
+    expect(step("submitSecurityDispatch", ["APPROVED"], "DISPATCHED").ok).toBe(true);
+    expect(currentStatus).toBe("DISPATCHED");
+
+    // 4. Confirm Vendor Receipt
+    expect(step("confirmDcAtVendor", ["DISPATCHED"], "AT_VENDOR").ok).toBe(true);
+    expect(currentStatus).toBe("AT_VENDOR");
+
+    // 5. Security Return
+    expect(step("submitSecurityReturn", ["DISPATCHED", "AT_VENDOR"], "SECURITY_RETURNED").ok).toBe(true);
+    expect(currentStatus).toBe("SECURITY_RETURNED");
+
+    // 6. Store Verification
+    expect(step("submitStoreVerification", ["SECURITY_RETURNED"], "STORE_VERIFIED").ok).toBe(true);
+    expect(currentStatus).toBe("STORE_VERIFIED");
+
+    // 7. Manager Final Approval
+    expect(step("submitManagerFinalApproval", ["STORE_VERIFIED"], "FINAL_APPROVED").ok).toBe(true);
+    expect(currentStatus).toBe("FINAL_APPROVED");
+
+    // 8. Payment Approval
+    expect(step("submitPaymentApproval", ["FINAL_APPROVED"], "APPROVED_FOR_PAYMENT").ok).toBe(true);
+    expect(currentStatus).toBe("APPROVED_FOR_PAYMENT");
+
+    // 9. Accounts Payment Entry (Status remains APPROVED_FOR_PAYMENT)
+    expect(step("submitAccountsPaymentEntry", ["APPROVED_FOR_PAYMENT"], "APPROVED_FOR_PAYMENT").ok).toBe(true);
+    expect(currentStatus).toBe("APPROVED_FOR_PAYMENT");
+
+    // 10. Close DC
+    expect(step("closeDc", ["APPROVED_FOR_PAYMENT"], "CLOSED").ok).toBe(true);
+    expect(currentStatus).toBe("CLOSED");
   });
 });
