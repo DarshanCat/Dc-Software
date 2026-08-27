@@ -19,17 +19,14 @@ describe("DC Manual Prepared By & Approved By Signatures", () => {
       approvedBy: "user-audit-id-456",
       preparedByName: "Ramesh Kumar",
       approvedByName: "Aravind Gurudev",
+      woNumber: "WO-2026-001",
+      partNumber: "PART-101",
+      rmQuantity: 50.0,
+      returnFgQuantity: 48.0,
+      heatNumber: "HEAT-99",
+      remarks: "Sample job work remarks",
       vendor: { vendorName: "ABC Engineering", address: "Peenya Industrial Area", gstNumber: null, panNumber: null },
       process: { name: "Machining" },
-      items: [
-        {
-          drawingNumber: "DWG-101",
-          quantity: 10,
-          uom: "NOS",
-          inputWeight: 50.5,
-          item: { itemCode: "ITEM-01", itemName: "Casting Item", drawingNumber: "DWG-101" },
-        },
-      ],
     };
 
     expect(mockDc.preparedByName).toBe("Ramesh Kumar");

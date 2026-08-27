@@ -7,8 +7,8 @@ export const metadata = { title: "Delivery Challan" };
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="text-sm font-semibold text-slate-900">{value || "-"}</p>
+      <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">{label}</p>
+      <p className="text-xs font-semibold text-slate-900">{value || "—"}</p>
     </div>
   );
 }
@@ -30,25 +30,25 @@ export default async function QrScanPage({ params }: { params: Promise<{ token: 
     );
   }
 
-  const contactLine = [data.company.gst ? "GST: " + data.company.gst : "", data.company.contact]
+  const contactLine = [data.company.gst ? "GSTIN: " + data.company.gst : "", data.company.contact]
     .filter(Boolean)
     .join("  |  ");
 
   const infoPairs: [string, string][] = [
-    ["Date", data.dcDate],
-    ["Vendor", data.vendorName],
-    ["Purpose", data.purpose],
+    ["DC Date", data.dcDate],
+    ["Work Order No.", data.woNumber],
+    ["Vendor Name", data.vendorName],
     ["Process", data.processName],
+    ["Purpose", data.purpose],
     ["Expected Return", data.expectedReturnDate],
     ["Vehicle No.", data.vehicleNumber],
     ["Transporter", data.transporter],
     ["E-Way Bill", data.ewayBillNumber],
-    ["Reference No.", data.referenceNumber],
     ["Vendor Address", data.vendorAddress],
   ];
 
   return (
-    <main className="mx-auto min-h-screen max-w-md bg-slate-100 pb-24 print:max-w-none print:bg-white print:pb-0">
+    <main className="mx-auto min-h-screen max-w-lg bg-slate-100 pb-24 print:max-w-none print:bg-white print:pb-0">
       {/* Action bar */}
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur print:hidden">
         <span className="font-mono text-sm font-bold text-slate-900">{data.dcNumber}</span>
@@ -64,79 +64,98 @@ export default async function QrScanPage({ params }: { params: Promise<{ token: 
 
       {/* Challan document */}
       <article
-        className="mx-auto mt-4 bg-white px-5 py-6 shadow-sm print:mt-0 print:shadow-none"
-        style={{ fontFamily: "'Times New Roman', Times, serif" }}
+        className="mx-auto mt-4 bg-white px-6 py-6 shadow-sm print:mt-0 print:shadow-none"
+        style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
       >
         {/* Header */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-900 pb-3">
           <div className="flex items-start gap-3">
             {data.logo && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={data.logo} alt={`${data.company.name} logo`} className="h-12 w-auto max-w-[80px] object-contain" />
             )}
-            <h1 className="text-lg font-bold text-slate-900">{data.company.name}</h1>
+            <div>
+              <h1 className="text-base font-bold text-slate-900 uppercase tracking-tight">{data.company.name}</h1>
+              {data.company.address && (
+                <p className="mt-0.5 text-[11px] text-slate-600">{data.company.address}</p>
+              )}
+              {contactLine && (
+                <p className="mt-0.5 text-[11px] text-slate-500">{contactLine}</p>
+              )}
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-[9px] uppercase tracking-wide text-slate-400">DC No.</p>
-            <p className="text-sm font-bold text-slate-900">{data.dcNumber}</p>
+          <div className="text-right shrink-0">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">DC No.</p>
+            <p className="text-sm font-bold text-slate-900 font-mono">{data.dcNumber}</p>
+            <span className="mt-1 inline-block rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+              {data.status}
+            </span>
           </div>
-        </div>
-        {data.company.address && (
-          <p className="mt-0.5 text-[11px] text-slate-500">{data.company.address}</p>
-        )}
-        <div className="mt-0.5 flex items-start justify-between gap-3">
-          {contactLine ? (
-            <p className="text-[11px] text-slate-500">{contactLine}</p>
-          ) : <span />}
-          <p className="shrink-0 text-[11px] text-slate-500">{data.status}</p>
         </div>
 
-        <p className="mt-4 text-center text-sm font-bold tracking-wide text-slate-900">DELIVERY CHALLAN</p>
-        <hr className="mt-2 border-slate-300" />
+        <p className="mt-3 text-center text-sm font-bold tracking-widest text-slate-900 uppercase">
+          DELIVERY CHALLAN
+        </p>
 
         {/* Info grid */}
-        <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 rounded-lg border border-slate-200 bg-slate-50/50 p-3">
           {infoPairs.map(([label, value]) => (
             <Field key={label} label={label} value={value} />
           ))}
         </div>
 
-        <hr className="mt-4 border-slate-300" />
-
-        {/* Items */}
-        <div className="mt-4 rounded border border-slate-200 p-3 bg-slate-50">
-          <div className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">Movement Specifications</div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div><span className="text-slate-500">Part Number:</span> <span className="font-semibold">{data.partNumber}</span></div>
-            <div><span className="text-slate-500">Heat Number:</span> <span className="font-semibold">{data.heatNumber}</span></div>
-            <div><span className="text-slate-500">RM Qty:</span> <span className="font-semibold">{data.rmQuantity}</span></div>
-            <div><span className="text-slate-500">Return FG Qty:</span> <span className="font-semibold">{data.returnFgQuantity}</span></div>
-            <div><span className="text-slate-500">Process:</span> <span className="font-semibold">{data.processName}</span></div>
-            <div><span className="text-slate-500">Purpose:</span> <span className="font-semibold">{data.purpose}</span></div>
+        {/* Material Details Section */}
+        <div className="mt-4 rounded-lg border border-slate-200 overflow-hidden">
+          <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+            Material Details
           </div>
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
+              <tr>
+                <th className="px-3 py-2">Part Number</th>
+                <th className="px-3 py-2">RM Qty (Raw Mat.)</th>
+                <th className="px-3 py-2">Return FG Qty (Expected)</th>
+                <th className="px-3 py-2">Heat Number</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              <tr>
+                <td className="px-3 py-2.5 font-bold font-mono text-slate-900">{data.partNumber}</td>
+                <td className="px-3 py-2.5 font-bold font-mono text-slate-900">{data.rmQuantity}</td>
+                <td className="px-3 py-2.5 font-bold font-mono text-slate-900">{data.returnFgQuantity}</td>
+                <td className="px-3 py-2.5 font-bold font-mono text-slate-900">{data.heatNumber}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Remarks */}
+        <div className="mt-4 rounded-lg border border-slate-200 p-3 bg-white">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Remarks / Instructions</p>
+          <p className="mt-1 text-xs text-slate-800 whitespace-pre-wrap">{data.remarks?.trim() || "NIL"}</p>
         </div>
 
         {/* Terms */}
-        <p className="mt-4 text-[10px] leading-relaxed text-slate-400">
+        <p className="mt-4 text-[10px] leading-relaxed text-slate-400 border-t border-slate-100 pt-2">
           Terms: Material listed above is sent for job work only and remains the property of{" "}
-          {data.company.name}. The receiving party is responsible for the safe custody and timely
-          return of the material and any finished goods / scrap generated, as per the agreed job
-          work terms.
+          {data.company.name}. The receiving party is responsible for safe custody and timely return
+          of the material and any finished goods / scrap generated, as per agreed terms.
         </p>
 
         {/* Signatures */}
-        <div className="mt-10 grid grid-cols-3 gap-4">
+        <div className="mt-8 grid grid-cols-4 gap-2 pt-2 border-t border-slate-200">
           {(
             [
               { label: "Prepared By", name: data.preparedByName },
               { label: "Approved By", name: data.approvedByName },
-              { label: "Authorized Signature", name: null },
+              { label: "Receiver Sign", name: null },
+              { label: "Auth. Sign", name: null },
             ] as const
           ).map(({ label, name }) => (
-            <div key={label}>
-              <p className="h-5 text-[11px] font-semibold text-slate-900">{name ?? ""}</p>
-              <div className="border-t border-slate-300 pt-1" />
-              <p className="mt-0.5 text-[10px] text-slate-500">{label}</p>
+            <div key={label} className="text-center">
+              <p className="h-4 text-[10px] font-bold text-slate-900 truncate">{name ?? ""}</p>
+              <div className="border-t border-slate-300 mt-1 pt-1" />
+              <p className="text-[9px] font-semibold text-slate-500 uppercase">{label}</p>
             </div>
           ))}
         </div>

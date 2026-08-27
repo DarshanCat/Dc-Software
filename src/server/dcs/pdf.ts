@@ -17,7 +17,7 @@ interface DcRowLike {
   rmQuantity: unknown;
   returnFgQuantity: unknown;
   heatNumber: string | null;
-  expectedScrap: unknown;
+  remarks: string | null;
   vehicleNumber: string | null;
   transporter: string | null;
   ewayBillNumber: string | null;
@@ -46,6 +46,7 @@ export interface DcPdfData {
   approvedByName?: string | null;
   dcNumber: string;
   dcDate: string;
+  woNumber: string;
   status: string;
   vendorName: string;
   vendorAddress: string;
@@ -57,6 +58,7 @@ export interface DcPdfData {
   rmQuantity: string;
   returnFgQuantity: string;
   heatNumber: string;
+  remarks: string | null;
   vehicleNumber: string;
   transporter: string;
   ewayBillNumber: string;
@@ -95,6 +97,7 @@ async function buildPdfData(dc: DcRowLike): Promise<DcPdfData> {
     approvedByName: dc.approvedByName || null,
     dcNumber: dc.dcNumber,
     dcDate: dc.dcDate.toLocaleDateString(),
+    woNumber: dc.woNumber,
     status: dc.status.replace(/_/g, " "),
     vendorName: dc.vendor.vendorName,
     vendorAddress: dc.vendor.address || "",
@@ -106,6 +109,7 @@ async function buildPdfData(dc: DcRowLike): Promise<DcPdfData> {
     rmQuantity: dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—",
     returnFgQuantity: dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—",
     heatNumber: dc.heatNumber || "—",
+    remarks: dc.remarks || null,
     vehicleNumber: dc.vehicleNumber || "—",
     transporter: dc.transporter || "—",
     ewayBillNumber: dc.ewayBillNumber || "—",
