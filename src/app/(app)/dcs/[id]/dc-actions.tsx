@@ -217,6 +217,13 @@ export function DcActions({
             )}
           </>
         )}
+
+        {status === "CLOSED" && (
+          <div className="w-full p-3 bg-slate-100 border border-slate-300 text-slate-800 rounded-md text-xs font-semibold flex items-center justify-between">
+            <span>🔒 DC is CLOSED. All operational, commercial, and financial entries are locked and read-only.</span>
+            <span className="text-[10px] text-slate-500 font-mono uppercase">Completed &amp; Archival Mode</span>
+          </div>
+        )}
       </div>
 
       {/* ================= MODALS ================= */}

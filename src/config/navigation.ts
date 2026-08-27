@@ -37,7 +37,7 @@ export const NAVIGATION: NavSection[] = [
       { label: "Pending Approval", href: "/dcs?status=PENDING_APPROVAL", permission: P.DC_VIEW },
       { label: "Approved", href: "/dcs?status=APPROVED", permission: P.DC_VIEW },
       { label: "Dispatched", href: "/dcs?status=DISPATCHED", permission: P.DC_VIEW },
-      { label: "Overdue", href: "/dcs?overdue=1", permission: P.DC_VIEW },
+      { label: "Close DC", href: "/dcs/close", permission: P.DC_VIEW },
     ],
   },
   {
