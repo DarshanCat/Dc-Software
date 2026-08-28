@@ -36,14 +36,39 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/change-password", req.url));
   }
 
+  const roleKeys = (token.roleKeys as string[]) || [];
+  const isAdmin = roleKeys.includes("ADMIN");
+
+  // Server-side Route-Level RBAC Enforcement
+  if (pathname.startsWith("/admin") && !isAdmin) {
+    return new NextResponse("403 Forbidden: Admin access required", { status: 403 });
+  }
+
+  if (pathname.startsWith("/security") && !isAdmin && !roleKeys.includes("SECURITY")) {
+    return new NextResponse("403 Forbidden: Security access required", { status: 403 });
+  }
+
+  if (pathname.startsWith("/accounts") && !isAdmin && !roleKeys.includes("ACCOUNTS")) {
+    return new NextResponse("403 Forbidden: Accounts access required", { status: 403 });
+  }
+
+  if (pathname.startsWith("/management") && !isAdmin && !roleKeys.includes("MANAGEMENT")) {
+    return new NextResponse("403 Forbidden: Management access required", { status: 403 });
+  }
+
+  if (pathname.startsWith("/stores") && !isAdmin && !roleKeys.includes("STORES")) {
+    return new NextResponse("403 Forbidden: Stores access required", { status: 403 });
+  }
+
+  if (pathname.startsWith("/production") && !isAdmin && !roleKeys.includes("PRODUCTION")) {
+    return new NextResponse("403 Forbidden: Production access required", { status: 403 });
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for static files & images
-     */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

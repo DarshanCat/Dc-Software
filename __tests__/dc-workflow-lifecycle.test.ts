@@ -213,7 +213,6 @@ describe("DC Close Workflow & Security Test Suite", () => {
   // 15. ADMIN complete workflow execution test
   it("15. allows ADMIN user to perform every action through full lifecycle sequentially", () => {
     let currentStatus = "DRAFT";
-    const userRole = "ADMIN";
 
     const step = (action: string, allowedFromStatus: string[], nextStatus: string) => {
       if (!allowedFromStatus.includes(currentStatus)) {
@@ -262,5 +261,33 @@ describe("DC Close Workflow & Security Test Suite", () => {
     // 10. Close DC
     expect(step("closeDc", ["APPROVED_FOR_PAYMENT"], "CLOSED").ok).toBe(true);
     expect(currentStatus).toBe("CLOSED");
+  });
+
+  // 16. CLOSE DC readiness state & button color logic
+  it("16. evaluates isReadyToClose and enforces CLOSE DC button state", () => {
+    const checkReadiness = (
+      status: string,
+      invNum?: string,
+      invDate?: string,
+      invAmt?: number,
+      payRef?: string,
+      payDate?: string,
+    ) => {
+      return (
+        status === "APPROVED_FOR_PAYMENT" &&
+        !!invNum?.trim() &&
+        !!invDate &&
+        Number(invAmt ?? 0) > 0 &&
+        !!payRef?.trim() &&
+        !!payDate
+      );
+    };
+
+    // Incomplete payment details -> Disabled (not ready)
+    expect(checkReadiness("APPROVED_FOR_PAYMENT", "", "2026-08-27", 1000, "UTR-1", "2026-08-27")).toBe(false);
+    expect(checkReadiness("APPROVED_FOR_PAYMENT", "INV-100", "2026-08-27", 0, "UTR-1", "2026-08-27")).toBe(false);
+
+    // Complete payment details -> Enabled & Green (ready to close)
+    expect(checkReadiness("APPROVED_FOR_PAYMENT", "INV-100", "2026-08-27", 15000, "UTR-1", "2026-08-27")).toBe(true);
   });
 });

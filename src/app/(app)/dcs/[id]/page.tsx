@@ -212,8 +212,10 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
           storeVerifiedRejectionQuantity: dc.storeVerifiedRejectionQuantity ? Number(dc.storeVerifiedRejectionQuantity) : null,
           storeVerifiedScrapQuantity: dc.storeVerifiedScrapQuantity ? Number(dc.storeVerifiedScrapQuantity) : null,
           invoiceNumber: dc.invoiceNumber,
+          invoiceDate: dc.invoiceDate ? dc.invoiceDate.toISOString().split("T")[0] : null,
           invoiceAmount: dc.invoiceAmount ? Number(dc.invoiceAmount) : null,
           paymentReferenceNumber: dc.paymentReferenceNumber,
+          paymentDate: dc.paymentDate ? dc.paymentDate.toISOString().split("T")[0] : null,
         }}
       />
 

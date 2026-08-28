@@ -1,3 +1,9 @@
+import { getSessionUser } from "@/server/session";
+import SecurityDashboardPage from "./security/dashboard/page";
+import StoreDashboardPage from "./stores/dashboard/page";
+import ManagementDashboardPage from "./management/dashboard/page";
+import AccountsDashboardPage from "./accounts/dashboard/page";
+import ProductionDashboardPage from "./production/dashboard/page";
 import { prisma } from "@/lib/db";
 import type { DcStatus, ExceptionStatus } from "@prisma/client";
 import { StatusDistributionChart, VendorOutstandingChart, OverdueAgeingChart } from "./dashboard-charts";
@@ -21,6 +27,19 @@ function ageingBucket(days: number): string {
 }
 
 export default async function DashboardPage() {
+  const user = await getSessionUser();
+  const roleKeys = user?.roleKeys || [];
+
+  // Dispatch to role-specific dashboard if not ADMIN
+  if (!roleKeys.includes("ADMIN")) {
+    if (roleKeys.includes("SECURITY")) return <SecurityDashboardPage />;
+    if (roleKeys.includes("STORES")) return <StoreDashboardPage />;
+    if (roleKeys.includes("MANAGEMENT")) return <ManagementDashboardPage />;
+    if (roleKeys.includes("ACCOUNTS")) return <AccountsDashboardPage />;
+    if (roleKeys.includes("PRODUCTION")) return <ProductionDashboardPage />;
+  }
+
+  // Full Company Dashboard for ADMIN / Superuser
   const now = new Date();
 
   const [statusGroups, exceptionOpenCount, dcs] = await Promise.all([
@@ -121,7 +140,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-slate-900">Dashboard</h1>
+        <h1 className="text-lg font-semibold text-slate-900">Admin Full Company Dashboard</h1>
         <p className="text-sm text-slate-500">Live figures from the database — updates as DCs move through their lifecycle.</p>
       </div>
 

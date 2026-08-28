@@ -6,6 +6,13 @@ import { DcStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
+const ROLE_CLOSURE_STATUSES: Record<string, DcStatus[]> = {
+  SECURITY: ["DISPATCHED", "AT_VENDOR"],
+  STORES: ["SECURITY_RETURNED", "STORE_VERIFIED"],
+  MANAGEMENT: ["STORE_VERIFIED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT"],
+  ACCOUNTS: ["APPROVED_FOR_PAYMENT", "CLOSED"],
+};
+
 export default async function CloseDcPage({
   searchParams,
 }: {
@@ -14,9 +21,11 @@ export default async function CloseDcPage({
   const { stage } = await searchParams;
   const user = await getSessionUser();
   const userRole = user?.roleKeys?.[0] || "GUEST";
+  const roleKeys = user?.roleKeys || [];
+  const isAdmin = roleKeys.includes("ADMIN");
 
-  // Closure statuses filter
-  const closureStatuses: DcStatus[] = [
+  // Base closure statuses
+  let statusFilter: DcStatus[] = [
     "DISPATCHED",
     "AT_VENDOR",
     "SECURITY_RETURNED",
@@ -26,14 +35,27 @@ export default async function CloseDcPage({
     "CLOSED",
   ];
 
-  let statusFilter: DcStatus[] = closureStatuses;
-
   if (stage === "security") statusFilter = ["DISPATCHED", "AT_VENDOR"];
   else if (stage === "store") statusFilter = ["SECURITY_RETURNED"];
   else if (stage === "manager") statusFilter = ["STORE_VERIFIED", "FINAL_APPROVED"];
   else if (stage === "accounts") statusFilter = ["APPROVED_FOR_PAYMENT"];
   else if (stage === "closed") statusFilter = ["CLOSED"];
   else statusFilter = ["DISPATCHED", "AT_VENDOR", "SECURITY_RETURNED", "STORE_VERIFIED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT"];
+
+  // Enforce role-based DC filtering for non-admin users
+  if (!isAdmin) {
+    let allowed: DcStatus[] = [];
+    for (const r of roleKeys) {
+      if (ROLE_CLOSURE_STATUSES[r]) {
+        allowed = [...allowed, ...ROLE_CLOSURE_STATUSES[r]];
+      }
+    }
+    if (allowed.length > 0) {
+      const uniqueAllowed = [...new Set(allowed)];
+      statusFilter = statusFilter.filter((s) => uniqueAllowed.includes(s));
+      if (statusFilter.length === 0) statusFilter = uniqueAllowed;
+    }
+  }
 
   const rawDcs = await prisma.deliveryChallan.findMany({
     where: { status: { in: statusFilter } },
@@ -44,7 +66,7 @@ export default async function CloseDcPage({
     orderBy: { updatedAt: "desc" },
   });
 
-  // Apply server-side blind payload filtering for Security & Stores
+  // Apply server-side blind payload filtering
   const dcs = rawDcs.map((dc) => filterDcDataForRole(dc, userRole));
 
   function getClosureStageInfo(status: string, invoiceNumber?: string | null, payRef?: string | null) {
@@ -74,7 +96,7 @@ export default async function CloseDcPage({
     <div className="space-y-6">
       <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between border-b border-slate-200 pb-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Close DC Workflow</h1>
+          <h1 className="text-xl font-bold text-slate-900">Close DC Workflow Portal</h1>
           <p className="text-xs text-slate-500">
             Process material return, store verification, manager final approval, accounts entry, and explicit closure.
           </p>
@@ -91,46 +113,56 @@ export default async function CloseDcPage({
         >
           All Active Closures
         </Link>
-        <Link
-          href="/dcs/close?stage=security"
-          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-            stage === "security" ? "bg-amber-800 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-        >
-          Security Gate Return
-        </Link>
-        <Link
-          href="/dcs/close?stage=store"
-          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-            stage === "store" ? "bg-cyan-800 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-        >
-          Store Verification
-        </Link>
-        <Link
-          href="/dcs/close?stage=manager"
-          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-            stage === "manager" ? "bg-teal-800 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-        >
-          Manager Review
-        </Link>
-        <Link
-          href="/dcs/close?stage=accounts"
-          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-            stage === "accounts" ? "bg-blue-800 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-        >
-          Accounts Entry
-        </Link>
-        <Link
-          href="/dcs/close?stage=closed"
-          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-            stage === "closed" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-          }`}
-        >
-          Closed DCs
-        </Link>
+        {(isAdmin || roleKeys.includes("SECURITY")) && (
+          <Link
+            href="/dcs/close?stage=security"
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              stage === "security" ? "bg-amber-800 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
+          >
+            Security Gate Return
+          </Link>
+        )}
+        {(isAdmin || roleKeys.includes("STORES")) && (
+          <Link
+            href="/dcs/close?stage=store"
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              stage === "store" ? "bg-cyan-800 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
+          >
+            Store Verification
+          </Link>
+        )}
+        {(isAdmin || roleKeys.includes("MANAGEMENT")) && (
+          <Link
+            href="/dcs/close?stage=manager"
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              stage === "manager" ? "bg-teal-800 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
+          >
+            Manager Review
+          </Link>
+        )}
+        {(isAdmin || roleKeys.includes("ACCOUNTS")) && (
+          <Link
+            href="/dcs/close?stage=accounts"
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              stage === "accounts" ? "bg-blue-800 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
+          >
+            Accounts Entry
+          </Link>
+        )}
+        {(isAdmin || roleKeys.includes("ACCOUNTS")) && (
+          <Link
+            href="/dcs/close?stage=closed"
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              stage === "closed" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
+          >
+            Closed DCs
+          </Link>
+        )}
       </div>
 
       {/* TABLE */}
@@ -154,7 +186,7 @@ export default async function CloseDcPage({
             {dcs.length === 0 ? (
               <tr>
                 <td colSpan={10} className="p-8 text-center text-slate-400 text-sm">
-                  No Delivery Challans found for this closure stage.
+                  No Delivery Challans found for your role or requested closure stage.
                 </td>
               </tr>
             ) : (

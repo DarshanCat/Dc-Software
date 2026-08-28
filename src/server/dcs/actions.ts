@@ -748,13 +748,18 @@ export async function submitAccountsPaymentEntry(
   if (!user) return { ok: false, error: "Not signed in." };
   await requirePermission(user, PERMISSIONS.ACCOUNTS_PAYMENT_ENTRY);
 
+  const missing: string[] = [];
   const invNum = (input.invoiceNumber || "").trim();
-  if (!invNum) return { ok: false, error: "Invoice Number is required." };
-
-  if (input.invoiceAmount <= 0) return { ok: false, error: "Invoice Amount must be greater than zero." };
-
+  if (!invNum) missing.push("Invoice Number");
+  if (!input.invoiceDate) missing.push("Invoice Date");
+  if (!input.invoiceAmount || input.invoiceAmount <= 0) missing.push("Invoice Amount (> 0)");
   const payRef = (input.paymentReferenceNumber || "").trim();
-  if (!payRef) return { ok: false, error: "Payment Reference Number is required." };
+  if (!payRef) missing.push("Payment Reference Number");
+  if (!input.paymentDate) missing.push("Payment Date");
+
+  if (missing.length > 0) {
+    return { ok: false, error: `Cannot save payment details. Please complete: ${missing.join(", ")}.` };
+  }
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
@@ -780,7 +785,7 @@ export async function submitAccountsPaymentEntry(
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: dcId,
-    reason: `Recorded invoice ${invNum}`,
+    reason: `Recorded Invoice ${invNum} (Amt: ₹${input.invoiceAmount}, Ref: ${payRef})`,
   });
 
   revalidatePath(`/dcs/${dcId}`);
@@ -831,11 +836,19 @@ export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: stri
   }
 
   // Mandatory closure validations
-  if (!dc.invoiceNumber || !dc.invoiceNumber.trim()) return { ok: false, error: "Invoice Number is required before closing DC." };
-  if (!dc.invoiceDate) return { ok: false, error: "Invoice Date is required before closing DC." };
-  if (!dc.invoiceAmount || Number(dc.invoiceAmount) <= 0) return { ok: false, error: "Valid Invoice Amount is required before closing DC." };
-  if (!dc.paymentReferenceNumber || !dc.paymentReferenceNumber.trim()) return { ok: false, error: "Payment Reference Number is required before closing DC." };
-  if (!dc.paymentDate) return { ok: false, error: "Payment Date is required before closing DC." };
+  const missingFields: string[] = [];
+  if (!dc.invoiceNumber || !dc.invoiceNumber.trim()) missingFields.push("Invoice Number");
+  if (!dc.invoiceDate) missingFields.push("Invoice Date");
+  if (!dc.invoiceAmount || Number(dc.invoiceAmount) <= 0) missingFields.push("Invoice Amount");
+  if (!dc.paymentReferenceNumber || !dc.paymentReferenceNumber.trim()) missingFields.push("Payment Reference Number");
+  if (!dc.paymentDate) missingFields.push("Payment Date");
+
+  if (missingFields.length > 0) {
+    return {
+      ok: false,
+      error: `Cannot close DC. Please complete: ${missingFields.join(", ")}.`,
+    };
+  }
 
   const now = new Date();
   await prisma.$transaction([
@@ -853,7 +866,7 @@ export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: stri
         fromStatus: "APPROVED_FOR_PAYMENT",
         toStatus: "CLOSED",
         changedBy: user.id,
-        reason: "DC Closed",
+        reason: "DC Closed after mandatory payment verification",
       },
     }),
   ]);
@@ -864,7 +877,7 @@ export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: stri
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: dcId,
-    reason: `DC ${dc.dcNumber} closed`,
+    reason: "Delivery Challan closed with complete payment details",
   });
 
   revalidatePath(`/dcs/${dcId}`);

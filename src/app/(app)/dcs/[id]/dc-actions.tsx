@@ -17,7 +17,6 @@ import {
 } from "@/server/dcs/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2 } from "lucide-react";
 
 export function DcActions({
   dcId,
@@ -52,8 +51,10 @@ export function DcActions({
     storeVerifiedRejectionQuantity?: number | null;
     storeVerifiedScrapQuantity?: number | null;
     invoiceNumber?: string | null;
+    invoiceDate?: string | null;
     invoiceAmount?: number | null;
     paymentReferenceNumber?: string | null;
+    paymentDate?: string | null;
   };
 }) {
   const router = useRouter();
@@ -103,11 +104,22 @@ export function DcActions({
 
   // Accounts Payment Entry
   const [invNum, setInvNum] = useState(dcData.invoiceNumber || "");
-  const [invDate, setInvDate] = useState(new Date().toISOString().split("T")[0]);
-  const [invAmount, setInvAmount] = useState(String(dcData.invoiceAmount || ""));
+  const [invDate, setInvDate] = useState(dcData.invoiceDate || new Date().toISOString().split("T")[0]);
+  const [invAmount, setInvAmount] = useState(dcData.invoiceAmount ? String(dcData.invoiceAmount) : "");
   const [payRef, setPayRef] = useState(dcData.paymentReferenceNumber || "");
-  const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
+  const [payDate, setPayDate] = useState(dcData.paymentDate || new Date().toISOString().split("T")[0]);
   const [payRemarks, setPayRemarks] = useState("");
+  const [accountsFieldErrors, setAccountsFieldErrors] = useState<Record<string, string>>({});
+  const [accountsSuccessMsg, setAccountsSuccessMsg] = useState<string | null>(null);
+
+  // Readiness logic for CLOSE DC action
+  const isReadyToClose =
+    status === "APPROVED_FOR_PAYMENT" &&
+    !!dcData.invoiceNumber?.trim() &&
+    !!dcData.invoiceDate &&
+    Number(dcData.invoiceAmount ?? 0) > 0 &&
+    !!dcData.paymentReferenceNumber?.trim() &&
+    !!dcData.paymentDate;
 
   async function handleAction(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setBusy(true);
@@ -204,18 +216,57 @@ export function DcActions({
 
         {/* 9. APPROVED_FOR_PAYMENT -> ACCOUNTS ENTRY & CLOSE */}
         {status === "APPROVED_FOR_PAYMENT" && (
-          <>
-            {permissions.canAccountsEntry && (
-              <Button disabled={busy} onClick={() => setModal("ACCOUNTS_ENTRY")} className="bg-blue-800 hover:bg-blue-900 text-white">
-                Enter Invoice &amp; Payment Details
-              </Button>
-            )}
+          <div className="w-full flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pt-2 border-t border-slate-200">
+            <div className="flex flex-wrap items-center gap-3">
+              {permissions.canAccountsEntry && (
+                <Button
+                  disabled={busy}
+                  onClick={() => {
+                    setAccountsFieldErrors({});
+                    setAccountsSuccessMsg(null);
+                    setModal("ACCOUNTS_ENTRY");
+                  }}
+                  className="bg-blue-800 hover:bg-blue-900 text-white font-semibold shadow-sm"
+                >
+                  Enter Invoice &amp; Payment Details
+                </Button>
+              )}
+
+              {permissions.canClose && (
+                isReadyToClose ? (
+                  <Button
+                    disabled={busy}
+                    onClick={() => handleAction(() => closeDc(dcId))}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md px-5 py-2"
+                  >
+                    CLOSE DC
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={true}
+                    title="Complete required Invoice and Payment details to close this DC."
+                    className="bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed font-bold opacity-70 px-5 py-2"
+                  >
+                    CLOSE DC
+                  </Button>
+                )
+              )}
+            </div>
+
             {permissions.canClose && (
-              <Button disabled={busy} onClick={() => handleAction(() => closeDc(dcId))} className="bg-red-700 hover:bg-red-800 text-white font-bold">
-                CLOSE DC
-              </Button>
+              <div className="text-xs font-medium">
+                {isReadyToClose ? (
+                  <span className="text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-md flex items-center gap-1.5">
+                    ✓ Payment details saved — DC is ready to be closed.
+                  </span>
+                ) : (
+                  <span className="text-amber-800 font-medium bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-md flex items-center gap-1.5">
+                    ⚠ Complete required Invoice and Payment details to enable CLOSE DC.
+                  </span>
+                )}
+              </div>
             )}
-          </>
+          </div>
         )}
 
         {status === "CLOSED" && (
@@ -481,50 +532,157 @@ export function DcActions({
       {modal === "ACCOUNTS_ENTRY" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Accounts Invoice &amp; Payment Entry</h3>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h3 className="text-base font-bold text-slate-900">Accounts Invoice &amp; Payment Details</h3>
+              <span className="text-xs text-red-600 font-semibold">* Required fields</span>
+            </div>
+
+            {accountsSuccessMsg && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-md text-xs font-semibold">
+                {accountsSuccessMsg}
+              </div>
+            )}
+
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Invoice Number *</label>
-                <Input value={invNum} onChange={(e) => setInvNum(e.target.value)} placeholder="e.g. INV-2026-99" />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Invoice Number <span className="text-red-600 font-bold">*</span>
+                </label>
+                <Input
+                  value={invNum}
+                  onChange={(e) => {
+                    setInvNum(e.target.value);
+                    if (accountsFieldErrors.invoiceNumber) {
+                      setAccountsFieldErrors((prev) => ({ ...prev, invoiceNumber: "" }));
+                    }
+                  }}
+                  placeholder="e.g. INV-2026-99"
+                  className={accountsFieldErrors.invoiceNumber ? "border-red-500 bg-red-50/20" : ""}
+                />
+                {accountsFieldErrors.invoiceNumber && (
+                  <p className="text-red-600 text-xs font-semibold mt-1">{accountsFieldErrors.invoiceNumber}</p>
+                )}
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Invoice Date *</label>
-                <Input type="date" value={invDate} onChange={(e) => setInvDate(e.target.value)} />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Invoice Date <span className="text-red-600 font-bold">*</span>
+                </label>
+                <Input
+                  type="date"
+                  value={invDate}
+                  onChange={(e) => {
+                    setInvDate(e.target.value);
+                    if (accountsFieldErrors.invoiceDate) {
+                      setAccountsFieldErrors((prev) => ({ ...prev, invoiceDate: "" }));
+                    }
+                  }}
+                  className={accountsFieldErrors.invoiceDate ? "border-red-500 bg-red-50/20" : ""}
+                />
+                {accountsFieldErrors.invoiceDate && (
+                  <p className="text-red-600 text-xs font-semibold mt-1">{accountsFieldErrors.invoiceDate}</p>
+                )}
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Invoice Amount (₹) *</label>
-                <Input type="number" step="0.01" value={invAmount} onChange={(e) => setInvAmount(e.target.value)} />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Invoice Amount (₹) <span className="text-red-600 font-bold">*</span>
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={invAmount}
+                  onChange={(e) => {
+                    setInvAmount(e.target.value);
+                    if (accountsFieldErrors.invoiceAmount) {
+                      setAccountsFieldErrors((prev) => ({ ...prev, invoiceAmount: "" }));
+                    }
+                  }}
+                  placeholder="Must be greater than 0"
+                  className={accountsFieldErrors.invoiceAmount ? "border-red-500 bg-red-50/20" : ""}
+                />
+                {accountsFieldErrors.invoiceAmount && (
+                  <p className="text-red-600 text-xs font-semibold mt-1">{accountsFieldErrors.invoiceAmount}</p>
+                )}
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Reference Number *</label>
-                <Input value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="e.g. UTR-987654321" />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Payment Reference Number <span className="text-red-600 font-bold">*</span>
+                </label>
+                <Input
+                  value={payRef}
+                  onChange={(e) => {
+                    setPayRef(e.target.value);
+                    if (accountsFieldErrors.paymentReferenceNumber) {
+                      setAccountsFieldErrors((prev) => ({ ...prev, paymentReferenceNumber: "" }));
+                    }
+                  }}
+                  placeholder="e.g. UTR-987654321"
+                  className={accountsFieldErrors.paymentReferenceNumber ? "border-red-500 bg-red-50/20" : ""}
+                />
+                {accountsFieldErrors.paymentReferenceNumber && (
+                  <p className="text-red-600 text-xs font-semibold mt-1">{accountsFieldErrors.paymentReferenceNumber}</p>
+                )}
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Date *</label>
-                <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Payment Date <span className="text-red-600 font-bold">*</span>
+                </label>
+                <Input
+                  type="date"
+                  value={payDate}
+                  onChange={(e) => {
+                    setPayDate(e.target.value);
+                    if (accountsFieldErrors.paymentDate) {
+                      setAccountsFieldErrors((prev) => ({ ...prev, paymentDate: "" }));
+                    }
+                  }}
+                  className={accountsFieldErrors.paymentDate ? "border-red-500 bg-red-50/20" : ""}
+                />
+                {accountsFieldErrors.paymentDate && (
+                  <p className="text-red-600 text-xs font-semibold mt-1">{accountsFieldErrors.paymentDate}</p>
+                )}
               </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Remarks</label>
-                <Input value={payRemarks} onChange={(e) => setPayRemarks(e.target.value)} placeholder="Accounts payment notes" />
+                <Input value={payRemarks} onChange={(e) => setPayRemarks(e.target.value)} placeholder="Accounts payment notes (Optional)" />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <Button variant="secondary" onClick={() => setModal(null)} disabled={busy}>Cancel</Button>
               <Button
-                onClick={() =>
-                  handleAction(() =>
-                    submitAccountsPaymentEntry(dcId, {
+                onClick={() => {
+                  const errors: Record<string, string> = {};
+                  if (!invNum.trim()) errors.invoiceNumber = "Invoice Number is required";
+                  if (!invDate) errors.invoiceDate = "Invoice Date is required";
+                  if (!invAmount || Number(invAmount) <= 0) errors.invoiceAmount = "Invoice Amount must be greater than 0";
+                  if (!payRef.trim()) errors.paymentReferenceNumber = "Payment Reference Number is required";
+                  if (!payDate) errors.paymentDate = "Payment Date is required";
+
+                  setAccountsFieldErrors(errors);
+                  if (Object.keys(errors).length > 0) return;
+
+                  handleAction(async () => {
+                    const res = await submitAccountsPaymentEntry(dcId, {
                       invoiceNumber: invNum,
                       invoiceDate: invDate,
                       invoiceAmount: Number(invAmount),
                       paymentReferenceNumber: payRef,
                       paymentDate: payDate,
                       paymentRemarks: payRemarks,
-                    }),
-                  )
-                }
+                    });
+                    if (res.ok) {
+                      setAccountsSuccessMsg("✓ Invoice and Payment details saved successfully.");
+                    }
+                    return res;
+                  });
+                }}
                 disabled={busy}
-                className="bg-blue-800 text-white"
+                className="bg-blue-800 hover:bg-blue-900 text-white font-semibold"
               >
                 Save Payment Details
               </Button>
