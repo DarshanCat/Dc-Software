@@ -17,13 +17,14 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        const normalizedEmail = credentials.email.toLowerCase().trim();
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email: normalizedEmail },
           include: { roles: { include: { role: true } } },
         });
         if (!user || !user.active) {
           const req = await prisma.registrationRequest.findFirst({
-            where: { email: credentials.email.toLowerCase().trim() },
+            where: { email: normalizedEmail },
             orderBy: { createdAt: "desc" },
           });
           if (req?.status === "PENDING") {

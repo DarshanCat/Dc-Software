@@ -1,0 +1,331 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: dc-signatures.spec.ts >> DC Manual Fields (Part Number, Signatures) E2E >> DC creation validates Part Number and Prepared By Name, then approves
+- Location: e2e\dc-signatures.spec.ts:12:7
+
+# Error details
+
+```
+Error: page.selectOption: SyntaxError: Failed to execute 'querySelectorAll' on 'Document': 'select:has-option("Select vendor")' is not a valid selector.
+    at query (<anonymous>:5608:41)
+    at <anonymous>:5618:7
+    at SelectorEvaluatorImpl._cached (<anonymous>:5395:20)
+    at SelectorEvaluatorImpl._queryCSS (<anonymous>:5605:17)
+    at SelectorEvaluatorImpl._querySimple (<anonymous>:5485:19)
+    at <anonymous>:5433:29
+    at SelectorEvaluatorImpl._cached (<anonymous>:5395:20)
+    at SelectorEvaluatorImpl.query (<anonymous>:5426:19)
+    at Object.query (<anonymous>:5640:44)
+    at <anonymous>:5598:21
+Call log:
+  - waiting for locator('select:has-option("Select vendor")')
+
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - complementary [ref=f1e3]:
+      - generic [ref=f1e4]:
+        - img "Company Logo" [ref=f1e5]
+        - generic [ref=f1e6]:
+          - generic [ref=f1e7]: DC & Vendor
+          - generic [ref=f1e8]: Material Management
+      - navigation [ref=f1e9]:
+        - generic [ref=f1e10]:
+          - generic [ref=f1e11]: Dashboard
+          - list [ref=f1e12]:
+            - listitem [ref=f1e13]:
+              - link "Overview" [ref=f1e14] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=f1e15]:
+              - link "Open DCs" [ref=f1e16] [cursor=pointer]:
+                - /url: /dashboard/open
+            - listitem [ref=f1e17]:
+              - link "Overdue DCs" [ref=f1e18] [cursor=pointer]:
+                - /url: /dashboard/overdue
+            - listitem [ref=f1e19]:
+              - link "Material Outside" [ref=f1e20] [cursor=pointer]:
+                - /url: /dashboard/material-outside
+            - listitem [ref=f1e21]:
+              - link "Scrap Outstanding" [ref=f1e22] [cursor=pointer]:
+                - /url: /dashboard/scrap-outstanding
+            - listitem [ref=f1e23]:
+              - link "Reconciliation Exceptions" [ref=f1e24] [cursor=pointer]:
+                - /url: /dashboard/exceptions
+        - generic [ref=f1e25]:
+          - generic [ref=f1e26]: Work Orders
+          - list [ref=f1e27]:
+            - listitem [ref=f1e28]:
+              - link "All Work Orders" [ref=f1e29] [cursor=pointer]:
+                - /url: /work-orders
+        - generic [ref=f1e30]:
+          - generic [ref=f1e31]: Delivery Challans
+          - list [ref=f1e32]:
+            - listitem [ref=f1e33]:
+              - link "All DCs" [ref=f1e34] [cursor=pointer]:
+                - /url: /dcs
+            - listitem [ref=f1e35]:
+              - link "Create DC" [ref=f1e36] [cursor=pointer]:
+                - /url: /dcs/new
+            - listitem [ref=f1e37]:
+              - link "Draft" [ref=f1e38] [cursor=pointer]:
+                - /url: /dcs?status=DRAFT
+            - listitem [ref=f1e39]:
+              - link "Pending Approval" [ref=f1e40] [cursor=pointer]:
+                - /url: /dcs?status=PENDING_APPROVAL
+            - listitem [ref=f1e41]:
+              - link "Approved" [ref=f1e42] [cursor=pointer]:
+                - /url: /dcs?status=APPROVED
+            - listitem [ref=f1e43]:
+              - link "Dispatched" [ref=f1e44] [cursor=pointer]:
+                - /url: /dcs?status=DISPATCHED
+            - listitem [ref=f1e45]:
+              - link "At Vendor" [ref=f1e46] [cursor=pointer]:
+                - /url: /dcs?status=AT_VENDOR
+            - listitem [ref=f1e47]:
+              - link "Security Returned" [ref=f1e48] [cursor=pointer]:
+                - /url: /dcs?status=SECURITY_RETURNED
+            - listitem [ref=f1e49]:
+              - link "Store Verified" [ref=f1e50] [cursor=pointer]:
+                - /url: /dcs?status=STORE_VERIFIED
+            - listitem [ref=f1e51]:
+              - link "Final Approved" [ref=f1e52] [cursor=pointer]:
+                - /url: /dcs?status=FINAL_APPROVED
+            - listitem [ref=f1e53]:
+              - link "Approved for Payment" [ref=f1e54] [cursor=pointer]:
+                - /url: /dcs?status=APPROVED_FOR_PAYMENT
+            - listitem [ref=f1e55]:
+              - link "Close DC" [ref=f1e56] [cursor=pointer]:
+                - /url: /dcs/close
+        - generic [ref=f1e57]:
+          - generic [ref=f1e58]: Material Returns
+          - list [ref=f1e59]:
+            - listitem [ref=f1e60]:
+              - link "All Returns" [ref=f1e61] [cursor=pointer]:
+                - /url: /receipts
+            - listitem [ref=f1e62]:
+              - link "Receive Material" [ref=f1e63] [cursor=pointer]:
+                - /url: /receipts/new
+            - listitem [ref=f1e64]:
+              - link "Pending Returns" [ref=f1e65] [cursor=pointer]:
+                - /url: /receipts?pending=1
+            - listitem [ref=f1e66]:
+              - link "Partial Returns" [ref=f1e67] [cursor=pointer]:
+                - /url: /receipts?partial=1
+        - generic [ref=f1e68]:
+          - generic [ref=f1e69]: Scrap Recovery
+          - list [ref=f1e70]:
+            - listitem [ref=f1e71]:
+              - link "Scrap Dashboard" [ref=f1e72] [cursor=pointer]:
+                - /url: /scrap
+            - listitem [ref=f1e73]:
+              - link "Expected Scrap" [ref=f1e74] [cursor=pointer]:
+                - /url: /scrap?view=expected
+            - listitem [ref=f1e75]:
+              - link "Received Scrap" [ref=f1e76] [cursor=pointer]:
+                - /url: /scrap?view=received
+            - listitem [ref=f1e77]:
+              - link "Scrap Outstanding" [ref=f1e78] [cursor=pointer]:
+                - /url: /scrap?view=outstanding
+            - listitem [ref=f1e79]:
+              - link "Scrap Exceptions" [ref=f1e80] [cursor=pointer]:
+                - /url: /scrap?view=exceptions
+        - generic [ref=f1e81]:
+          - generic [ref=f1e82]: Reconciliation
+          - list [ref=f1e83]:
+            - listitem [ref=f1e84]:
+              - link "Pending Reconciliation" [ref=f1e85] [cursor=pointer]:
+                - /url: /reconciliation?status=PENDING
+            - listitem [ref=f1e86]:
+              - link "Exceptions" [ref=f1e87] [cursor=pointer]:
+                - /url: /reconciliation?status=EXCEPTION
+            - listitem [ref=f1e88]:
+              - link "Reconciled" [ref=f1e89] [cursor=pointer]:
+                - /url: /reconciliation?status=RECONCILED
+            - listitem [ref=f1e90]:
+              - link "Closed" [ref=f1e91] [cursor=pointer]:
+                - /url: /reconciliation?status=CLOSED
+        - generic [ref=f1e92]:
+          - generic [ref=f1e93]: Masters
+          - list [ref=f1e94]:
+            - listitem [ref=f1e95]:
+              - link "Vendors" [ref=f1e96] [cursor=pointer]:
+                - /url: /masters/vendors
+            - listitem [ref=f1e97]:
+              - link "Items" [ref=f1e98] [cursor=pointer]:
+                - /url: /masters/items
+            - listitem [ref=f1e99]:
+              - link "Processes" [ref=f1e100] [cursor=pointer]:
+                - /url: /masters/processes
+            - listitem [ref=f1e101]:
+              - link "Job Work Standards" [ref=f1e102] [cursor=pointer]:
+                - /url: /masters/job-work-standards
+            - listitem [ref=f1e103]:
+              - link "Scrap Types" [ref=f1e104] [cursor=pointer]:
+                - /url: /masters/scrap-types
+            - listitem [ref=f1e105]:
+              - link "UOM" [ref=f1e106] [cursor=pointer]:
+                - /url: /masters/uom
+        - generic [ref=f1e107]:
+          - generic [ref=f1e108]: Reports
+          - list [ref=f1e109]:
+            - listitem [ref=f1e110]:
+              - link "DC Register" [ref=f1e111] [cursor=pointer]:
+                - /url: /reports/dc-register
+            - listitem [ref=f1e112]:
+              - link "Vendor Outstanding" [ref=f1e113] [cursor=pointer]:
+                - /url: /reports/vendor-outstanding
+            - listitem [ref=f1e114]:
+              - link "Material Outstanding" [ref=f1e115] [cursor=pointer]:
+                - /url: /reports/material-outstanding
+            - listitem [ref=f1e116]:
+              - link "Scrap Recovery" [ref=f1e117] [cursor=pointer]:
+                - /url: /reports/scrap-recovery
+            - listitem [ref=f1e118]:
+              - link "Reconciliation" [ref=f1e119] [cursor=pointer]:
+                - /url: /reports/reconciliation
+            - listitem [ref=f1e120]:
+              - link "Ageing" [ref=f1e121] [cursor=pointer]:
+                - /url: /reports/ageing
+            - listitem [ref=f1e122]:
+              - link "Vendor Performance" [ref=f1e123] [cursor=pointer]:
+                - /url: /reports/vendor-performance
+        - generic [ref=f1e124]:
+          - generic [ref=f1e125]: Administration
+          - list [ref=f1e126]:
+            - listitem [ref=f1e127]:
+              - link "Users" [ref=f1e128] [cursor=pointer]:
+                - /url: /admin/users
+            - listitem [ref=f1e129]:
+              - link "Registration Requests" [ref=f1e130] [cursor=pointer]:
+                - /url: /admin/users/requests
+            - listitem [ref=f1e131]:
+              - link "Roles" [ref=f1e132] [cursor=pointer]:
+                - /url: /admin/roles
+            - listitem [ref=f1e133]:
+              - link "Permissions" [ref=f1e134] [cursor=pointer]:
+                - /url: /admin/permissions
+            - listitem [ref=f1e135]:
+              - link "Audit Trail" [ref=f1e136] [cursor=pointer]:
+                - /url: /admin/audit
+            - listitem [ref=f1e137]:
+              - link "Numbering" [ref=f1e138] [cursor=pointer]:
+                - /url: /admin/numbering
+            - listitem [ref=f1e139]:
+              - link "Settings" [ref=f1e140] [cursor=pointer]:
+                - /url: /admin/settings
+    - generic [ref=f1e141]:
+      - banner [ref=f1e142]:
+        - generic [ref=f1e143]: Delivery Challan & Vendor Material Management
+        - generic [ref=f1e144]:
+          - button "Notifications" [ref=f1e146] [cursor=pointer]
+          - generic [ref=f1e150]: ...
+          - button "Change Password" [ref=f1e152] [cursor=pointer]
+          - button "Sign out" [ref=f1e153] [cursor=pointer]
+      - main [ref=f1e154]:
+        - generic [ref=f1e155]:
+          - heading "Create Delivery Challan" [level=1] [ref=f1e156]
+          - generic [ref=f1e157]:
+            - generic [ref=f1e158]:
+              - heading "Basic & Material Information" [level=2] [ref=f1e159]
+              - generic [ref=f1e160]:
+                - generic [ref=f1e161]:
+                  - generic [ref=f1e162]: Work Order Number *
+                  - textbox "e.g. WO-2026-00452" [active] [ref=f1e163]: WO-1788419186572
+                - generic [ref=f1e164]:
+                  - generic [ref=f1e165]: Part Number *
+                  - textbox "e.g. PART-VJS-4029" [ref=f1e166]
+                - generic [ref=f1e167]:
+                  - generic [ref=f1e168]: Vendor *
+                  - combobox [ref=f1e169]:
+                    - option "Select vendor" [selected]
+                    - option "ABC Machining"
+                    - option "LMN Industries"
+                    - option "PQR Engineering"
+                    - option "XYZ CNC"
+                - generic [ref=f1e170]:
+                  - generic [ref=f1e171]: Process *
+                  - combobox [ref=f1e172]:
+                    - option "Select process" [selected]
+                    - option "Annealing"
+                    - option "Black Passivation"
+                    - option "CNC Machining"
+                    - option "CNC Turning"
+                    - option "For CMM"
+                    - option "For Cutting"
+                    - option "Heat Treatment"
+                    - option "HMC"
+                    - option "Milling"
+                    - option "Notching"
+                    - option "Painting"
+                    - option "Plating"
+                    - option "Shot Blasting and Painting"
+                    - option "Stress Relieving"
+                    - option "Surface Grinding"
+                    - option "Surface Treatment"
+                    - option "Turning"
+                    - option "Zinc Little Plating"
+                - generic [ref=f1e173]:
+                  - generic [ref=f1e174]: RM Quantity (Sent) *
+                  - spinbutton "Raw material quantity sent to vendor" [ref=f1e175]
+                - generic [ref=f1e176]:
+                  - generic [ref=f1e177]: Expected Return FG Quantity *
+                  - spinbutton "Finished goods quantity expected back" [ref=f1e178]
+                - generic [ref=f1e179]:
+                  - generic [ref=f1e180]: Heat / Batch Number *
+                  - textbox "e.g. HEAT-2026-X9" [ref=f1e181]
+                - generic [ref=f1e182]:
+                  - generic [ref=f1e183]: Purpose *
+                  - combobox [ref=f1e184]:
+                    - option "JOB WORK" [selected]
+                    - option "MACHINING"
+                    - option "HEAT TREATMENT"
+                    - option "SURFACE TREATMENT"
+                    - option "REPAIR"
+                    - option "SAMPLE"
+                    - option "TRIAL"
+                    - option "SUBCONTRACTING"
+                    - option "OTHER"
+            - generic [ref=f1e185]:
+              - heading "Mandatory Pricing & Commercial Terms" [level=2] [ref=f1e186]
+              - generic [ref=f1e187]:
+                - generic [ref=f1e188]: Price Based On *
+                - generic [ref=f1e189]:
+                  - generic [ref=f1e190] [cursor=pointer]:
+                    - radio "RM Quantity (Sent)" [ref=f1e191]
+                    - text: RM Quantity (Sent)
+                  - generic [ref=f1e192] [cursor=pointer]:
+                    - radio "FG Quantity (Returned)" [ref=f1e193]
+                    - text: FG Quantity (Returned)
+                - paragraph [ref=f1e194]: Choose whether vendor processing is charged per unit of Raw Material sent or Finished Goods returned.
+              - generic [ref=f1e195]:
+                - generic [ref=f1e196]:
+                  - generic [ref=f1e197]: Rate Per Quantity (₹) *
+                  - spinbutton "Enter rate (e.g. 1000.00)" [ref=f1e198]
+                - generic [ref=f1e199]:
+                  - generic [ref=f1e200]: Calculated Expected Total Amount
+                  - generic [ref=f1e201]: ₹0.00
+            - generic [ref=f1e202]:
+              - heading "Document Details & Additional Information" [level=2] [ref=f1e203]
+              - generic [ref=f1e204]:
+                - generic [ref=f1e205]:
+                  - generic [ref=f1e206]: Prepared By Name *
+                  - textbox "Enter name to appear on DC" [ref=f1e207]
+                - generic [ref=f1e208]:
+                  - generic [ref=f1e209]: Expected Return Date
+                  - textbox [ref=f1e210]
+                - generic [ref=f1e211]:
+                  - generic [ref=f1e212]: Remarks / Special Instructions
+                  - textbox "Additional notes for vendor or job work..." [ref=f1e213]
+            - button "Create DC (Saved as DRAFT)" [ref=f1e215] [cursor=pointer]
+  - alert [ref=f1e216]
+```

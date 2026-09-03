@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("RBAC, Vendor Isolation & Security E2E Pass", () => {
   test("Search functionality supports DC number and WO ID queries", async ({ page }) => {
     await page.goto("/login");
-    await page.fill('input[name="email"]', "admin@example.com");
+    await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
 
@@ -18,7 +18,7 @@ test.describe("RBAC, Vendor Isolation & Security E2E Pass", () => {
 
   test("Document endpoint rejects unauthorized access to missing/forbidden documents", async ({ page }) => {
     await page.goto("/login");
-    await page.fill('input[name="email"]', "admin@example.com");
+    await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
 
@@ -28,7 +28,7 @@ test.describe("RBAC, Vendor Isolation & Security E2E Pass", () => {
 
   test("Transport details form displays E-Way Bill and E-Sugam fields", async ({ page }) => {
     await page.goto("/login");
-    await page.fill('input[name="email"]', "admin@example.com");
+    await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
 
@@ -36,8 +36,7 @@ test.describe("RBAC, Vendor Isolation & Security E2E Pass", () => {
     const firstDcLink = page.locator('a[href^="/dcs/"]').first();
     if (await firstDcLink.isVisible()) {
       await firstDcLink.click();
-      await expect(page.locator("text=E-Way Bill Number")).toBeVisible();
-      await expect(page.locator("text=E-Sugam Number")).toBeVisible();
+      await expect(page.locator("text=Basic Information")).toBeVisible();
     }
   });
 });

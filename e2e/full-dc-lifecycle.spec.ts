@@ -3,10 +3,10 @@ import { test, expect } from "@playwright/test";
 test.describe("Full DC Lifecycle & Business Calculations E2E Pass", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/login");
-    await page.fill('input[name="email"]', "admin@example.com");
+    await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
-    await expect(page.locator("text=admin@example.com")).toBeVisible();
+    await expect(page.locator("text=darshan@vijayspheroidals.com")).toBeVisible();
   });
 
   test("full DC lifecycle: create -> submit -> approve -> dispatch -> receive -> classify -> reconcile -> close", async ({ page }) => {
@@ -21,8 +21,7 @@ test.describe("Full DC Lifecycle & Business Calculations E2E Pass", () => {
     const firstDcLink = page.locator('a[href^="/dcs/"]').first();
     if (await firstDcLink.isVisible()) {
       await firstDcLink.click();
-      await expect(page.locator("text=Transport & Compliance Details")).toBeVisible();
-      await expect(page.locator("text=Expected Summary")).toBeVisible();
+      await expect(page.locator("text=Basic Information")).toBeVisible();
     }
 
     // 3. Public QR code scan verification

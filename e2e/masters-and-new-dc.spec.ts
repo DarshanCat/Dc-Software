@@ -3,10 +3,10 @@ import { test, expect } from "@playwright/test";
 test.describe("Master Management & New DC Creation E2E", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/login");
-    await page.fill('input[name="email"]', "admin@example.com");
+    await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
-    await expect(page.locator("text=admin@example.com")).toBeVisible();
+    await expect(page.locator("text=darshan@vijayspheroidals.com")).toBeVisible();
   });
 
   test("New DC creation requires Part Number, RM Qty, Return FG Qty, Heat Number, and Process", async ({ page }) => {
@@ -27,7 +27,7 @@ test.describe("Master Management & New DC Creation E2E", () => {
 
     // Verify redirection to detail page
     await expect(page).toHaveURL(/\/dcs\/[a-z0-9-]+$/);
-    await expect(page.locator("text=DC Movement Specifications")).toBeVisible();
+    await expect(page.locator("text=Basic Information")).toBeVisible();
     await expect(page.locator("text=PART-8899")).toBeVisible();
     await expect(page.locator("text=100.500")).toBeVisible();
     await expect(page.locator("text=98.000")).toBeVisible();

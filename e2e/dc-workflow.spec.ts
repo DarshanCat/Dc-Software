@@ -3,10 +3,10 @@ import { test, expect } from "@playwright/test";
 test.describe("DC Workflow & Document Access E2E", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/login");
-    await page.fill('input[name="email"]', "admin@example.com");
+    await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
-    await expect(page.locator("text=admin@example.com")).toBeVisible();
+    await expect(page.locator("text=darshan@vijayspheroidals.com")).toBeVisible();
   });
 
   test("navigate to DC list page", async ({ page }) => {

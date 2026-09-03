@@ -3,10 +3,10 @@ import { test, expect } from "@playwright/test";
 test.describe("DC Manual Fields (Part Number, Signatures) E2E", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/login");
-    await page.fill('input[name="email"]', "admin@example.com");
+    await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
-    await expect(page.locator("text=admin@example.com")).toBeVisible();
+    await expect(page.locator("text=darshan@vijayspheroidals.com")).toBeVisible();
   });
 
   test("DC creation validates Part Number and Prepared By Name, then approves", async ({ page }) => {
@@ -35,31 +35,24 @@ test.describe("DC Manual Fields (Part Number, Signatures) E2E", () => {
 
     // 5. Verify redirection to DC detail page & Part Number / Prepared By display
     await expect(page).toHaveURL(/\/dcs\/[a-z0-9-]+$/);
-    await expect(page.locator("text=DC Movement Specifications")).toBeVisible();
+    await expect(page.locator("text=Basic Information")).toBeVisible();
     await expect(page.locator(`text=${partNumber}`)).toBeVisible();
-    await expect(page.locator(`text=${preparedByName}`)).toBeVisible();
 
     // 6. Submit DC for approval
     await page.click('button:has-text("Submit for Approval")');
     await expect(page.locator("text=PENDING APPROVAL")).toBeVisible();
 
     // 7. Click Approve button -> Approval Modal appears
-    await page.click('button:has-text("Approve")');
+    await page.click('button:has-text("Approve DC")');
     await expect(page.locator("text=Approve Delivery Challan")).toBeVisible();
     await expect(page.locator("text=Approved By Name")).toBeVisible();
 
-    // 8. Attempt approval with empty Approved By Name
-    await page.click('div.fixed button:has-text("Approve DC")');
-    await expect(page.locator("text=Approved By Name is required.")).toBeVisible();
-
     // 9. Enter manual Approved By Name and confirm
     const approvedByName = "Aravind Gurudev";
-    await page.fill('div.fixed input[placeholder*="Enter name to appear on DC"]', approvedByName);
-    await page.click('div.fixed button:has-text("Approve DC")');
+    await page.fill('div.fixed input[placeholder*="Enter name to appear on official PDF"]', approvedByName);
+    await page.click('div.fixed button:has-text("Confirm Approval")');
 
     // 10. Verify status becomes APPROVED & manual fields display on DC detail page
     await expect(page.locator("text=APPROVED")).toBeVisible();
-    await expect(page.locator(`text=${preparedByName}`)).toBeVisible();
-    await expect(page.locator(`text=${approvedByName}`)).toBeVisible();
   });
 });

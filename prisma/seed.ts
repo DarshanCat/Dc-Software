@@ -187,14 +187,12 @@ async function main() {
         email,
         name,
         passwordHash: devPasswordHash,
-
-        // New local users must change their password after login.
-        mustChangePassword: true,
+        mustChangePassword: false,
       },
 
       update: {
-        // Update profile information only.
         name,
+        mustChangePassword: false,
       },
     });
 
