@@ -70,8 +70,9 @@ export async function createUser(input: CreateUserInput): Promise<ActionResult> 
     return { ok: false, error: "Please fix the highlighted fields.", fieldErrors };
   }
   const data = parsed.data;
+  const normalizedEmail = data.email.toLowerCase().trim();
 
-  const existing = await prisma.user.findUnique({ where: { email: data.email } });
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) {
     return { ok: false, error: "A user with this email already exists.", fieldErrors: { email: "Already in use." } };
   }
@@ -86,8 +87,8 @@ export async function createUser(input: CreateUserInput): Promise<ActionResult> 
   const result = await prisma.$transaction(async (tx) => {
     const newUser = await tx.user.create({
       data: {
-        email: data.email,
-        name: data.name,
+        email: normalizedEmail,
+        name: data.name.trim(),
         passwordHash,
         vendorId: data.vendorId || null,
         roles: { create: roles.map((r) => ({ roleId: r.id })) },
@@ -96,12 +97,12 @@ export async function createUser(input: CreateUserInput): Promise<ActionResult> 
 
     await writeAudit(tx, {
       userId: user!.id,
-      action: "MASTER_CHANGED",
+      action: "USER_CREATED",
       module: "Users",
       entityType: "User",
       entityId: newUser.id,
-      newValue: { email: data.email, name: data.name, roleKeys: data.roleKeys },
-      reason: "User created",
+      newValue: { email: normalizedEmail, name: data.name, roleKeys: data.roleKeys },
+      reason: "User created by Admin",
     });
 
     return newUser.id;
@@ -125,16 +126,67 @@ export async function setUserActive(userId: string, active: boolean): Promise<Ac
     return { ok: false, error: "You cannot deactivate your own account." };
   }
 
+  const action = active ? "USER_ENABLED" : "USER_DISABLED";
+
   await prisma.$transaction(async (tx) => {
     await tx.user.update({ where: { id: userId }, data: { active } });
     await writeAudit(tx, {
       userId: user!.id,
-      action: "MASTER_CHANGED",
+      action,
       module: "Users",
       entityType: "User",
       entityId: userId,
       newValue: { active },
-      reason: active ? "User reactivated" : "User deactivated",
+      reason: active ? "User account enabled by Admin" : "User account disabled by Admin",
+    });
+  });
+
+  revalidatePath("/admin/users");
+  return { ok: true, id: userId };
+}
+
+export async function updateUserRoles(userId: string, roleKeys: string[]): Promise<ActionResult> {
+  const user = await getSessionUser();
+  try {
+    await requirePermission(user, PERMISSIONS.USER_MANAGE);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) return { ok: false, error: "Not signed in." };
+    if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to manage users." };
+    throw e;
+  }
+
+  if (!roleKeys || roleKeys.length === 0) {
+    return { ok: false, error: "Select at least one role for the user." };
+  }
+
+  const roles = await prisma.role.findMany({ where: { key: { in: roleKeys } } });
+  if (roles.length !== roleKeys.length) {
+    return { ok: false, error: "One or more selected roles do not exist." };
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { roles: { include: { role: true } } },
+  });
+  if (!existingUser) return { ok: false, error: "User not found." };
+
+  const oldRoles = existingUser.roles.map((r) => r.role.key);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.userRole.deleteMany({ where: { userId } });
+    await tx.userRole.createMany({
+      data: roles.map((r) => ({ userId, roleId: r.id })),
+    });
+
+    await writeAudit(tx, {
+      userId: user!.id,
+      action: "ROLE_CHANGED",
+      module: "Users",
+      entityType: "User",
+      entityId: userId,
+      oldValue: { roleKeys: oldRoles },
+      newValue: { roleKeys },
+      reason: "User roles updated by Admin",
     });
   });
 
@@ -219,7 +271,7 @@ export async function adminResetPassword(targetUserId: string): Promise<AdminRes
 
     await writeAudit(tx, {
       userId: user!.id,
-      action: "PASSWORD_RESET_BY_ADMIN",
+      action: "PASSWORD_RESET_REQUESTED",
       module: "Users",
       entityType: "User",
       entityId: targetUserId,
@@ -229,4 +281,4 @@ export async function adminResetPassword(targetUserId: string): Promise<AdminRes
 
   revalidatePath("/admin/users");
   return { ok: true, temporaryPassword: tempPassword };
-}
+}
