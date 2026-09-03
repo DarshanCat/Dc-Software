@@ -113,20 +113,20 @@ export const ADMIN_NAVIGATION: NavSection[] = [
 
 export const SECURITY_NAVIGATION: NavSection[] = [
   {
-    label: "Security Operations",
+    label: "SECURITY OPERATIONS",
     items: [
       { label: "Security Dashboard", href: "/security/dashboard" },
-      { label: "Waiting for Dispatch", href: "/dcs?status=APPROVED" },
-      { label: "Dispatched / At Vendor", href: "/dcs?status=DISPATCHED" },
-      { label: "Material Inward / Return", href: "/dcs?status=AT_VENDOR" },
-      { label: "My Security Entries", href: "/dcs?status=SECURITY_RETURNED" },
+      { label: "Waiting for Dispatch", href: "/security/dispatch" },
+      { label: "Dispatched / At Vendor", href: "/security/dispatched" },
+      { label: "Material Inward / Return", href: "/security/material-inward" },
+      { label: "My Security Entries", href: "/security/my-entries" },
     ],
   },
 ];
 
 export const STORES_NAVIGATION: NavSection[] = [
   {
-    label: "Store Operations",
+    label: "STORE OPERATIONS",
     items: [
       { label: "Store Dashboard", href: "/stores/dashboard" },
       { label: "Create DC", href: "/dcs/new" },
@@ -137,7 +137,7 @@ export const STORES_NAVIGATION: NavSection[] = [
     ],
   },
   {
-    label: "Material Returns",
+    label: "MATERIAL RETURNS",
     items: [
       { label: "Receive Material", href: "/receipts/new" },
       { label: "Pending Verification", href: "/receipts?pending=1" },
@@ -147,7 +147,7 @@ export const STORES_NAVIGATION: NavSection[] = [
 
 export const MANAGEMENT_NAVIGATION: NavSection[] = [
   {
-    label: "Management Dashboard",
+    label: "MANAGEMENT DASHBOARD",
     items: [
       { label: "Overview", href: "/management/dashboard" },
       { label: "Pending DC Approval", href: "/dcs?status=PENDING_APPROVAL" },
@@ -159,7 +159,7 @@ export const MANAGEMENT_NAVIGATION: NavSection[] = [
     ],
   },
   {
-    label: "Delivery Challans",
+    label: "DELIVERY CHALLANS",
     items: [
       { label: "Create DC", href: "/dcs/new" },
       { label: "Draft DCs", href: "/dcs?status=DRAFT" },
@@ -174,7 +174,7 @@ export const MANAGEMENT_NAVIGATION: NavSection[] = [
 
 export const ACCOUNTS_NAVIGATION: NavSection[] = [
   {
-    label: "Accounts",
+    label: "ACCOUNTS",
     items: [
       { label: "Accounts Dashboard", href: "/accounts/dashboard" },
       { label: "Approved for Payment", href: "/dcs?status=APPROVED_FOR_PAYMENT" },
@@ -188,7 +188,7 @@ export const ACCOUNTS_NAVIGATION: NavSection[] = [
 
 export const PRODUCTION_NAVIGATION: NavSection[] = [
   {
-    label: "Production Portal",
+    label: "PRODUCTION OPERATIONS",
     items: [
       { label: "Production Dashboard", href: "/production/dashboard" },
       { label: "Create DC", href: "/dcs/new" },

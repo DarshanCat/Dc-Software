@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
-import { filterDcDataForRole } from "@/server/dcs/sanitizer";
+import { getSecurityDispatchQueue, getSecurityReturnQueue, getSecurityCompletedQueue } from "@/server/dcs/queries";
+import { SecurityInwardForm } from "../security-inward-form";
 
 export const dynamic = "force-dynamic";
 
@@ -9,28 +9,11 @@ export default async function SecurityDashboardPage() {
   const user = await getSessionUser();
   const userRole = user?.roleKeys?.[0] || "SECURITY";
 
-  const [waitingDispatchRaw, waitingReturnRaw, recentSecurityRaw] = await Promise.all([
-    prisma.deliveryChallan.findMany({
-      where: { status: "APPROVED" },
-      include: { vendor: true, process: true },
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.deliveryChallan.findMany({
-      where: { status: { in: ["DISPATCHED", "AT_VENDOR"] } },
-      include: { vendor: true, process: true },
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.deliveryChallan.findMany({
-      where: { status: "SECURITY_RETURNED" },
-      include: { vendor: true, process: true },
-      orderBy: { updatedAt: "desc" },
-      take: 10,
-    }),
+  const [waitingDispatch, waitingReturn, recentSecurity] = await Promise.all([
+    getSecurityDispatchQueue(userRole),
+    getSecurityReturnQueue(userRole),
+    getSecurityCompletedQueue(userRole),
   ]);
-
-  const waitingDispatch = waitingDispatchRaw.map((dc) => filterDcDataForRole(dc, userRole));
-  const waitingReturn = waitingReturnRaw.map((dc) => filterDcDataForRole(dc, userRole));
-  const recentSecurity = recentSecurityRaw.map((dc) => filterDcDataForRole(dc, userRole));
 
   return (
     <div className="space-y-6">
@@ -50,7 +33,7 @@ export default async function SecurityDashboardPage() {
         </div>
 
         <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">2. Waiting for Return Entry</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">2. Waiting for Material Return</p>
           <p className="mt-2 text-3xl font-extrabold text-amber-950">{waitingReturn.length}</p>
           <p className="mt-1 text-[11px] text-amber-600">Status: DISPATCHED / AT_VENDOR</p>
         </div>
@@ -92,7 +75,7 @@ export default async function SecurityDashboardPage() {
                   <td className="px-4 py-3 font-semibold text-slate-800">{dc.vendor?.vendorName}</td>
                   <td className="px-4 py-3 font-mono text-slate-800">{dc.partNumber || "—"}</td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">
-                    {dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"}
+                    {dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"} kg
                   </td>
                   <td className="px-4 py-3 text-center">
                     <Link
@@ -139,10 +122,10 @@ export default async function SecurityDashboardPage() {
                   <td className="px-4 py-3 font-semibold text-slate-800">{dc.vendor?.vendorName}</td>
                   <td className="px-4 py-3 font-mono text-slate-800">{dc.partNumber || "—"}</td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">
-                    {dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"}
+                    {dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"} kg
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">
-                    {dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"}
+                    {dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"} kg
                   </td>
                   <td className="px-4 py-3">
                     <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900 border border-amber-300">
@@ -150,12 +133,16 @@ export default async function SecurityDashboardPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <Link
-                      href={`/dcs/${dc.id}`}
-                      className="inline-block rounded bg-amber-600 px-3 py-1 text-xs font-bold text-white hover:bg-amber-700"
-                    >
-                      Enter Security Return
-                    </Link>
+                    <SecurityInwardForm
+                      dc={{
+                        id: dc.id,
+                        dcNumber: dc.dcNumber,
+                        partNumber: dc.partNumber,
+                        rmQuantity: dc.rmQuantity != null ? Number(dc.rmQuantity) : null,
+                        returnFgQuantity: dc.returnFgQuantity != null ? Number(dc.returnFgQuantity) : null,
+                        vendorName: dc.vendor?.vendorName,
+                      }}
+                    />
                   </td>
                 </tr>
               ))

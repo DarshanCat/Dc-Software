@@ -21,7 +21,7 @@ describe("Role-Based Navigation, Route Security & Matrix", () => {
     const nav = getNavigationForUser(["SECURITY"]);
     const labels = nav.map((s) => s.label);
 
-    expect(labels).toEqual(["Security Operations"]);
+    expect(labels).toEqual(["SECURITY OPERATIONS"]);
     expect(labels).not.toContain("Accounts");
     expect(labels).not.toContain("Masters");
     expect(labels).not.toContain("Administration");
@@ -38,12 +38,12 @@ describe("Role-Based Navigation, Route Security & Matrix", () => {
     const nav = getNavigationForUser(["STORES"]);
     const labels = nav.map((s) => s.label);
 
-    expect(labels).toContain("Store Operations");
-    expect(labels).toContain("Material Returns");
+    expect(labels).toContain("STORE OPERATIONS");
+    expect(labels).toContain("MATERIAL RETURNS");
     expect(labels).not.toContain("Accounts");
     expect(labels).not.toContain("Administration");
 
-    const storeItems = nav.find((s) => s.label === "Store Operations")!.items.map((i) => i.label);
+    const storeItems = nav.find((s) => s.label === "STORE OPERATIONS")!.items.map((i) => i.label);
     expect(storeItems).toContain("Store Dashboard");
     expect(storeItems).toContain("Create DC");
     expect(storeItems).toContain("Draft DCs");
@@ -55,12 +55,12 @@ describe("Role-Based Navigation, Route Security & Matrix", () => {
     const nav = getNavigationForUser(["MANAGEMENT"]);
     const labels = nav.map((s) => s.label);
 
-    expect(labels).toContain("Management Dashboard");
-    expect(labels).toContain("Delivery Challans");
+    expect(labels).toContain("MANAGEMENT DASHBOARD");
+    expect(labels).toContain("DELIVERY CHALLANS");
     expect(labels).not.toContain("Administration");
     expect(labels).not.toContain("Accounts");
 
-    const items = nav.find((s) => s.label === "Management Dashboard")!.items.map((i) => i.label);
+    const items = nav.find((s) => s.label === "MANAGEMENT DASHBOARD")!.items.map((i) => i.label);
     expect(items).toContain("Overview");
     expect(items).toContain("Pending DC Approval");
     expect(items).toContain("Store Verified / Final Approval");
@@ -73,7 +73,7 @@ describe("Role-Based Navigation, Route Security & Matrix", () => {
     const nav = getNavigationForUser(["ACCOUNTS"]);
     const labels = nav.map((s) => s.label);
 
-    expect(labels).toEqual(["Accounts"]);
+    expect(labels).toEqual(["ACCOUNTS"]);
     expect(labels).not.toContain("Administration");
     expect(labels).not.toContain("Masters");
 
@@ -90,7 +90,7 @@ describe("Role-Based Navigation, Route Security & Matrix", () => {
     const nav = getNavigationForUser(["PRODUCTION"]);
     const labels = nav.map((s) => s.label);
 
-    expect(labels).toEqual(["Production Portal"]);
+    expect(labels).toEqual(["PRODUCTION OPERATIONS"]);
     const items = nav[0].items.map((i) => i.label);
     expect(items).toContain("Production Dashboard");
     expect(items).toContain("Create DC");

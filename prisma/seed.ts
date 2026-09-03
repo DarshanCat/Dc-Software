@@ -134,6 +134,11 @@ async function main() {
       ROLES.ADMIN,
     ],
     [
+      "security@vijayspheroidals.com",
+      "Security Gate User",
+      ROLES.SECURITY,
+    ],
+    [
       "loyed@vijayspheroidals.onmicrosoft.com",
       "Loyed",
       ROLES.MANAGEMENT,
@@ -189,11 +194,6 @@ async function main() {
 
       update: {
         // Update profile information only.
-        //
-        // IMPORTANT:
-        // Do NOT update passwordHash here.
-        // Running the seed again must NOT reset an existing
-        // user's password.
         name,
       },
     });
@@ -391,16 +391,6 @@ async function main() {
 
   // ==========================================================
   // SAMPLE DELIVERY CHALLAN
-  //
-  // New DC structure:
-  // - Part Number
-  // - RM Qty
-  // - Return FG Qty
-  // - Heat Number
-  // - Process
-  //
-  // No Item concept.
-  // No Expected Scrap.
   // ==========================================================
 
   const dcNumber = "DC-2026-000001";
