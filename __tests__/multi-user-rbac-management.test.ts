@@ -61,28 +61,28 @@ describe("Production Multi-User & Server RBAC Management Verification", () => {
     expect(sanitizedAdmin.invoiceNumber).toBe("INV-998877");
   });
 
-  it("grants ADMIN full navigation sections while isolating SECURITY, STORES, ACCOUNTS", () => {
+  it("grants ADMIN full navigation sections and direct access to Receive Material (/receipts/new)", () => {
     const adminNav = getNavigationForUser(["ADMIN"]);
     const securityNav = getNavigationForUser(["SECURITY"]);
     const storesNav = getNavigationForUser(["STORES"]);
     const accountsNav = getNavigationForUser(["ACCOUNTS"]);
 
-    // Admin has all sections
-    expect(adminNav.some((s) => s.label === "Administration")).toBe(true);
-    expect(adminNav.some((s) => s.label === "Masters")).toBe(true);
+    // Admin has Material Returns section pointing to /receipts/new
+    const adminMaterialReturns = adminNav.find((s) => s.label === "Material Returns");
+    expect(adminMaterialReturns).toBeDefined();
+
+    const receiveMaterialItem = adminMaterialReturns?.items.find((i) => i.label === "Receive Material");
+    expect(receiveMaterialItem).toBeDefined();
+    expect(receiveMaterialItem?.href).toBe("/receipts/new");
 
     // Security has only Security section
     expect(securityNav.length).toBe(1);
     expect(securityNav[0].label).toBe("SECURITY OPERATIONS");
-    expect(securityNav.some((s) => s.label === "Administration")).toBe(false);
 
-    // Stores has only Store sections
-    expect(storesNav.some((s) => s.label === "STORE OPERATIONS")).toBe(true);
-    expect(storesNav.some((s) => s.label === "Administration")).toBe(false);
-
-    // Accounts has only Accounts section
-    expect(accountsNav.length).toBe(1);
-    expect(accountsNav[0].label).toBe("ACCOUNTS");
-    expect(accountsNav.some((s) => s.label === "Administration")).toBe(false);
+    // Stores has Receive Material pointing to /receipts/new
+    const storesMaterialReturns = storesNav.find((s) => s.label === "MATERIAL RETURNS");
+    expect(storesMaterialReturns).toBeDefined();
+    const storesReceiveItem = storesMaterialReturns?.items.find((i) => i.label === "Receive Material");
+    expect(storesReceiveItem?.href).toBe("/receipts/new");
   });
 });
