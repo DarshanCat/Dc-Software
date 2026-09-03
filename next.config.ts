@@ -9,10 +9,7 @@ const nextConfig: NextConfig = {
     if (dev) {
       config.watchOptions = {
         ...(config.watchOptions || {}),
-        ignored: [
-          "**/.git/**",
-          "**/.next/**",
-        ],
+        ignored: /[\\/]\.(git|next|node_modules)[\\/]/,
       };
     }
     return config;
