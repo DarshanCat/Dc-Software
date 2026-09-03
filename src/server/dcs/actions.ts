@@ -12,6 +12,22 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { notifyUsersWithPermission, createNotification } from "@/server/notifications/service";
 
+// Helper to safely verify permissions without throwing unhandled exceptions into Next.js action boundary
+async function checkPermission(
+  user: any,
+  permission: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!user) return { ok: false, error: "Not signed in." };
+  try {
+    await requirePermission(user, permission);
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) return { ok: false, error: "Not signed in." };
+    if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to perform this action." };
+    return { ok: false, error: e instanceof Error ? e.message : "Permission denied." };
+  }
+}
+
 // ================= SCHEMAS =================
 
 const createDcSchema = z.object({
@@ -48,14 +64,8 @@ export type ActionResult =
 
 export async function createDc(input: CreateDcInput): Promise<ActionResult> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  try {
-    await requirePermission(user, PERMISSIONS.DC_CREATE);
-  } catch (e) {
-    if (e instanceof UnauthenticatedError) return { ok: false, error: "Not signed in." };
-    if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to create DCs." };
-    throw e;
-  }
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_CREATE);
+  if (!permCheck.ok) return permCheck;
 
   const parsed = createDcSchema.safeParse(input);
   if (!parsed.success) {
@@ -107,7 +117,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         remarks: data.remarks || null,
         preparedByName: data.preparedByName.trim(),
         status: "DRAFT",
-        createdBy: user.id,
+        createdBy: user!.id,
         qrToken,
       },
     });
@@ -116,7 +126,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
       data: {
         dcId: dc.id,
         toStatus: "DRAFT",
-        changedBy: user.id,
+        changedBy: user!.id,
         reason: "DC Created",
       },
     });
@@ -125,7 +135,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
   });
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "DC_CREATED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
@@ -141,7 +151,8 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
 
 export async function submitForApproval(dcId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_CREATE);
+  if (!permCheck.ok) return permCheck;
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
@@ -157,14 +168,14 @@ export async function submitForApproval(dcId: string): Promise<{ ok: boolean; er
         dcId,
         fromStatus: "DRAFT",
         toStatus: "PENDING_APPROVAL",
-        changedBy: user.id,
+        changedBy: user!.id,
         reason: "Submitted for approval",
       },
     }),
   ]);
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "DC_SUBMITTED_FOR_APPROVAL",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
@@ -194,8 +205,8 @@ export async function submitForApproval(dcId: string): Promise<{ ok: boolean; er
 
 export async function rejectDcToDraft(dcId: string, reason: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  await requirePermission(user, PERMISSIONS.DC_APPROVE);
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_APPROVE);
+  if (!permCheck.ok) return permCheck;
 
   const trimmedReason = (reason || "").trim();
   if (!trimmedReason) return { ok: false, error: "Return remarks are mandatory." };
@@ -214,14 +225,14 @@ export async function rejectDcToDraft(dcId: string, reason: string): Promise<{ o
         dcId,
         fromStatus: "PENDING_APPROVAL",
         toStatus: "DRAFT",
-        changedBy: user.id,
+        changedBy: user!.id,
         reason: `Returned to DRAFT: ${trimmedReason}`,
       },
     }),
   ]);
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "DC_RETURNED_TO_DRAFT",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
@@ -250,8 +261,8 @@ export async function rejectDcToDraft(dcId: string, reason: string): Promise<{ o
 
 export async function approveDc(dcId: string, approvedByName: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  await requirePermission(user, PERMISSIONS.DC_APPROVE);
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_APPROVE);
+  if (!permCheck.ok) return permCheck;
 
   const trimmed = (approvedByName || "").trim();
   if (!trimmed) return { ok: false, error: "Approved By Name is required." };
@@ -261,7 +272,7 @@ export async function approveDc(dcId: string, approvedByName: string): Promise<{
   if (dc.status !== "PENDING_APPROVAL") return { ok: false, error: `Only PENDING_APPROVAL DCs can be approved. Current status: ${dc.status}` };
 
   // Self-approval control rule: creator cannot approve own DC unless ADMIN
-  if (dc.createdBy === user.id && !user.roleKeys.includes("ADMIN")) {
+  if (dc.createdBy === user!.id && !user!.roleKeys.includes("ADMIN")) {
     return { ok: false, error: "You cannot approve a Delivery Challan that you created." };
   }
 
@@ -271,7 +282,7 @@ export async function approveDc(dcId: string, approvedByName: string): Promise<{
       where: { id: dcId },
       data: {
         status: "APPROVED",
-        approvedBy: user.id,
+        approvedBy: user!.id,
         approvedByName: trimmed,
         approvedAt: now,
       },
@@ -281,14 +292,14 @@ export async function approveDc(dcId: string, approvedByName: string): Promise<{
         dcId,
         fromStatus: "PENDING_APPROVAL",
         toStatus: "APPROVED",
-        changedBy: user.id,
+        changedBy: user!.id,
         reason: `Approved by ${trimmed}`,
       },
     }),
   ]);
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "DC_APPROVED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
@@ -328,8 +339,8 @@ export async function submitSecurityDispatch(
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  await requirePermission(user, PERMISSIONS.SECURITY_DISPATCH);
+  const permCheck = await checkPermission(user, PERMISSIONS.SECURITY_DISPATCH);
+  if (!permCheck.ok) return permCheck;
 
   if (input.dispatchQuantity <= 0) return { ok: false, error: "Dispatch quantity must be greater than zero." };
 
@@ -349,9 +360,9 @@ export async function submitSecurityDispatch(
         securityDispatchVehicleNumber: input.vehicleNumber || null,
         securityDispatchTransporter: input.transporter || null,
         securityDispatchRemarks: input.remarks || null,
-        securityDispatchedBy: user.id,
+        securityDispatchedBy: user!.id,
         securityDispatchedAt: now,
-        dispatchedBy: user.id,
+        dispatchedBy: user!.id,
         dispatchedAt: now,
         vehicleNumber: input.vehicleNumber || dc.vehicleNumber,
         transporter: input.transporter || dc.transporter,
@@ -362,14 +373,14 @@ export async function submitSecurityDispatch(
         dcId,
         fromStatus: "APPROVED",
         toStatus: "DISPATCHED",
-        changedBy: user.id,
+        changedBy: user!.id,
         reason: `Security Dispatch recorded (${input.dispatchQuantity})`,
       },
     }),
   ]);
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "SECURITY_DISPATCH_SUBMITTED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
@@ -386,8 +397,8 @@ export async function submitSecurityDispatch(
 
 export async function confirmDcAtVendor(dcId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  await requirePermission(user, PERMISSIONS.DC_VIEW);
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_VIEW);
+  if (!permCheck.ok) return permCheck;
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
@@ -403,14 +414,14 @@ export async function confirmDcAtVendor(dcId: string): Promise<{ ok: boolean; er
         dcId,
         fromStatus: "DISPATCHED",
         toStatus: "AT_VENDOR",
-        changedBy: user.id,
+        changedBy: user!.id,
         reason: "Vendor receipt confirmed",
       },
     }),
   ]);
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "VENDOR_RECEIPT_CONFIRMED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
@@ -439,8 +450,8 @@ export async function submitSecurityReturn(
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  await requirePermission(user, PERMISSIONS.SECURITY_RETURN);
+  const permCheck = await checkPermission(user, PERMISSIONS.SECURITY_RETURN);
+  if (!permCheck.ok) return permCheck;
 
   if (input.securityFgQuantity < 0 || input.securityRejectionQuantity < 0 || input.securityScrapQuantity < 0) {
     return { ok: false, error: "Quantities cannot be negative." };
@@ -466,7 +477,7 @@ export async function submitSecurityReturn(
         securityVehicleNumber: input.vehicleNumber || null,
         securityTransporter: input.transporter || null,
         securityReturnRemarks: input.remarks || null,
-        securityEnteredBy: user.id,
+        securityEnteredBy: user!.id,
         securityEnteredAt: now,
       },
     }),
@@ -475,14 +486,14 @@ export async function submitSecurityReturn(
         dcId,
         fromStatus: dc.status,
         toStatus: "SECURITY_RETURNED",
-        changedBy: user.id,
+        changedBy: user!.id,
         reason: `Security Return recorded (FG: ${input.securityFgQuantity}, Rej: ${input.securityRejectionQuantity}, Scrap: ${input.securityScrapQuantity})`,
       },
     }),
   ]);
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "SECURITY_RETURN_SUBMITTED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
@@ -520,8 +531,8 @@ export async function submitStoreVerification(
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  await requirePermission(user, PERMISSIONS.STORE_VERIFY);
+  const permCheck = await checkPermission(user, PERMISSIONS.STORE_VERIFY);
+  if (!permCheck.ok) return permCheck;
 
   if (input.storeVerifiedFgQuantity < 0 || input.storeVerifiedRejectionQuantity < 0 || input.storeVerifiedScrapQuantity < 0) {
     return { ok: false, error: "Verified quantities cannot be negative." };
@@ -543,7 +554,7 @@ export async function submitStoreVerification(
         storeVerifiedRejectionQuantity: new Prisma.Decimal(input.storeVerifiedRejectionQuantity),
         storeVerifiedScrapQuantity: new Prisma.Decimal(input.storeVerifiedScrapQuantity),
         storeRemarks: input.storeRemarks || null,
-        storeVerifiedBy: user.id,
+        storeVerifiedBy: user!.id,
         storeVerifiedAt: now,
       },
     }),
@@ -552,14 +563,14 @@ export async function submitStoreVerification(
         dcId,
         fromStatus: "SECURITY_RETURNED",
         toStatus: "STORE_VERIFIED",
-        changedBy: user.id,
+        changedBy: user!.id,
         reason: `Store Verification completed (FG: ${input.storeVerifiedFgQuantity}, Rej: ${input.storeVerifiedRejectionQuantity}, Scrap: ${input.storeVerifiedScrapQuantity})`,
       },
     }),
   ]);
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "STORE_VERIFICATION_SUBMITTED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
@@ -597,8 +608,8 @@ export async function submitManagerFinalApproval(
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  await requirePermission(user, PERMISSIONS.MANAGER_FINAL_APPROVE);
+  const permCheck = await checkPermission(user, PERMISSIONS.MANAGER_FINAL_APPROVE);
+  if (!permCheck.ok) return permCheck;
 
   if (input.finalApprovedFgQuantity < 0 || input.finalApprovedRejectionQuantity < 0 || input.finalApprovedScrapQuantity < 0) {
     return { ok: false, error: "Final approved quantities cannot be negative." };
@@ -640,7 +651,7 @@ export async function submitManagerFinalApproval(
         finalApprovedRejectionQuantity: new Prisma.Decimal(input.finalApprovedRejectionQuantity),
         finalApprovedScrapQuantity: new Prisma.Decimal(input.finalApprovedScrapQuantity),
         managerCorrectionRemarks: remarks || null,
-        finalApprovedBy: user.id,
+        finalApprovedBy: user!.id,
         finalApprovedAt: now,
         finalPayableAmount: new Prisma.Decimal(finalPayable),
       },
@@ -650,14 +661,14 @@ export async function submitManagerFinalApproval(
         dcId,
         fromStatus: "STORE_VERIFIED",
         toStatus: "FINAL_APPROVED",
-        changedBy: user.id,
+        changedBy: user!.id,
         reason: `Final approved quantities set (Payable: ₹${finalPayable})`,
       },
     }),
   ]);
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "MANAGER_FINAL_APPROVAL_SUBMITTED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
@@ -674,8 +685,8 @@ export async function submitManagerFinalApproval(
 
 export async function submitPaymentApproval(dcId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  await requirePermission(user, PERMISSIONS.PAYMENT_APPROVE);
+  const permCheck = await checkPermission(user, PERMISSIONS.PAYMENT_APPROVE);
+  if (!permCheck.ok) return permCheck;
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
@@ -689,7 +700,7 @@ export async function submitPaymentApproval(dcId: string): Promise<{ ok: boolean
       where: { id: dcId },
       data: {
         status: "APPROVED_FOR_PAYMENT",
-        approvedForPaymentBy: user.id,
+        approvedForPaymentBy: user!.id,
         approvedForPaymentAt: now,
       },
     }),
@@ -698,14 +709,14 @@ export async function submitPaymentApproval(dcId: string): Promise<{ ok: boolean
         dcId,
         fromStatus: "FINAL_APPROVED",
         toStatus: "APPROVED_FOR_PAYMENT",
-        changedBy: user.id,
+        changedBy: user!.id,
         reason: "Approved for payment",
       },
     }),
   ]);
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "DC_APPROVED_FOR_PAYMENT",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
@@ -745,8 +756,8 @@ export async function submitAccountsPaymentEntry(
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  await requirePermission(user, PERMISSIONS.ACCOUNTS_PAYMENT_ENTRY);
+  const permCheck = await checkPermission(user, PERMISSIONS.ACCOUNTS_PAYMENT_ENTRY);
+  if (!permCheck.ok) return permCheck;
 
   const missing: string[] = [];
   const invNum = (input.invoiceNumber || "").trim();
@@ -780,7 +791,7 @@ export async function submitAccountsPaymentEntry(
   });
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "ACCOUNTS_PAYMENT_ENTRY_RECORDED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
@@ -805,8 +816,8 @@ export async function updateDcTransportDetails(
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  await requirePermission(user, PERMISSIONS.DC_EDIT);
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_EDIT);
+  if (!permCheck.ok) return permCheck;
 
   await prisma.deliveryChallan.update({
     where: { id: dcId },
@@ -826,8 +837,8 @@ export async function updateDcTransportDetails(
 
 export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-  await requirePermission(user, PERMISSIONS.DC_CLOSE);
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_CLOSE);
+  if (!permCheck.ok) return permCheck;
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
@@ -856,7 +867,7 @@ export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: stri
       where: { id: dcId },
       data: {
         status: "CLOSED",
-        closedBy: user.id,
+        closedBy: user!.id,
         closedAt: now,
       },
     }),
@@ -865,14 +876,14 @@ export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: stri
         dcId,
         fromStatus: "APPROVED_FOR_PAYMENT",
         toStatus: "CLOSED",
-        changedBy: user.id,
+        changedBy: user!.id,
         reason: "DC Closed after mandatory payment verification",
       },
     }),
   ]);
 
   await writeAudit(prisma, {
-    userId: user.id,
+    userId: user!.id,
     action: "DC_CLOSED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
