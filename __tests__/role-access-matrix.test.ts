@@ -30,7 +30,7 @@ describe("Role-Based Navigation, Route Security & Matrix", () => {
     expect(items).toContain("Security Dashboard");
     expect(items).toContain("Waiting for Dispatch");
     expect(items).toContain("Dispatched / At Vendor");
-    expect(items).toContain("Waiting for Return Entry");
+    expect(items).toContain("Material Inward / Return");
     expect(items).toContain("My Security Entries");
   });
 
@@ -46,39 +46,42 @@ describe("Role-Based Navigation, Route Security & Matrix", () => {
     const storeItems = nav.find((s) => s.label === "Store Operations")!.items.map((i) => i.label);
     expect(storeItems).toContain("Store Dashboard");
     expect(storeItems).toContain("Create DC");
-    expect(storeItems).toContain("My Drafts");
+    expect(storeItems).toContain("Draft DCs");
     expect(storeItems).toContain("Pending Approval");
-    expect(storeItems).toContain("Store Verification Queue");
+    expect(storeItems).toContain("Store Verification");
   });
 
-  it("MANAGEMENT receives Management Portal navigation ONLY", () => {
+  it("MANAGEMENT receives Management Dashboard & Delivery Challans navigation ONLY", () => {
     const nav = getNavigationForUser(["MANAGEMENT"]);
     const labels = nav.map((s) => s.label);
 
-    expect(labels).toContain("Management Portal");
-    expect(labels).toContain("Reconciliation & Reports");
+    expect(labels).toContain("Management Dashboard");
+    expect(labels).toContain("Delivery Challans");
     expect(labels).not.toContain("Administration");
+    expect(labels).not.toContain("Accounts");
 
-    const items = nav.find((s) => s.label === "Management Portal")!.items.map((i) => i.label);
-    expect(items).toContain("Management Dashboard");
-    expect(items).toContain("Pending Approvals");
-    expect(items).toContain("Final Approval Queue");
-    expect(items).toContain("Payment Approval Queue");
-    expect(items).toContain("All DCs");
+    const items = nav.find((s) => s.label === "Management Dashboard")!.items.map((i) => i.label);
+    expect(items).toContain("Overview");
+    expect(items).toContain("Pending DC Approval");
+    expect(items).toContain("Store Verified / Final Approval");
+    expect(items).toContain("Discrepancies");
+    expect(items).toContain("Payment Approval");
+    expect(items).toContain("DC History");
   });
 
-  it("ACCOUNTS receives Accounts Financial Portal navigation ONLY", () => {
+  it("ACCOUNTS receives Accounts Portal navigation ONLY", () => {
     const nav = getNavigationForUser(["ACCOUNTS"]);
     const labels = nav.map((s) => s.label);
 
-    expect(labels).toEqual(["Accounts Portal"]);
+    expect(labels).toEqual(["Accounts"]);
     expect(labels).not.toContain("Administration");
     expect(labels).not.toContain("Masters");
 
     const items = nav[0].items.map((i) => i.label);
     expect(items).toContain("Accounts Dashboard");
     expect(items).toContain("Approved for Payment");
-    expect(items).toContain("Payment Entry & Close DC");
+    expect(items).toContain("Payment Entry");
+    expect(items).toContain("Ready to Close");
     expect(items).toContain("Closed DCs");
     expect(items).toContain("Payment History");
   });

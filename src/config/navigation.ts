@@ -118,7 +118,7 @@ export const SECURITY_NAVIGATION: NavSection[] = [
       { label: "Security Dashboard", href: "/security/dashboard" },
       { label: "Waiting for Dispatch", href: "/dcs?status=APPROVED" },
       { label: "Dispatched / At Vendor", href: "/dcs?status=DISPATCHED" },
-      { label: "Waiting for Return Entry", href: "/dcs?status=AT_VENDOR" },
+      { label: "Material Inward / Return", href: "/dcs?status=AT_VENDOR" },
       { label: "My Security Entries", href: "/dcs?status=SECURITY_RETURNED" },
     ],
   },
@@ -130,10 +130,10 @@ export const STORES_NAVIGATION: NavSection[] = [
     items: [
       { label: "Store Dashboard", href: "/stores/dashboard" },
       { label: "Create DC", href: "/dcs/new" },
-      { label: "My Drafts", href: "/dcs?status=DRAFT" },
+      { label: "Draft DCs", href: "/dcs?status=DRAFT" },
       { label: "Pending Approval", href: "/dcs?status=PENDING_APPROVAL" },
-      { label: "Store Verification Queue", href: "/dcs?status=SECURITY_RETURNED" },
-      { label: "My Completed Verifications", href: "/dcs?status=STORE_VERIFIED" },
+      { label: "Store Verification", href: "/dcs?status=SECURITY_RETURNED" },
+      { label: "Completed Verification", href: "/dcs?status=STORE_VERIFIED" },
     ],
   },
   {
@@ -147,35 +147,39 @@ export const STORES_NAVIGATION: NavSection[] = [
 
 export const MANAGEMENT_NAVIGATION: NavSection[] = [
   {
-    label: "Management Portal",
+    label: "Management Dashboard",
     items: [
-      { label: "Management Dashboard", href: "/management/dashboard" },
-      { label: "Pending Approvals", href: "/dcs?status=PENDING_APPROVAL" },
-      { label: "Final Approval Queue", href: "/dcs?status=STORE_VERIFIED" },
-      { label: "Payment Approval Queue", href: "/dcs?status=FINAL_APPROVED" },
-      { label: "All DCs", href: "/dcs" },
-      { label: "Approved", href: "/dcs?status=APPROVED" },
-      { label: "Approved for Payment", href: "/dcs?status=APPROVED_FOR_PAYMENT" },
-      { label: "Closed DCs", href: "/dcs?status=CLOSED" },
+      { label: "Overview", href: "/management/dashboard" },
+      { label: "Pending DC Approval", href: "/dcs?status=PENDING_APPROVAL" },
+      { label: "DCs Requiring Correction", href: "/dcs?status=DRAFT" },
+      { label: "Store Verified / Final Approval", href: "/dcs?status=STORE_VERIFIED" },
+      { label: "Discrepancies", href: "/dcs/close?stage=manager" },
+      { label: "Payment Approval", href: "/dcs?status=FINAL_APPROVED" },
+      { label: "DC History", href: "/dcs" },
     ],
   },
   {
-    label: "Reconciliation & Reports",
+    label: "Delivery Challans",
     items: [
-      { label: "Exceptions", href: "/dashboard/exceptions" },
-      { label: "DC Register", href: "/reports/dc-register" },
-      { label: "Vendor Outstanding", href: "/reports/vendor-outstanding" },
+      { label: "Create DC", href: "/dcs/new" },
+      { label: "Draft DCs", href: "/dcs?status=DRAFT" },
+      { label: "Pending Approval", href: "/dcs?status=PENDING_APPROVAL" },
+      { label: "Approved DCs", href: "/dcs?status=APPROVED" },
+      { label: "Final Approval", href: "/dcs?status=STORE_VERIFIED" },
+      { label: "Approved for Payment", href: "/dcs?status=APPROVED_FOR_PAYMENT" },
+      { label: "DC History", href: "/dcs" },
     ],
   },
 ];
 
 export const ACCOUNTS_NAVIGATION: NavSection[] = [
   {
-    label: "Accounts Portal",
+    label: "Accounts",
     items: [
       { label: "Accounts Dashboard", href: "/accounts/dashboard" },
       { label: "Approved for Payment", href: "/dcs?status=APPROVED_FOR_PAYMENT" },
-      { label: "Payment Entry & Close DC", href: "/dcs/close" },
+      { label: "Payment Entry", href: "/dcs/close" },
+      { label: "Ready to Close", href: "/dcs/close?stage=accounts" },
       { label: "Closed DCs", href: "/dcs?status=CLOSED" },
       { label: "Payment History", href: "/reports/dc-register" },
     ],
