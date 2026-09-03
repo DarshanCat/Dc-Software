@@ -1,0 +1,66 @@
+-- CreateEnum
+DO $$ BEGIN
+  CREATE TYPE "PricingBasis" AS ENUM ('RM', 'FG');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+-- AlterEnum
+ALTER TYPE "DcStatus" ADD VALUE IF NOT EXISTS 'SECURITY_RETURNED';
+ALTER TYPE "DcStatus" ADD VALUE IF NOT EXISTS 'STORE_VERIFIED';
+ALTER TYPE "DcStatus" ADD VALUE IF NOT EXISTS 'FINAL_APPROVED';
+ALTER TYPE "DcStatus" ADD VALUE IF NOT EXISTS 'APPROVED_FOR_PAYMENT';
+
+-- AlterTable
+ALTER TABLE "DeliveryChallan"
+ADD COLUMN IF NOT EXISTS "pricingBasis" "PricingBasis",
+ADD COLUMN IF NOT EXISTS "ratePerQuantity" DECIMAL(12,2),
+ADD COLUMN IF NOT EXISTS "expectedAmount" DECIMAL(14,2),
+
+ADD COLUMN IF NOT EXISTS "securityDispatchQuantity" DECIMAL(12,3),
+ADD COLUMN IF NOT EXISTS "securityDispatchDate" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "securityDispatchTime" TEXT,
+ADD COLUMN IF NOT EXISTS "securityDispatchVehicleNumber" TEXT,
+ADD COLUMN IF NOT EXISTS "securityDispatchTransporter" TEXT,
+ADD COLUMN IF NOT EXISTS "securityDispatchRemarks" TEXT,
+ADD COLUMN IF NOT EXISTS "securityDispatchedBy" TEXT,
+ADD COLUMN IF NOT EXISTS "securityDispatchedAt" TIMESTAMP(3),
+
+ADD COLUMN IF NOT EXISTS "securityFgQuantity" DECIMAL(12,3),
+ADD COLUMN IF NOT EXISTS "securityRejectionQuantity" DECIMAL(12,3),
+ADD COLUMN IF NOT EXISTS "securityScrapQuantity" DECIMAL(12,3),
+ADD COLUMN IF NOT EXISTS "securityReturnDate" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "securityReturnTime" TEXT,
+ADD COLUMN IF NOT EXISTS "securityVehicleNumber" TEXT,
+ADD COLUMN IF NOT EXISTS "securityTransporter" TEXT,
+ADD COLUMN IF NOT EXISTS "securityReturnRemarks" TEXT,
+ADD COLUMN IF NOT EXISTS "securityEnteredBy" TEXT,
+ADD COLUMN IF NOT EXISTS "securityEnteredAt" TIMESTAMP(3),
+
+ADD COLUMN IF NOT EXISTS "storeVerifiedFgQuantity" DECIMAL(12,3),
+ADD COLUMN IF NOT EXISTS "storeVerifiedRejectionQuantity" DECIMAL(12,3),
+ADD COLUMN IF NOT EXISTS "storeVerifiedScrapQuantity" DECIMAL(12,3),
+ADD COLUMN IF NOT EXISTS "storeRemarks" TEXT,
+ADD COLUMN IF NOT EXISTS "storeVerifiedBy" TEXT,
+ADD COLUMN IF NOT EXISTS "storeVerifiedAt" TIMESTAMP(3),
+
+ADD COLUMN IF NOT EXISTS "finalApprovedFgQuantity" DECIMAL(12,3),
+ADD COLUMN IF NOT EXISTS "finalApprovedRejectionQuantity" DECIMAL(12,3),
+ADD COLUMN IF NOT EXISTS "finalApprovedScrapQuantity" DECIMAL(12,3),
+ADD COLUMN IF NOT EXISTS "managerCorrectionRemarks" TEXT,
+ADD COLUMN IF NOT EXISTS "finalApprovedBy" TEXT,
+ADD COLUMN IF NOT EXISTS "finalApprovedAt" TIMESTAMP(3),
+
+ADD COLUMN IF NOT EXISTS "approvedForPaymentBy" TEXT,
+ADD COLUMN IF NOT EXISTS "approvedForPaymentAt" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "finalPayableAmount" DECIMAL(14,2),
+
+ADD COLUMN IF NOT EXISTS "invoiceNumber" TEXT,
+ADD COLUMN IF NOT EXISTS "invoiceDate" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "invoiceAmount" DECIMAL(14,2),
+ADD COLUMN IF NOT EXISTS "paymentReferenceNumber" TEXT,
+ADD COLUMN IF NOT EXISTS "paymentDate" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "paymentRemarks" TEXT,
+
+ADD COLUMN IF NOT EXISTS "closedBy" TEXT,
+ADD COLUMN IF NOT EXISTS "closedAt" TIMESTAMP(3);
