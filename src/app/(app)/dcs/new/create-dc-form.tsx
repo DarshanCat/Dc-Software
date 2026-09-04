@@ -1,317 +1,475 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createDc, type CreateDcInput } from "@/server/dcs/actions";
+import { createOutwardDc, CreateOutwardDcInput } from "@/server/dcs/extended-actions";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 
-type Opt = { id: string; name: string };
+interface VendorOption {
+  id: string;
+  vendorCode: string;
+  vendorName: string;
+  address: string | null;
+  gstNumber: string | null;
+  city: string | null;
+  state: string | null;
+}
 
-const PURPOSES = [
-  "JOB_WORK", "MACHINING", "HEAT_TREATMENT", "SURFACE_TREATMENT",
-  "REPAIR", "SAMPLE", "TRIAL", "SUBCONTRACTING", "OTHER",
-];
+interface ItemOption {
+  id: string;
+  itemCode: string;
+  itemName: string;
+  description: string | null;
+  rate: any;
+}
 
-export function CreateDcForm({ vendors, processes }: {
-  vendors: Opt[]; processes: Opt[]; items?: Opt[]; standards?: unknown[];
-}) {
+interface Props {
+  vendors: VendorOption[];
+  items?: ItemOption[];
+}
+
+export function CreateDcForm({ vendors, items = [] }: Props) {
   const router = useRouter();
-  const [form, setForm] = useState({
-    woNumber: "",
-    partNumber: "",
-    rmQuantity: "",
-    returnFgQuantity: "",
-    heatNumber: "",
-    vendorId: "",
-    processId: "",
-    purpose: "JOB_WORK",
-    pricingBasis: "" as "RM" | "FG" | "",
-    ratePerQuantity: "",
-    preparedByName: "",
-    expectedReturnDate: "",
-    remarks: "",
-  });
+
+  // Form state according to new business requirements
+  const [selectedVendorId, setSelectedVendorId] = useState("");
+  const [documentDate, setDocumentDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [department, setDepartment] = useState("PRODUCTION");
+
+  const [woNumber, setWoNumber] = useState("");
+  const [selectedPartId, setSelectedPartId] = useState("");
+  const [customPartNumber, setCustomPartNumber] = useState("");
+  const [partDescription, setPartDescription] = useState("");
+
+  const [outwardQtyRw, setOutwardQtyRw] = useState("");
+  const [returningFgQuantity, setReturningFgQuantity] = useState("");
+
+  const [outwardWeight, setOutwardWeight] = useState("");
+  const [outwardGatingWeight, setOutwardGatingWeight] = useState("");
+  const [outwardBoringWeight, setOutwardBoringWeight] = useState("");
+
+  const [length, setLength] = useState("");
+  const [width, setWidth] = useState("");
+  const [height, setHeight] = useState("");
+
+  const [pricing, setPricing] = useState("");
+  const [remarks, setRemarks] = useState("");
+
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  // Auto-population calculations
+  const selectedVendor = vendors.find((v) => v.id === selectedVendorId);
 
-  const calculatedAmount = useMemo(() => {
-    if (!form.pricingBasis || !form.ratePerQuantity || Number(form.ratePerQuantity) <= 0) return 0;
-    const rate = Number(form.ratePerQuantity);
-    const qty = form.pricingBasis === "RM" ? Number(form.rmQuantity) : Number(form.returnFgQuantity);
-    if (!qty || qty <= 0) return 0;
-    return Number((qty * rate).toFixed(2));
-  }, [form.pricingBasis, form.ratePerQuantity, form.rmQuantity, form.returnFgQuantity]);
-
-  async function submit() {
-    if (!form.woNumber.trim()) {
-      setError("WO ID is required.");
-      return;
-    }
-    if (!form.partNumber.trim()) {
-      setError("Part Number is required.");
-      return;
-    }
-    if (!form.vendorId) {
-      setError("Vendor is required.");
-      return;
-    }
-    if (!form.processId) {
-      setError("Process is required.");
-      return;
-    }
-    if (!form.rmQuantity || Number(form.rmQuantity) <= 0) {
-      setError("RM Qty must be greater than 0.");
-      return;
-    }
-    if (!form.returnFgQuantity || Number(form.returnFgQuantity) <= 0) {
-      setError("Return FG Qty must be greater than 0.");
-      return;
-    }
-    if (!form.heatNumber.trim()) {
-      setError("Heat Number is required.");
-      return;
-    }
-    if (!form.pricingBasis) {
-      setError("Please select a pricing basis: RM Quantity or FG Quantity.");
-      return;
-    }
-    if (!form.ratePerQuantity || Number(form.ratePerQuantity) <= 0) {
-      setError("Rate Per Quantity must be greater than zero.");
-      return;
-    }
-    if (!form.preparedByName.trim()) {
-      setError("Prepared By Name is required.");
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    const payload = {
-      woNumber: form.woNumber.trim(),
-      partNumber: form.partNumber.trim(),
-      rmQuantity: Number(form.rmQuantity),
-      returnFgQuantity: Number(form.returnFgQuantity),
-      heatNumber: form.heatNumber.trim(),
-      vendorId: form.vendorId,
-      processId: form.processId,
-      purpose: form.purpose,
-      pricingBasis: form.pricingBasis as "RM" | "FG",
-      ratePerQuantity: Number(form.ratePerQuantity),
-      preparedByName: form.preparedByName.trim(),
-      expectedReturnDate: form.expectedReturnDate,
-      remarks: form.remarks,
-    };
-
-    const res = await createDc(payload as unknown as CreateDcInput);
-    setSaving(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
-    router.push(`/dcs/${res.dcId}`);
-    router.refresh();
+  function handleVendorChange(vendorId: string) {
+    setSelectedVendorId(vendorId);
   }
 
-  const Select = ({ k, label, opts, placeholder }: { k: string; label: string; opts: Opt[]; placeholder: string }) => (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-slate-600">{label}</label>
-      <select
-        className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
-        value={(form as never)[k]}
-        onChange={(e) => set(k, e.target.value)}
-      >
-        <option value="">{placeholder}</option>
-        {opts.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-      </select>
-    </div>
-  );
+  function handlePartChange(partId: string) {
+    setSelectedPartId(partId);
+    if (!partId) {
+      setPartDescription("");
+      setPricing("");
+      return;
+    }
+    const foundItem = items.find((i) => i.id === partId);
+    if (foundItem) {
+      setCustomPartNumber(foundItem.itemCode);
+      setPartDescription(foundItem.description || foundItem.itemName || "");
+      if (foundItem.rate) setPricing(String(foundItem.rate));
+    }
+  }
+
+  async function handleSubmit(isDraft: boolean) {
+    setError(null);
+    setSuccess(null);
+
+    if (!selectedVendorId) return setError("Supplier (Vendor) is mandatory.");
+    if (!woNumber.trim()) return setError("WO ID (Work Order) is mandatory.");
+    const partNum = customPartNumber.trim() || (items.find((i) => i.id === selectedPartId)?.itemCode || "");
+    if (!partNum) return setError("Part Number is mandatory.");
+
+    setLoading(true);
+
+    const payload: CreateOutwardDcInput = {
+      vendorId: selectedVendorId,
+      department,
+      woNumber: woNumber.trim(),
+      partNumber: partNum,
+      partDescription: partDescription.trim() || undefined,
+      pricing: pricing ? parseFloat(pricing) : undefined,
+      outwardWeight: outwardWeight ? parseFloat(outwardWeight) : undefined,
+      outwardGatingWeight: outwardGatingWeight ? parseFloat(outwardGatingWeight) : undefined,
+      outwardQtyRw: outwardQtyRw ? parseFloat(outwardQtyRw) : undefined,
+      returningFgQuantity: returningFgQuantity ? parseFloat(returningFgQuantity) : undefined,
+      length: length ? parseFloat(length) : undefined,
+      width: width ? parseFloat(width) : undefined,
+      height: height ? parseFloat(height) : undefined,
+      outwardBoringWeight: outwardBoringWeight ? parseFloat(outwardBoringWeight) : undefined,
+      remarks: remarks.trim() || undefined,
+    };
+
+    const res = await createOutwardDc(payload);
+    setLoading(false);
+
+    if (!res.ok) {
+      setError(res.error || "An error occurred while creating Outward DC.");
+    } else {
+      setSuccess(`Outward DC ${res.dcNumber} created successfully.`);
+      setTimeout(() => router.push(`/dcs/${res.dcId}`), 1000);
+    }
+  }
 
   return (
     <div className="space-y-6">
-      {/* BASIC & MATERIAL SECTION */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-slate-900 border-b border-slate-100 pb-2">
-          Basic &amp; Material Information
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Work Order Number *</label>
-            <Input
-              value={form.woNumber}
-              onChange={(e) => set("woNumber", e.target.value)}
-              placeholder="e.g. WO-2026-00452"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Part Number *</label>
-            <Input
-              value={form.partNumber}
-              onChange={(e) => set("partNumber", e.target.value)}
-              placeholder="e.g. PART-VJS-4029"
-            />
-          </div>
-          <Select k="vendorId" label="Vendor *" opts={vendors} placeholder="Select vendor" />
-          <Select k="processId" label="Process *" opts={processes} placeholder="Select process" />
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">RM Quantity (Sent) *</label>
-            <Input
-              type="number"
-              step="0.001"
-              min="0.001"
-              value={form.rmQuantity}
-              onChange={(e) => set("rmQuantity", e.target.value)}
-              placeholder="Raw material quantity sent to vendor"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Expected Return FG Quantity *</label>
-            <Input
-              type="number"
-              step="0.001"
-              min="0.001"
-              value={form.returnFgQuantity}
-              onChange={(e) => set("returnFgQuantity", e.target.value)}
-              placeholder="Finished goods quantity expected back"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Heat / Batch Number *</label>
-            <Input
-              value={form.heatNumber}
-              onChange={(e) => set("heatNumber", e.target.value)}
-              placeholder="e.g. HEAT-2026-X9"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Purpose *</label>
-            <select
-              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"
-              value={form.purpose}
-              onChange={(e) => set("purpose", e.target.value)}
-            >
-              {PURPOSES.map((p) => <option key={p} value={p}>{p.replace(/_/g, " ")}</option>)}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* MANDATORY PRICING SECTION */}
-      <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-5 space-y-4">
-        <h2 className="text-sm font-bold text-blue-900 border-b border-blue-200/60 pb-2">
-          Mandatory Pricing &amp; Commercial Terms
-        </h2>
-        
-        <div className="space-y-2">
-          <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
-            Price Based On <span className="text-red-500">*</span>
-          </label>
-          <div className="flex items-center gap-6 pt-1">
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-800 cursor-pointer">
-              <input
-                type="radio"
-                name="pricingBasis"
-                value="RM"
-                checked={form.pricingBasis === "RM"}
-                onChange={() => set("pricingBasis", "RM")}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-              />
-              RM Quantity (Sent)
-            </label>
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-800 cursor-pointer">
-              <input
-                type="radio"
-                name="pricingBasis"
-                value="FG"
-                checked={form.pricingBasis === "FG"}
-                onChange={() => set("pricingBasis", "FG")}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-              />
-              FG Quantity (Returned)
-            </label>
-          </div>
-          <p className="text-xs text-slate-500">
-            Choose whether vendor processing is charged per unit of Raw Material sent or Finished Goods returned.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">
-              Rate Per Quantity (₹) <span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={form.ratePerQuantity}
-              onChange={(e) => set("ratePerQuantity", e.target.value)}
-              placeholder="Enter rate (e.g. 1000.00)"
-              className="bg-white"
-            />
-          </div>
-
-          <div className="rounded-md border border-blue-200 bg-white p-3 flex flex-col justify-center">
-            <span className="text-xs text-slate-500">Calculated Expected Total Amount</span>
-            <span className="text-xl font-bold font-mono text-blue-900">
-              ₹{calculatedAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-            </span>
-            {form.pricingBasis && Number(form.ratePerQuantity) > 0 && (
-              <span className="text-[11px] text-slate-400">
-                ({form.pricingBasis === "RM" ? `${form.rmQuantity || 0} RM` : `${form.returnFgQuantity || 0} FG`} × ₹{form.ratePerQuantity})
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* SIGNATURE & ADDITIONAL */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-slate-900 border-b border-slate-100 pb-2">
-          Document Details &amp; Additional Information
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Prepared By Name *</label>
-            <Input
-              value={form.preparedByName}
-              onChange={(e) => set("preparedByName", e.target.value)}
-              placeholder="Enter name to appear on DC"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Expected Return Date</label>
-            <Input
-              type="date"
-              value={form.expectedReturnDate}
-              onChange={(e) => set("expectedReturnDate", e.target.value)}
-            />
-          </div>
-          <div className="col-span-2">
-            <label className="mb-1 block text-xs font-medium text-slate-600">Remarks / Special Instructions</label>
-            <Input
-              value={form.remarks}
-              onChange={(e) => set("remarks", e.target.value)}
-              placeholder="Additional notes for vendor or job work..."
-            />
-          </div>
-        </div>
-      </div>
-
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-md text-xs font-medium">
-          {error}
+        <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700 border border-red-200">
+          <AlertCircle className="h-5 w-5 flex-shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
-      <div className="flex justify-end gap-3">
-        <Button onClick={submit} disabled={saving} className="bg-slate-900 hover:bg-slate-800 text-white font-medium">
-          {saving ? "Saving Draft..." : "Create DC (Saved as DRAFT)"}
-        </Button>
-      </div>
+      {success && (
+        <div className="flex items-center gap-2 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700 border border-emerald-200">
+          <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
+          <span>{success}</span>
+        </div>
+      )}
+
+      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(false); }} className="space-y-6">
+        {/* SECTION 1: DOCUMENT INFORMATION */}
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
+            Section 1: Document Information
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Supplier Name *</label>
+              <select
+                value={selectedVendorId}
+                onChange={(e) => handleVendorChange(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                required
+              >
+                <option value="">-- Select Supplier --</option>
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.vendorName} ({v.vendorCode})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Supplier Address (Auto-filled)</label>
+              <input
+                type="text"
+                readOnly
+                value={selectedVendor ? selectedVendor.address || `${selectedVendor.city || ""}, ${selectedVendor.state || ""}` : ""}
+                className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 focus:outline-none"
+                placeholder="Snapshot from Master Data"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">GST Number (Auto-filled)</label>
+              <input
+                type="text"
+                readOnly
+                value={selectedVendor ? selectedVendor.gstNumber || "N/A" : ""}
+                className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 focus:outline-none"
+                placeholder="Snapshot from Master Data"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Date of Creating DC *</label>
+              <input
+                type="date"
+                value={documentDate}
+                onChange={(e) => setDocumentDate(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Department *</label>
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                required
+              >
+                <option value="PRODUCTION">PRODUCTION</option>
+                <option value="STORES">STORES</option>
+                <option value="FOUNDRY">FOUNDRY</option>
+                <option value="QUALITY">QUALITY</option>
+                <option value="MACHINING">MACHINING</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 2: WORK ORDER / PART INFORMATION */}
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
+            Section 2: Work Order & Part Information
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">WO ID (Work Order Number) *</label>
+              <input
+                type="text"
+                value={woNumber}
+                onChange={(e) => setWoNumber(e.target.value)}
+                placeholder="e.g. WO-2026-001"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Part Number *</label>
+              {items.length > 0 ? (
+                <select
+                  value={selectedPartId}
+                  onChange={(e) => handlePartChange(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                >
+                  <option value="">-- Select Part from Master --</option>
+                  {items.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.itemCode} - {i.itemName}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={customPartNumber}
+                  onChange={(e) => setCustomPartNumber(e.target.value)}
+                  placeholder="e.g. PN-9988"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Part Description (Auto-filled)</label>
+              <input
+                type="text"
+                value={partDescription}
+                onChange={(e) => setPartDescription(e.target.value)}
+                placeholder="Auto-filled from Part Master"
+                className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 3: OUTWARD QUANTITY */}
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
+            Section 3: Outward Quantity
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Outward Qty RW *</label>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                value={outwardQtyRw}
+                onChange={(e) => setOutwardQtyRw(e.target.value)}
+                placeholder="Raw material quantity sent (NOS)"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Returning FG Qty *</label>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                value={returningFgQuantity}
+                onChange={(e) => setReturningFgQuantity(e.target.value)}
+                placeholder="Finished goods expected back (NOS)"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 4: OUTWARD WEIGHT */}
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
+            Section 4: Outward Weight (KG)
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Outward Weight (KG) *</label>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                value={outwardWeight}
+                onChange={(e) => setOutwardWeight(e.target.value)}
+                placeholder="Total outward gross weight"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Outward Gating Weight (KG) *</label>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                value={outwardGatingWeight}
+                onChange={(e) => setOutwardGatingWeight(e.target.value)}
+                placeholder="Gating / runner weight"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Outward Boring Weight (KG) *</label>
+              <input
+                type="number"
+                step="0.001"
+                min="0"
+                value={outwardBoringWeight}
+                onChange={(e) => setOutwardBoringWeight(e.target.value)}
+                placeholder="Boring / chip weight"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 5: DIMENSIONS */}
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
+            Section 5: Dimensions (mm)
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Length (mm)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={length}
+                onChange={(e) => setLength(e.target.value)}
+                placeholder="Length"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Width (mm)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={width}
+                onChange={(e) => setWidth(e.target.value)}
+                placeholder="Width"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Height (mm)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={height}
+                onChange={(e) => setHeight(e.target.value)}
+                placeholder="Height"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 6: PRICING */}
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
+            Section 6: Pricing
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Pricing (Rate / Unit Amount ₹)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={pricing}
+                onChange={(e) => setPricing(e.target.value)}
+                placeholder="Unit rate or standard pricing"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 7: REMARKS */}
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
+            Section 7: Remarks & Attachments
+          </h2>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Remarks / Notes</label>
+            <input
+              type="text"
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              placeholder="Special job work instructions or transport notes"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* ACTION BUTTONS */}
+        <div className="flex justify-end gap-3 border-t pt-4">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => router.back()}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6"
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Creating Outward DC...
+              </span>
+            ) : (
+              "CREATE OUTWARD DC"
+            )}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

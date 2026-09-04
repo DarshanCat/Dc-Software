@@ -289,7 +289,7 @@ export async function confirmStoreReceipt(input: ConfirmStoreReceiptInput) {
   return { ok: true };
 }
 
-// ---------------- 4. QUALITY INSPECTION (QUALITY ROLE) ----------------
+// ---------------- 4. QUALITY INSPECTION (QUALITY ROLE ONLY) ----------------
 
 export interface SubmitQualityInspectionInput {
   dcId: string;
@@ -304,6 +304,16 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.RECEIPT_EDIT);
   if (!permCheck.ok) return permCheck;
+
+  // Strict Backend Role Check: SECURITY and STORE roles are strictly forbidden from creating/editing Quality quantities
+  const roleKeys = user?.roleKeys || [];
+  const isQualityAuthorized = roleKeys.some((r: string) => ["QUALITY", "ADMIN", "SUPERADMIN"].includes(r));
+  if (!isQualityAuthorized) {
+    return {
+      ok: false,
+      error: "403 Forbidden: Security and Store roles are strictly prohibited from entering or submitting Quality Inspection quantities.",
+    };
+  }
 
   if (input.goodQty < 0 || input.rejectionQty < 0 || input.scrapQty < 0) {
     return { ok: false, error: "Quality quantities (Good, Rejection, Scrap) cannot be negative." };
@@ -338,7 +348,7 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
         inspectedBy: user!.id,
         inspectionRemarks: input.inspectionRemarks || null,
 
-        // Also sync legacy quality fields
+        // Sync legacy quality fields
         finalApprovedFgQuantity: new Prisma.Decimal(input.goodQty),
         finalApprovedRejectionQuantity: new Prisma.Decimal(input.rejectionQty),
         finalApprovedScrapQuantity: new Prisma.Decimal(input.scrapQty),
@@ -415,6 +425,11 @@ export async function reviewManagerApproval(input: ReviewManagerApprovalInput) {
         approvalRemarks: input.approvalRemarks || null,
         finalApprovedBy: user!.id,
         finalApprovedAt: now,
+
+        // Also set payment status if approved
+        paymentStatus: input.action === "APPROVE" ? "PAYMENT_APPROVED" : dc.paymentStatus,
+        paymentApprovedBy: input.action === "APPROVE" ? user!.id : dc.paymentApprovedBy,
+        paymentApprovedAt: input.action === "APPROVE" ? now : dc.paymentApprovedAt,
       },
     }),
     prisma.statusHistory.create({
@@ -438,6 +453,77 @@ export async function reviewManagerApproval(input: ReviewManagerApprovalInput) {
   });
 
   revalidatePath(`/dcs/${input.dcId}`);
+  revalidatePath("/dcs");
+  return { ok: true };
+}
+
+// ---------------- 6. ADMIN CLOSE DC (MANDATORY PAYMENT VALIDATION) ----------------
+
+export async function closeDcByAdmin(dcId: string) {
+  const user = await getSessionUser();
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_CLOSE);
+  if (!permCheck.ok) return permCheck;
+
+  const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
+  if (!dc) return { ok: false, error: "DC not found." };
+
+  if (dc.status === "CLOSED") {
+    return { ok: false, error: "DC is already CLOSED." };
+  }
+
+  // MANDATORY BUSINESS RULE: ADMIN CANNOT CLOSE A DC WITHOUT PAYMENT DETAILS.
+  const paymentRef = (dc.paymentReference || dc.paymentReferenceNumber || "").trim();
+  const invoiceRef = (dc.invoiceNumber || "").trim();
+  const hasPaymentRef = paymentRef.length > 0 || invoiceRef.length > 0;
+  const hasPaymentDate = !!(dc.paymentApprovedAt || dc.paymentDate || dc.invoiceDate);
+  const hasValidPaymentStatus =
+    dc.paymentStatus === "COMPLETED" ||
+    dc.paymentStatus === "PAID" ||
+    dc.paymentStatus === "PAYMENT_APPROVED" ||
+    dc.status === "PAYMENT_APPROVED" ||
+    dc.status === "APPROVED_FOR_PAYMENT" ||
+    dc.status === "FINAL_APPROVED";
+
+  if (!hasPaymentRef || !hasPaymentDate || !hasValidPaymentStatus) {
+    return {
+      ok: false,
+      error: "DC cannot be closed. Payment details are mandatory. Please complete the payment details before closing the DC.",
+    };
+  }
+
+  const now = new Date();
+
+  await prisma.$transaction([
+    prisma.deliveryChallan.update({
+      where: { id: dcId },
+      data: {
+        status: "CLOSED",
+        paymentStatus: "CLOSED",
+        closedBy: user!.id,
+        closedAt: now,
+      },
+    }),
+    prisma.statusHistory.create({
+      data: {
+        dcId,
+        fromStatus: dc.status,
+        toStatus: "CLOSED",
+        changedBy: user!.id,
+        reason: "DC Closed after mandatory payment verification",
+      },
+    }),
+  ]);
+
+  await writeAudit(prisma, {
+    userId: user!.id,
+    action: "DC_CLOSED",
+    module: "DeliveryChallan",
+    entityType: "DeliveryChallan",
+    entityId: dcId,
+    reason: `Admin closed DC ${dc.dcNumber} with verified payment details`,
+  });
+
+  revalidatePath(`/dcs/${dcId}`);
   revalidatePath("/dcs");
   return { ok: true };
 }

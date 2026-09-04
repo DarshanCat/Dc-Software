@@ -43,7 +43,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
     );
   }
 
-  // Server-side blind payload sanitization
+  // Server-side payload sanitization
   const userRole = user?.roleKeys?.[0] || "GUEST";
   const dc = filterDcDataForRole(dcRaw, userRole);
 
@@ -89,56 +89,61 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
     : [];
   const auditUserMap = new Map(auditUsers.map((u) => [u.id, u.name || u.email]));
 
-  // Discrepancy Detection logic for Manager/Admin comparison
-  const secTotal = Number(dc.securityFgQuantity ?? 0) + Number(dc.securityRejectionQuantity ?? 0) + Number(dc.securityScrapQuantity ?? 0);
-  const storeTotal = Number(dc.storeVerifiedFgQuantity ?? 0) + Number(dc.storeVerifiedRejectionQuantity ?? 0) + Number(dc.storeVerifiedScrapQuantity ?? 0);
-  const expFg = Number(dc.returnFgQuantity ?? 0);
-  const hasDiscrepancy = (dc.securityFgQuantity != null && dc.storeVerifiedFgQuantity != null && secTotal !== storeTotal) || (storeTotal > 0 && storeTotal !== expFg);
+  // Discrepancy Detection
+  const secTotal = Number(dc.actualInwardQty ?? dc.securityFgQuantity ?? 0);
+  const storeTotal = Number(dc.storeReceivedQty ?? dc.storeVerifiedFgQuantity ?? 0);
+  const goodQty = Number(dc.goodQty ?? dc.finalApprovedFgQuantity ?? 0);
+  const rejectQty = Number(dc.rejectionQty ?? dc.finalApprovedRejectionQuantity ?? 0);
+  const scrapQty = Number(dc.scrapQty ?? dc.finalApprovedScrapQuantity ?? 0);
+  const qualityTotal = goodQty + rejectQty + scrapQty;
 
-  // Next required action prompt text
+  // Next required action prompt & owner mapping
   let nextActionPrompt = "";
   let responsibleRoleText = "";
 
   switch (dc.status) {
     case "DRAFT":
-      nextActionPrompt = "DC Created (DRAFT). Click 'Submit for Approval' to send to Manager.";
-      responsibleRoleText = "Creator / Stores";
+      nextActionPrompt = "Draft DC created. Click 'Submit Outward DC' to finalize outward dispatch.";
+      responsibleRoleText = "Security / PPC";
       break;
-    case "PENDING_APPROVAL":
-      nextActionPrompt = "Pending Manager Approval. Authorized Approver must review and Approve or Return to Draft.";
-      responsibleRoleText = "Manager / Approver";
+    case "OUTWARD_CREATED":
+      nextActionPrompt = "Outward DC created. Material ready to move out at gate.";
+      responsibleRoleText = "Security Gate";
       break;
-    case "APPROVED":
-      nextActionPrompt = "Approved. Security must perform dispatch entry when material leaves gate.";
-      responsibleRoleText = "Security";
-      break;
+    case "MATERIAL_OUT":
     case "DISPATCHED":
-      nextActionPrompt = "Dispatched. Confirm vendor receipt when material reaches vendor.";
-      responsibleRoleText = "Stores / Manager";
-      break;
     case "AT_VENDOR":
-      nextActionPrompt = "Material is at Vendor for processing. Security return entry required when material returns.";
-      responsibleRoleText = "Security";
+    case "INWARD_PENDING":
+      nextActionPrompt = "Material at Supplier. Record Physical Inward Receipt when material arrives back.";
+      responsibleRoleText = "Security Gate";
       break;
+    case "INWARD_RECEIVED":
     case "SECURITY_RETURNED":
-      nextActionPrompt = "Security Return recorded. Store must inspect and record Store Verification quantities.";
-      responsibleRoleText = "Stores";
+      nextActionPrompt = "Material received at gate. Store confirmation required for inventory entry.";
+      responsibleRoleText = "Store Department";
       break;
-    case "STORE_VERIFIED":
-      nextActionPrompt = "Store Verification complete. Manager must compare entries and set Final Approved Quantities.";
-      responsibleRoleText = "Manager / Admin";
+    case "STORE_CONFIRMED":
+    case "QUALITY_PENDING":
+      nextActionPrompt = "Store receipt confirmed. Complete Quality Inspection (Good Qty + Rejection Qty + Scrap Qty = Actual Inward Qty).";
+      responsibleRoleText = "Quality Department";
       break;
-    case "FINAL_APPROVED":
-      nextActionPrompt = "Final Approved quantities set. Manager/Admin must mark 'Approve for Payment'.";
-      responsibleRoleText = "Manager / Admin";
+    case "QUALITY_COMPLETED":
+    case "MANAGER_APPROVAL_PENDING":
+      nextActionPrompt = "Quality Inspection completed. Manager must review full lifecycle and approve for payment.";
+      responsibleRoleText = "Manager";
       break;
+    case "PAYMENT_APPROVED":
     case "APPROVED_FOR_PAYMENT":
-      nextActionPrompt = "Approved for Payment. Accounts must record Invoice/Payment details and click CLOSE DC.";
-      responsibleRoleText = "Accounts";
+      nextActionPrompt = "Manager payment approval completed. Accounts must record payment details.";
+      responsibleRoleText = "Accounts Department";
       break;
     case "CLOSED":
-      nextActionPrompt = "DC is CLOSED. All operational and financial entries are locked.";
+      nextActionPrompt = "DC is CLOSED. Financial payment verified and lifecycle completed.";
       responsibleRoleText = "Completed";
+      break;
+    default:
+      nextActionPrompt = `Current status: ${dc.status.replace(/_/g, " ")}`;
+      responsibleRoleText = "Authorized User";
       break;
   }
 
@@ -154,10 +159,13 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-500 font-sans">
-            Work Order: <span className="font-mono font-semibold text-slate-800">{dc.woNumber}</span>
-            {dc.partNumber ? ` · Part No: ${dc.partNumber}` : ""}
+            Supplier: <span className="font-semibold text-slate-900">{dc.supplierNameSnapshot || dc.vendor.vendorName}</span>
             {" · "}
-            {dc.vendor.vendorName} · {dc.process?.name ?? "—"}
+            WO ID: <span className="font-mono font-semibold text-slate-800">{dc.woNumber}</span>
+            {" · "}
+            Part: <span className="font-mono font-semibold text-slate-800">{dc.partNumberSnapshot || dc.partNumber || "N/A"}</span>
+            {" · "}
+            Department: <span className="font-semibold text-slate-800">{dc.department || "PRODUCTION"}</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -172,15 +180,15 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      {/* NEXT ACTION BANNER */}
+      {/* LIFECYCLE STAGE VISUALIZER & NEXT ACTION BANNER */}
       <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-4 flex items-center justify-between">
         <div className="space-y-0.5">
-          <p className="text-xs font-bold text-blue-900 uppercase tracking-wider">Next Required Action</p>
+          <p className="text-xs font-bold text-blue-900 uppercase tracking-wider">Current Ownership &amp; Next Required Action</p>
           <p className="text-sm font-semibold text-blue-950">{nextActionPrompt}</p>
         </div>
         <div className="text-right">
-          <span className="text-[10px] text-blue-600 uppercase block tracking-wider font-semibold">Responsible Role</span>
-          <span className="rounded bg-blue-200/80 px-2 py-0.5 text-xs font-bold text-blue-900">{responsibleRoleText}</span>
+          <span className="text-[10px] text-blue-600 uppercase block tracking-wider font-semibold">Current Owner</span>
+          <span className="rounded bg-blue-200/80 px-2.5 py-1 text-xs font-bold text-blue-900">{responsibleRoleText}</span>
         </div>
       </div>
 
@@ -202,27 +210,27 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
           canClose,
         }}
         dcData={{
-          rmQuantity: dc.rmQuantity ? Number(dc.rmQuantity) : null,
+          rmQuantity: dc.outwardQtyRw ? Number(dc.outwardQtyRw) : Number(dc.rmQuantity ?? 0),
           returnFgQuantity: dc.returnFgQuantity ? Number(dc.returnFgQuantity) : null,
-          securityDispatchQuantity: dc.securityDispatchQuantity ? Number(dc.securityDispatchQuantity) : null,
-          securityFgQuantity: dc.securityFgQuantity ? Number(dc.securityFgQuantity) : null,
-          securityRejectionQuantity: dc.securityRejectionQuantity ? Number(dc.securityRejectionQuantity) : null,
-          securityScrapQuantity: dc.securityScrapQuantity ? Number(dc.securityScrapQuantity) : null,
-          storeVerifiedFgQuantity: dc.storeVerifiedFgQuantity ? Number(dc.storeVerifiedFgQuantity) : null,
-          storeVerifiedRejectionQuantity: dc.storeVerifiedRejectionQuantity ? Number(dc.storeVerifiedRejectionQuantity) : null,
-          storeVerifiedScrapQuantity: dc.storeVerifiedScrapQuantity ? Number(dc.storeVerifiedScrapQuantity) : null,
+          securityDispatchQuantity: dc.outwardWeight ? Number(dc.outwardWeight) : null,
+          securityFgQuantity: dc.actualInwardQty ? Number(dc.actualInwardQty) : null,
+          securityRejectionQuantity: dc.rejectionQty ? Number(dc.rejectionQty) : null,
+          securityScrapQuantity: dc.scrapQty ? Number(dc.scrapQty) : null,
+          storeVerifiedFgQuantity: dc.storeReceivedQty ? Number(dc.storeReceivedQty) : null,
+          storeVerifiedRejectionQuantity: dc.rejectionQty ? Number(dc.rejectionQty) : null,
+          storeVerifiedScrapQuantity: dc.scrapQty ? Number(dc.scrapQty) : null,
           invoiceNumber: dc.invoiceNumber,
           invoiceDate: dc.invoiceDate ? dc.invoiceDate.toISOString().split("T")[0] : null,
-          invoiceAmount: dc.invoiceAmount ? Number(dc.invoiceAmount) : null,
-          paymentReferenceNumber: dc.paymentReferenceNumber,
-          paymentDate: dc.paymentDate ? dc.paymentDate.toISOString().split("T")[0] : null,
+          invoiceAmount: dc.pricingSnapshot ? Number(dc.pricingSnapshot) : Number(dc.invoiceAmount ?? 0),
+          paymentReferenceNumber: dc.paymentReference || dc.paymentReferenceNumber,
+          paymentDate: dc.paymentApprovedAt ? dc.paymentApprovedAt.toISOString().split("T")[0] : null,
         }}
       />
 
-      {/* 2. BASIC INFORMATION */}
+      {/* 1. DOCUMENT & SUPPLIER SNAPSHOT */}
       <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
         <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
-          1. Basic Information
+          1. Document &amp; Supplier Master Information
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-sans">
           <div>
@@ -234,277 +242,197 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
             <span className="font-semibold text-slate-900">{dc.dcDate.toLocaleDateString()}</span>
           </div>
           <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Work Order No.</span>
-            <span className="font-mono font-bold text-slate-900">{dc.woNumber}</span>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Supplier Name</span>
+            <span className="font-bold text-slate-900">{dc.supplierNameSnapshot || dc.vendor.vendorName}</span>
           </div>
           <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Part Number</span>
-            <span className="font-mono font-bold text-slate-900">{dc.partNumber || "—"}</span>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">GST Number</span>
+            <span className="font-mono font-semibold text-slate-900">{dc.supplierGstSnapshot || dc.vendor.gstNumber || "N/A"}</span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Supplier Address</span>
+            <span className="text-slate-800">{dc.supplierAddressSnapshot || dc.vendor.address || "N/A"}</span>
           </div>
           <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Vendor Name</span>
-            <span className="font-bold text-slate-900">{dc.vendor.vendorName}</span>
-          </div>
-          <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Process</span>
-            <span className="font-semibold text-slate-900">{dc.process?.name || "—"}</span>
-          </div>
-          <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Purpose</span>
-            <span className="font-semibold text-slate-900">{dc.purpose.replace(/_/g, " ")}</span>
-          </div>
-          <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Heat Number</span>
-            <span className="font-mono font-semibold text-slate-900">{dc.heatNumber || "—"}</span>
+            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Department</span>
+            <span className="font-semibold text-slate-900">{dc.department || "PRODUCTION"}</span>
           </div>
         </div>
       </div>
 
-      {/* 3. MATERIAL SPECIFICATIONS & 4. MANDATORY PRICING */}
+      {/* 2. WO, PART & OUTWARD DETAILS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
           <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
-            2. Material Quantities
+            2. Work Order &amp; Outward Quantities
           </h2>
           <div className="grid grid-cols-2 gap-4 text-xs">
             <div>
-              <span className="text-slate-500 block text-[10px] uppercase font-semibold">RM Quantity (Sent)</span>
-              <span className="font-mono font-bold text-slate-900 text-base">
-                {dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"}
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">WO ID</span>
+              <span className="font-mono font-bold text-slate-900 text-sm">{dc.woNumber}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Part Number</span>
+              <span className="font-mono font-bold text-slate-900 text-sm">{dc.partNumberSnapshot || dc.partNumber || "N/A"}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Outward Qty RW</span>
+              <span className="font-mono font-bold text-blue-900 text-base">
+                {dc.outwardQtyRw != null ? Number(dc.outwardQtyRw).toFixed(3) : Number(dc.rmQuantity ?? 0).toFixed(3)} NOS
               </span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Expected Return FG Qty</span>
-              <span className="font-mono font-bold text-slate-900 text-base">
-                {dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"}
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Returning FG Qty</span>
+              <span className="font-mono font-bold text-blue-900 text-base">
+                {dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"} NOS
               </span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-5 space-y-3">
-          <h2 className="text-sm font-bold text-blue-900 uppercase tracking-wider border-b border-blue-200/60 pb-2">
-            3. Pricing &amp; Commercial Terms
+        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+            3. Outward Weights &amp; Dimensions
           </h2>
-          <div className="grid grid-cols-2 gap-4 text-xs">
+          <div className="grid grid-cols-3 gap-3 text-xs">
             <div>
-              <span className="text-blue-600 block text-[10px] uppercase font-bold">Pricing Basis</span>
-              <span className="font-bold text-blue-950 text-sm">
-                {dc.pricingBasis === "RM" ? "RM Quantity" : dc.pricingBasis === "FG" ? "FG Quantity" : "—"}
-              </span>
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Outward Weight</span>
+              <span className="font-mono font-bold text-slate-900">{dc.outwardWeight != null ? `${Number(dc.outwardWeight)} KG` : "—"}</span>
             </div>
             <div>
-              <span className="text-blue-600 block text-[10px] uppercase font-bold">Rate Per Quantity</span>
-              <span className="font-mono font-bold text-blue-950 text-sm">
-                ₹{dc.ratePerQuantity != null ? Number(dc.ratePerQuantity).toFixed(2) : "—"}
-              </span>
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Gating Weight</span>
+              <span className="font-mono font-bold text-slate-900">{dc.outwardGatingWeight != null ? `${Number(dc.outwardGatingWeight)} KG` : "—"}</span>
             </div>
             <div>
-              <span className="text-blue-600 block text-[10px] uppercase font-bold">Original Expected Amount</span>
-              <span className="font-mono font-bold text-blue-950">
-                ₹{dc.expectedAmount != null ? Number(dc.expectedAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 }) : "—"}
-              </span>
-            </div>
-            <div>
-              <span className="text-emerald-700 block text-[10px] uppercase font-bold">Final Payable Amount</span>
-              <span className="font-mono font-bold text-emerald-900 text-sm">
-                ₹{dc.finalPayableAmount != null ? Number(dc.finalPayableAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 }) : "Pending Manager Approval"}
-              </span>
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Boring Weight</span>
+              <span className="font-mono font-bold text-slate-900">{dc.outwardBoringWeight != null ? `${Number(dc.outwardBoringWeight)} KG` : "—"}</span>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* 5. DISPATCH DETAILS */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
-        <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
-          4. Security Dispatch Details
-        </h2>
-        {dc.securityDispatchedAt ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-sans">
-            <div>
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Actual Dispatched Qty</span>
-              <span className="font-mono font-bold text-slate-900">{Number(dc.securityDispatchQuantity).toFixed(3)}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Dispatch Date &amp; Time</span>
-              <span className="font-semibold text-slate-900">{dc.securityDispatchDate ? dc.securityDispatchDate.toLocaleDateString() : "—"} {dc.securityDispatchTime || ""}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Vehicle Number</span>
-              <span className="font-mono font-semibold text-slate-900">{dc.securityDispatchVehicleNumber || dc.vehicleNumber || "—"}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Transporter</span>
-              <span className="font-semibold text-slate-900">{dc.securityDispatchTransporter || dc.transporter || "—"}</span>
-            </div>
-          </div>
-        ) : (
-          <p className="text-xs text-slate-400 italic">Security dispatch entry pending.</p>
-        )}
-      </div>
-
-      {/* 6. SECURITY RETURN & 7. STORE VERIFICATION */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Security Return (Hidden for Stores) */}
-        {userRole !== "STORES" && (
-          <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
-            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
-              5. Security Return Gate Entry
-            </h2>
-            {dc.securityEnteredAt ? (
-              <div className="space-y-3 text-xs">
-                <div className="grid grid-cols-3 gap-2 font-mono">
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Returned FG</span>
-                    <span className="font-bold text-slate-900">{Number(dc.securityFgQuantity).toFixed(3)}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Rejection Qty</span>
-                    <span className="font-bold text-amber-700">{Number(dc.securityRejectionQuantity).toFixed(3)}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Scrap Qty</span>
-                    <span className="font-bold text-slate-700">{Number(dc.securityScrapQuantity).toFixed(3)}</span>
-                  </div>
-                </div>
-                {dc.securityReturnRemarks && (
-                  <p className="text-slate-600 bg-slate-50 p-2 rounded text-[11px]">
-                    <span className="font-semibold">Gate Remarks:</span> {dc.securityReturnRemarks}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400 italic">Security return entry pending.</p>
-            )}
-          </div>
-        )}
-
-        {/* Store Verification (Hidden for Security) */}
-        {userRole !== "SECURITY" && (
-          <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
-            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
-              6. Store Material Verification
-            </h2>
-            {dc.storeVerifiedAt ? (
-              <div className="space-y-3 text-xs">
-                <div className="grid grid-cols-3 gap-2 font-mono">
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Verified FG</span>
-                    <span className="font-bold text-slate-900">{Number(dc.storeVerifiedFgQuantity).toFixed(3)}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Verified Rejection</span>
-                    <span className="font-bold text-amber-700">{Number(dc.storeVerifiedRejectionQuantity).toFixed(3)}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-sans font-semibold uppercase">Verified Scrap</span>
-                    <span className="font-bold text-slate-700">{Number(dc.storeVerifiedScrapQuantity).toFixed(3)}</span>
-                  </div>
-                </div>
-                {dc.storeRemarks && (
-                  <p className="text-slate-600 bg-slate-50 p-2 rounded text-[11px]">
-                    <span className="font-semibold">Store Remarks:</span> {dc.storeRemarks}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400 italic">Store verification pending.</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* 8. MANAGER COMPARISON & FINAL APPROVED QUANTITIES */}
-      {["ADMIN", "MANAGEMENT", "ACCOUNTS"].includes(userRole) && (
-        <div className="rounded-lg border border-teal-200 bg-teal-50/30 p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-teal-200/60 pb-2">
-            <h2 className="text-sm font-bold text-teal-950 uppercase tracking-wider">
-              7. Manager Comparison &amp; Final Approved Quantities
-            </h2>
-            {hasDiscrepancy && (
-              <span className="rounded bg-amber-100 border border-amber-300 px-2 py-0.5 text-xs font-bold text-amber-900">
-                ⚠ Quantity Discrepancy Detected
+          {(dc.length || dc.width || dc.height) && (
+            <div className="pt-2 border-t text-xs">
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Dimensions (L × W × H)</span>
+              <span className="font-mono font-semibold text-slate-800">
+                {dc.length ? `${dc.length}mm` : "—"} × {dc.width ? `${dc.width}mm` : "—"} × {dc.height ? `${dc.height}mm` : "—"}
               </span>
-            )}
-          </div>
-
-          <table className="w-full text-left text-xs bg-white rounded border border-slate-200 overflow-hidden">
-            <thead className="bg-slate-100 text-[10px] uppercase tracking-wider text-slate-600 border-b border-slate-200">
-              <tr>
-                <th className="px-3 py-2">Entry Stage</th>
-                <th className="px-3 py-2 text-right">FG Quantity</th>
-                <th className="px-3 py-2 text-right">Rejection Qty</th>
-                <th className="px-3 py-2 text-right">Scrap Qty</th>
-                <th className="px-3 py-2 text-right">Total Returned</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 font-mono">
-              <tr>
-                <td className="px-3 py-2 font-sans font-semibold text-slate-700">Security Gate Return</td>
-                <td className="px-3 py-2 text-right">{dc.securityFgQuantity != null ? Number(dc.securityFgQuantity).toFixed(3) : "—"}</td>
-                <td className="px-3 py-2 text-right text-amber-700">{dc.securityRejectionQuantity != null ? Number(dc.securityRejectionQuantity).toFixed(3) : "—"}</td>
-                <td className="px-3 py-2 text-right text-slate-600">{dc.securityScrapQuantity != null ? Number(dc.securityScrapQuantity).toFixed(3) : "—"}</td>
-                <td className="px-3 py-2 text-right font-bold">{dc.securityFgQuantity != null ? secTotal.toFixed(3) : "—"}</td>
-              </tr>
-              <tr>
-                <td className="px-3 py-2 font-sans font-semibold text-slate-700">Store Verification</td>
-                <td className="px-3 py-2 text-right">{dc.storeVerifiedFgQuantity != null ? Number(dc.storeVerifiedFgQuantity).toFixed(3) : "—"}</td>
-                <td className="px-3 py-2 text-right text-amber-700">{dc.storeVerifiedRejectionQuantity != null ? Number(dc.storeVerifiedRejectionQuantity).toFixed(3) : "—"}</td>
-                <td className="px-3 py-2 text-right text-slate-600">{dc.storeVerifiedScrapQuantity != null ? Number(dc.storeVerifiedScrapQuantity).toFixed(3) : "—"}</td>
-                <td className="px-3 py-2 text-right font-bold">{dc.storeVerifiedFgQuantity != null ? storeTotal.toFixed(3) : "—"}</td>
-              </tr>
-              <tr className="bg-teal-50/70 font-bold">
-                <td className="px-3 py-2.5 font-sans text-teal-950 uppercase text-[11px]">Final Approved (Manager)</td>
-                <td className="px-3 py-2.5 text-right text-teal-950">{dc.finalApprovedFgQuantity != null ? Number(dc.finalApprovedFgQuantity).toFixed(3) : "—"}</td>
-                <td className="px-3 py-2.5 text-right text-amber-900">{dc.finalApprovedRejectionQuantity != null ? Number(dc.finalApprovedRejectionQuantity).toFixed(3) : "—"}</td>
-                <td className="px-3 py-2.5 text-right text-slate-800">{dc.finalApprovedScrapQuantity != null ? Number(dc.finalApprovedScrapQuantity).toFixed(3) : "—"}</td>
-                <td className="px-3 py-2.5 text-right text-teal-950">
-                  {dc.finalApprovedFgQuantity != null
-                    ? (Number(dc.finalApprovedFgQuantity) + Number(dc.finalApprovedRejectionQuantity ?? 0) + Number(dc.finalApprovedScrapQuantity ?? 0)).toFixed(3)
-                    : "—"}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          {dc.managerCorrectionRemarks && (
-            <div className="bg-white p-3 rounded border border-teal-200 text-xs">
-              <span className="font-bold text-teal-950 block">Manager Correction Remarks:</span>
-              <p className="text-slate-700 mt-0.5">{dc.managerCorrectionRemarks}</p>
             </div>
           )}
         </div>
-      )}
+      </div>
 
-      {/* 9. ACCOUNTS PAYMENT INFORMATION */}
+      {/* 4. INWARD & STORE CONFIRMATION */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+            4. Security Physical Inward Receipt
+          </h2>
+          {dc.actualInwardQty ? (
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Actual Inward Qty</span>
+                <span className="font-mono font-bold text-blue-900 text-base">{Number(dc.actualInwardQty)} NOS</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Inward Date</span>
+                <span className="font-semibold text-slate-900">{dc.inwardDate ? dc.inwardDate.toLocaleDateString() : "—"}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Inward Doc / Invoice</span>
+                <span className="font-mono text-slate-800">{dc.inwardDocumentNo || dc.invoiceNumber || "N/A"}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Inward Gating/Boring Wt</span>
+                <span className="font-mono text-slate-800">
+                  {dc.inwardGatingWeight ? `${dc.inwardGatingWeight} KG` : "—"} / {dc.inwardBoringWeight ? `${dc.inwardBoringWeight} KG` : "—"}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 italic">Physical inward receipt pending at gate.</p>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
+            5. Store Receipt Confirmation
+          </h2>
+          {dc.storeReceivedQty ? (
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Store Received Qty</span>
+                <span className="font-mono font-bold text-emerald-900 text-base">{Number(dc.storeReceivedQty)} NOS</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Store Receipt Date</span>
+                <span className="font-semibold text-slate-900">{dc.storeReceivedDate ? dc.storeReceivedDate.toLocaleDateString() : "—"}</span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Store Remarks</span>
+                <span className="text-slate-800">{dc.storeRemarks || "None"}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 italic">Store receipt confirmation pending.</p>
+          )}
+        </div>
+      </div>
+
+      {/* 6. QUALITY INSPECTION SUMMARY (LOCKED) */}
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-5 space-y-3">
+        <h2 className="text-sm font-bold text-emerald-950 uppercase tracking-wider border-b border-emerald-200/60 pb-2">
+          6. Quality Inspection Decision (Locked Quality Department Output)
+        </h2>
+        {goodQty > 0 || rejectQty > 0 || scrapQty > 0 || dc.qualityDecision ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+            <div className="rounded bg-white p-3 border border-emerald-200">
+              <span className="text-emerald-700 block text-[10px] uppercase font-bold">Good Qty (Passed)</span>
+              <span className="font-mono font-bold text-emerald-950 text-lg">{goodQty} NOS</span>
+            </div>
+            <div className="rounded bg-white p-3 border border-red-200">
+              <span className="text-red-700 block text-[10px] uppercase font-bold">Rejection Qty</span>
+              <span className="font-mono font-bold text-red-900 text-lg">{rejectQty} NOS</span>
+            </div>
+            <div className="rounded bg-white p-3 border border-amber-200">
+              <span className="text-amber-700 block text-[10px] uppercase font-bold">Scrap Qty</span>
+              <span className="font-mono font-bold text-amber-900 text-lg">{scrapQty} NOS</span>
+            </div>
+            <div className="rounded bg-white p-3 border border-blue-200">
+              <span className="text-blue-700 block text-[10px] uppercase font-bold">Quality Decision</span>
+              <span className="font-bold text-blue-950 text-sm mt-1 block">{dc.qualityDecision || "PASSED"}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500 italic">Quality inspection pending. Material undergoes Quality verification after Store confirmation.</p>
+        )}
+      </div>
+
+      {/* 7. ACCOUNTS & FINANCIAL CLOSURE */}
       <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
         <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-2">
-          8. Accounts Invoice &amp; Payment Details
+          7. Accounts Payment &amp; Closure Verification
         </h2>
-        {dc.invoiceNumber ? (
+        {dc.paymentReference || dc.paymentReferenceNumber || dc.paymentStatus ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-sans">
             <div>
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Invoice Number</span>
-              <span className="font-mono font-bold text-slate-900">{dc.invoiceNumber}</span>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Payment Status</span>
+              <span className="font-bold text-emerald-900">{dc.paymentStatus || "COMPLETED"}</span>
             </div>
             <div>
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Invoice Date</span>
-              <span className="font-semibold text-slate-900">{dc.invoiceDate ? dc.invoiceDate.toLocaleDateString() : "—"}</span>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Payment Approved Date</span>
+              <span className="font-semibold text-slate-900">{dc.paymentApprovedAt ? dc.paymentApprovedAt.toLocaleDateString() : "—"}</span>
             </div>
             <div>
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Invoice Amount</span>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Pricing / Payable Amount</span>
               <span className="font-mono font-bold text-emerald-800">
-                ₹{dc.invoiceAmount != null ? Number(dc.invoiceAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 }) : "—"}
+                ₹{dc.pricingSnapshot ? Number(dc.pricingSnapshot).toLocaleString("en-IN", { minimumFractionDigits: 2 }) : "—"}
               </span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Payment Reference</span>
-              <span className="font-mono font-semibold text-slate-900">{dc.paymentReferenceNumber || "—"}</span>
+              <span className="font-mono font-semibold text-slate-900">{dc.paymentReference || dc.paymentReferenceNumber || "N/A"}</span>
             </div>
           </div>
         ) : (
-          <p className="text-xs text-slate-400 italic">Invoice and payment details pending Accounts entry.</p>
+          <p className="text-xs text-slate-400 italic">Payment details pending completion. Admin closure requires mandatory payment details.</p>
         )}
       </div>
 
@@ -525,7 +453,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
         revalidateTo={"/dcs/" + dc.id}
       />
 
-      {/* 10. AUDIT & STATUS HISTORY (RESTRICTED SERVER-SIDE TO ADMIN, MANAGEMENT, ACCOUNTS) */}
+      {/* AUDIT TRAIL */}
       {canViewHistory && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 space-y-3">
           <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-2">
