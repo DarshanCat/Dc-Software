@@ -24,6 +24,19 @@ export const ADMIN_NAVIGATION: NavSection[] = [
     ],
   },
   {
+    label: "DC MANAGEMENT",
+    items: [
+      { label: "DC Dashboard", href: "/dcs/dashboard", permission: P.DC_VIEW },
+      { label: "Outgoing DC", href: "/dcs/outward", permission: P.DC_CREATE },
+      { label: "Inward DC", href: "/dcs/inward", permission: P.SECURITY_RETURN },
+      { label: "Store Receipt", href: "/dcs/store-receipt", permission: P.STORE_VERIFY },
+      { label: "Quality Inspection", href: "/dcs/quality", permission: P.RECEIPT_EDIT },
+      { label: "Manager Approval", href: "/dcs/manager-approval", permission: P.MANAGER_FINAL_APPROVE },
+      { label: "Payment", href: "/accounts/dashboard", permission: P.PAYMENT_APPROVE },
+      { label: "DC History", href: "/dcs", permission: P.DC_VIEW },
+    ],
+  },
+  {
     label: "Work Orders",
     items: [
       { label: "All Work Orders", href: "/work-orders", permission: P.DC_VIEW },
@@ -116,6 +129,8 @@ export const SECURITY_NAVIGATION: NavSection[] = [
     label: "SECURITY OPERATIONS",
     items: [
       { label: "Security Dashboard", href: "/security/dashboard" },
+      { label: "Outgoing DC", href: "/dcs/outward" },
+      { label: "Inward DC", href: "/dcs/inward" },
       { label: "Waiting for Dispatch", href: "/security/dispatch" },
       { label: "Dispatched / At Vendor", href: "/security/dispatched" },
       { label: "Material Inward / Return", href: "/security/material-inward" },
@@ -130,6 +145,7 @@ export const STORES_NAVIGATION: NavSection[] = [
     items: [
       { label: "Store Dashboard", href: "/stores/dashboard" },
       { label: "Create DC", href: "/dcs/new" },
+      { label: "Store Receipt", href: "/dcs/store-receipt" },
       { label: "Draft DCs", href: "/dcs?status=DRAFT" },
       { label: "Pending Approval", href: "/dcs?status=PENDING_APPROVAL" },
       { label: "Store Verification", href: "/dcs?status=SECURITY_RETURNED" },
@@ -150,6 +166,7 @@ export const MANAGEMENT_NAVIGATION: NavSection[] = [
     label: "MANAGEMENT DASHBOARD",
     items: [
       { label: "Overview", href: "/management/dashboard" },
+      { label: "Manager Approval", href: "/dcs/manager-approval" },
       { label: "Pending DC Approval", href: "/dcs?status=PENDING_APPROVAL" },
       { label: "DCs Requiring Correction", href: "/dcs?status=DRAFT" },
       { label: "Store Verified / Final Approval", href: "/dcs?status=STORE_VERIFIED" },
@@ -161,13 +178,9 @@ export const MANAGEMENT_NAVIGATION: NavSection[] = [
   {
     label: "DELIVERY CHALLANS",
     items: [
-      { label: "Create DC", href: "/dcs/new" },
-      { label: "Draft DCs", href: "/dcs?status=DRAFT" },
+      { label: "All DCs", href: "/dcs" },
       { label: "Pending Approval", href: "/dcs?status=PENDING_APPROVAL" },
-      { label: "Approved DCs", href: "/dcs?status=APPROVED" },
-      { label: "Final Approval", href: "/dcs?status=STORE_VERIFIED" },
-      { label: "Approved for Payment", href: "/dcs?status=APPROVED_FOR_PAYMENT" },
-      { label: "DC History", href: "/dcs" },
+      { label: "Close DC", href: "/dcs/close" },
     ],
   },
 ];
@@ -178,10 +191,10 @@ export const ACCOUNTS_NAVIGATION: NavSection[] = [
     items: [
       { label: "Accounts Dashboard", href: "/accounts/dashboard" },
       { label: "Approved for Payment", href: "/dcs?status=APPROVED_FOR_PAYMENT" },
-      { label: "Payment Entry", href: "/dcs/close" },
-      { label: "Ready to Close", href: "/dcs/close?stage=accounts" },
+      { label: "Payment Entry", href: "/dcs/close?stage=payment" },
+      { label: "Ready to Close", href: "/dcs/close" },
       { label: "Closed DCs", href: "/dcs?status=CLOSED" },
-      { label: "Payment History", href: "/reports/dc-register" },
+      { label: "Payment History", href: "/accounts/dashboard" },
     ],
   },
 ];
@@ -192,35 +205,29 @@ export const PRODUCTION_NAVIGATION: NavSection[] = [
     items: [
       { label: "Production Dashboard", href: "/production/dashboard" },
       { label: "Create DC", href: "/dcs/new" },
-      { label: "My Drafts", href: "/dcs?status=DRAFT" },
-      { label: "Authorized DCs", href: "/dcs" },
-      { label: "Pending Approval", href: "/dcs?status=PENDING_APPROVAL" },
+      { label: "Authorized DCs", href: "/dcs?status=APPROVED" },
     ],
   },
 ];
 
-export function getNavigationForUser(roleKeys: string[] = []): NavSection[] {
-  if (roleKeys.includes("ADMIN")) {
-    return ADMIN_NAVIGATION;
-  }
-  if (roleKeys.includes("SECURITY")) {
-    return SECURITY_NAVIGATION;
-  }
-  if (roleKeys.includes("STORES")) {
-    return STORES_NAVIGATION;
-  }
-  if (roleKeys.includes("MANAGEMENT")) {
-    return MANAGEMENT_NAVIGATION;
-  }
-  if (roleKeys.includes("ACCOUNTS")) {
-    return ACCOUNTS_NAVIGATION;
-  }
-  if (roleKeys.includes("PRODUCTION")) {
-    return PRODUCTION_NAVIGATION;
-  }
+export const QUALITY_NAVIGATION: NavSection[] = [
+  {
+    label: "QUALITY OPERATIONS",
+    items: [
+      { label: "Quality Inspection", href: "/dcs/quality" },
+      { label: "Pending Inspection", href: "/dcs?status=QUALITY_PENDING" },
+      { label: "Completed Inspection", href: "/dcs?status=QUALITY_COMPLETED" },
+    ],
+  },
+];
 
-  // Fallback for default user
+export function getNavigationForUser(roleKeys: string[]): NavSection[] {
+  if (roleKeys.includes("ADMIN")) return ADMIN_NAVIGATION;
+  if (roleKeys.includes("SECURITY")) return SECURITY_NAVIGATION;
+  if (roleKeys.includes("STORES")) return STORES_NAVIGATION;
+  if (roleKeys.includes("MANAGEMENT")) return MANAGEMENT_NAVIGATION;
+  if (roleKeys.includes("ACCOUNTS")) return ACCOUNTS_NAVIGATION;
+  if (roleKeys.includes("PRODUCTION")) return PRODUCTION_NAVIGATION;
+  if (roleKeys.includes("QUALITY")) return QUALITY_NAVIGATION;
   return ADMIN_NAVIGATION;
 }
-
-export const NAVIGATION = ADMIN_NAVIGATION;

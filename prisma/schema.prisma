@@ -165,9 +165,6 @@ model Process {
   updatedAt        DateTime @updatedAt
 }
 
-
-
-
 enum CalculationType {
   FIXED
   PERCENTAGE
@@ -212,6 +209,19 @@ enum DcStatus {
   SCRAP_PENDING
   RECONCILIATION
   RECONCILED
+  // Extended SMES/OMS DC Lifecycle States
+  OUTWARD_CREATED
+  MATERIAL_OUT
+  INWARD_PENDING
+  INWARD_RECEIVED
+  STORE_CONFIRMED
+  QUALITY_PENDING
+  QUALITY_COMPLETED
+  MANAGER_APPROVAL_PENDING
+  PAYMENT_APPROVED
+  REJECTED
+  SENT_BACK
+  HOLD
 }
 
 enum DcPurpose {
@@ -237,6 +247,25 @@ model DeliveryChallan {
   heatNumber         String?
   expectedScrap      Decimal?  @db.Decimal(12, 3)
 
+  // Master Snapshot Fields
+  supplierNameSnapshot        String?
+  supplierAddressSnapshot     String?
+  supplierGstSnapshot         String?
+  partNumberSnapshot          String?
+  partDescriptionSnapshot     String?
+  pricingSnapshot             Decimal?  @db.Decimal(14, 2)
+  department                  String?
+
+  // Outward Detailed Fields
+  outwardDate                 DateTime?
+  outwardWeight               Decimal?  @db.Decimal(12, 3)
+  outwardGatingWeight         Decimal?  @db.Decimal(12, 3)
+  outwardQtyRw                Decimal?  @db.Decimal(12, 3)
+  length                      Decimal?  @db.Decimal(10, 2)
+  width                       Decimal?  @db.Decimal(10, 2)
+  height                      Decimal?  @db.Decimal(10, 2)
+  outwardBoringWeight         Decimal?  @db.Decimal(12, 3)
+
   // Mandatory Pricing Fields
   pricingBasis                 PricingBasis?
   ratePerQuantity              Decimal?  @db.Decimal(12, 2)
@@ -252,7 +281,13 @@ model DeliveryChallan {
   securityDispatchedBy         String?
   securityDispatchedAt         DateTime?
 
-  // Security Return Fields
+  // Inward & Security Return Fields
+  actualInwardQty              Decimal?  @db.Decimal(12, 3)
+  inwardDate                   DateTime?
+  inwardDocumentNo             String?
+  inwardGatingWeight           Decimal?  @db.Decimal(12, 3)
+  inwardBoringWeight           Decimal?  @db.Decimal(12, 3)
+
   securityFgQuantity           Decimal?  @db.Decimal(12, 3)
   securityRejectionQuantity    Decimal?  @db.Decimal(12, 3)
   securityScrapQuantity        Decimal?  @db.Decimal(12, 3)
@@ -264,7 +299,10 @@ model DeliveryChallan {
   securityEnteredBy            String?
   securityEnteredAt            DateTime?
 
-  // Store Verification Fields
+  // Store Receipt & Verification Fields
+  storeReceivedQty             Decimal?  @db.Decimal(12, 3)
+  storeReceivedDate            DateTime?
+  storeConfirmedBy             String?
   storeVerifiedFgQuantity      Decimal?  @db.Decimal(12, 3)
   storeVerifiedRejectionQuantity Decimal? @db.Decimal(12, 3)
   storeVerifiedScrapQuantity   Decimal?  @db.Decimal(12, 3)
@@ -272,7 +310,18 @@ model DeliveryChallan {
   storeVerifiedBy              String?
   storeVerifiedAt              DateTime?
 
+  // Quality Inspection Fields
+  goodQty                      Decimal?  @db.Decimal(12, 3)
+  rejectionQty                 Decimal?  @db.Decimal(12, 3)
+  scrapQty                     Decimal?  @db.Decimal(12, 3)
+  qualityDecision              String?
+  inspectionDate               DateTime?
+  inspectedBy                  String?
+  inspectionRemarks            String?
+
   // Manager/Admin Final Approval Fields
+  approvalStatus               String?
+  approvalRemarks              String?
   finalApprovedFgQuantity      Decimal?  @db.Decimal(12, 3)
   finalApprovedRejectionQuantity Decimal? @db.Decimal(12, 3)
   finalApprovedScrapQuantity   Decimal?  @db.Decimal(12, 3)
@@ -284,6 +333,10 @@ model DeliveryChallan {
   finalPayableAmount           Decimal?  @db.Decimal(14, 2)
 
   // Accounts Invoice & Payment Fields
+  paymentStatus                String?
+  paymentApprovedBy            String?
+  paymentApprovedAt            DateTime?
+  paymentReference             String?
   invoiceNumber                String?
   invoiceDate                  DateTime?
   invoiceAmount                Decimal?  @db.Decimal(14, 2)
@@ -660,7 +713,7 @@ model NumberSequence {
 }
 
 // ============================================================================
-// WORK ORDER LAYER (new) — every DC belongs to a WO. WO status is
+// WORK ORDER LAYER — every DC belongs to a WO. WO status is
 // transaction-driven (sent vs required, returned vs expected).
 // ============================================================================
 
@@ -699,8 +752,55 @@ model WorkOrder {
   @@index([status])
 }
 
+// ============================================================================
+// PRODUCTION STAGE TRACKING LAYER (OMS)
+// ============================================================================
 
+model ProductionStage {
+  id             String          @id @default(uuid())
+  woNumber       String
+  stageName      String
+  sequenceOrder  Int
+  targetQty      Decimal         @db.Decimal(18, 3)
+  completedOkQty Decimal         @default(0) @db.Decimal(18, 3)
+  rejectionQty   Decimal         @default(0) @db.Decimal(18, 3)
+  scrapQty       Decimal         @default(0) @db.Decimal(18, 3)
+  availableQty   Decimal         @default(0) @db.Decimal(18, 3)
+  status         String          @default("PENDING")
+  movements      StageMovement[]
+  rejections     StageRejection[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
+  @@index([woNumber])
+  @@index([stageName])
+}
+
+model StageMovement {
+  id        String          @id @default(uuid())
+  stageId   String
+  stage     ProductionStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  fromStage String
+  toStage   String
+  movedQty  Decimal         @db.Decimal(18, 3)
+  movedBy   String
+  movedAt   DateTime        @default(now())
+  remarks   String?
+
+  @@index([stageId])
+}
+
+model StageRejection {
+  id           String          @id @default(uuid())
+  stageId      String
+  stage        ProductionStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  rejectionQty Decimal         @db.Decimal(18, 3)
+  reason       String?
+  rejectedBy   String
+  rejectedAt   DateTime        @default(now())
+
+  @@index([stageId])
+}
 
 // ============================================================================
 // RECOVERY MATERIAL (Boring first; generic so more types can be added later)
