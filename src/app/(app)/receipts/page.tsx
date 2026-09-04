@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { getSessionUser } from "@/server/session";
+import { getVendorScope } from "@/server/dcs/vendor-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +11,10 @@ export default async function ReceiptsPage({
   searchParams: Promise<{ pending?: string; partial?: string }>;
 }) {
   const { pending, partial } = await searchParams;
+  const user = await getSessionUser();
 
   const receipts = await prisma.materialReceipt.findMany({
+    where: { ...getVendorScope(user) },
     orderBy: { receiptDate: "desc" },
     include: {
       dc: { include: { vendor: true } },

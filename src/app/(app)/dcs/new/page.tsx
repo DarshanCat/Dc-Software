@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function NewDcPage() {
   await requireUser();
 
-  const [vendors, workOrders] = await Promise.all([
+  const [vendors, items, departments] = await Promise.all([
     prisma.vendor.findMany({
       where: { active: true },
       select: {
@@ -21,26 +21,55 @@ export default async function NewDcPage() {
       },
       orderBy: { vendorName: "asc" },
     }),
-    prisma.workOrder.findMany({
+    prisma.itemMaster.findMany({
+      where: { active: true },
       select: {
         id: true,
-        woNumber: true,
+        partNumber: true,
+        partDescription: true,
+        pricingBasis: true,
+        ratePerQuantity: true,
+        uom: true,
       },
-      take: 100,
-      orderBy: { createdAt: "desc" },
+      orderBy: { partNumber: "asc" },
+    }),
+    prisma.department.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+      },
+      orderBy: { name: "asc" },
     }),
   ]);
+
+  const formattedItems = items.map((i) => ({
+    id: i.id,
+    itemCode: i.partNumber,
+    itemName: i.partDescription,
+    description: i.partDescription,
+    pricingBasis: i.pricingBasis as "RW" | "FG",
+    rate: i.ratePerQuantity ? Number(i.ratePerQuantity) : null,
+    uom: i.uom,
+  }));
+
+  const formattedDepts = departments.map((d) => ({
+    id: d.id,
+    code: d.code,
+    name: d.name,
+  }));
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <h1 className="text-xl font-bold tracking-tight text-slate-900">Create Outward Delivery Challan</h1>
         <p className="text-sm text-slate-500">
-          Security & PPC Outgoing DC Creation form with master data auto-population and snapshot logging.
+          Security &amp; PPC Outgoing DC Creation form with master data auto-population and snapshot logging.
         </p>
       </div>
 
-      <CreateDcForm vendors={vendors} items={[]} />
+      <CreateDcForm vendors={vendors} items={formattedItems} departments={formattedDepts} />
     </div>
   );
 }

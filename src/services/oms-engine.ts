@@ -31,29 +31,31 @@ export const DEFAULT_DYNAMIC_ROUTES: Record<string, StageDefinition[]> = {
 export async function initializeWOStages(woNumber: string, targetQty: number, routeType: string = "STANDARD_JOB_WORK") {
   const route = DEFAULT_DYNAMIC_ROUTES[routeType] || DEFAULT_DYNAMIC_ROUTES.STANDARD_JOB_WORK;
 
-  const existing = await prisma.productionStage.findMany({ where: { woNumber } });
-  if (existing.length > 0) return existing;
+  return await prisma.$transaction(async (tx) => {
+    const existing = await tx.productionStage.findMany({ where: { woNumber } });
+    if (existing.length > 0) return existing;
 
-  const createdStages: any[] = [];
-  for (const def of route) {
-    const isFirstStage = def.sequenceOrder === 1;
-    const stage = await prisma.productionStage.create({
-      data: {
-        woNumber,
-        stageName: def.stageName,
-        sequenceOrder: def.sequenceOrder,
-        targetQty: new Prisma.Decimal(targetQty),
-        completedOkQty: new Prisma.Decimal(0),
-        rejectionQty: new Prisma.Decimal(0),
-        scrapQty: new Prisma.Decimal(0),
-        availableQty: isFirstStage ? new Prisma.Decimal(targetQty) : new Prisma.Decimal(0),
-        status: isFirstStage ? "IN_PROGRESS" : "PENDING",
-      },
-    });
-    createdStages.push(stage);
-  }
+    const createdStages: any[] = [];
+    for (const def of route) {
+      const isFirstStage = def.sequenceOrder === 1;
+      const stage = await tx.productionStage.create({
+        data: {
+          woNumber,
+          stageName: def.stageName,
+          sequenceOrder: def.sequenceOrder,
+          targetQty: new Prisma.Decimal(targetQty),
+          completedOkQty: new Prisma.Decimal(0),
+          rejectionQty: new Prisma.Decimal(0),
+          scrapQty: new Prisma.Decimal(0),
+          availableQty: isFirstStage ? new Prisma.Decimal(targetQty) : new Prisma.Decimal(0),
+          status: isFirstStage ? "IN_PROGRESS" : "PENDING",
+        },
+      });
+      createdStages.push(stage);
+    }
 
-  return createdStages;
+    return createdStages;
+  });
 }
 
 export async function recordStageProduction(
@@ -120,6 +122,10 @@ export async function moveStageQuantity(
     const toStage = await tx.productionStage.findUnique({ where: { id: toStageId } });
 
     if (!fromStage || !toStage) throw new Error("Source or destination stage not found.");
+
+    if (fromStage.woNumber !== toStage.woNumber) {
+      throw new Error("Cannot move quantity between different Work Orders.");
+    }
 
     const completedAvailable = Number(fromStage.completedOkQty);
     if (moveQty > completedAvailable) {

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { reconcile } from "@/services/reconciliation.service";
+import { getToleranceSettings } from "@/server/settings/tolerances";
 import type { ExceptionType } from "@prisma/client";
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -31,11 +32,12 @@ export async function calculateReconciliation(tx: Tx, dcId: string, userId: stri
   });
   if (!dc) throw new Error("DC not found during reconciliation calculation.");
 
+  const tolerances = await getToleranceSettings(tx as never);
   const totalInputWeight = Number(dc.rmQuantity ?? 0);
   const expectedFinishedWeight = Number(dc.returnFgQuantity ?? 0);
   const expectedScrapWeight = Number(dc.expectedScrap ?? 0);
-  const approvedProcessLoss = 0;
-  const tolerancePercentage = 0;
+  const approvedProcessLoss = (totalInputWeight * tolerances.approvedProcessLossPercentage) / 100;
+  const tolerancePercentage = tolerances.unaccountedTolerancePercentage;
 
   const totalFinishedWeight = dc.receipts.reduce(
     (sum, r) => sum + r.items.reduce((s, l) => s + (Number(l.weightReceived) - Number(l.rejectedWeight)), 0),

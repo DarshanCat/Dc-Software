@@ -161,6 +161,7 @@ model Process {
   active           Boolean @default(true)
   deliveryChallans DeliveryChallan[]
   workOrders       WorkOrder[]
+  jobWorkStandards JobWorkStandard[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -185,11 +186,56 @@ model ScrapType {
   updatedAt         DateTime @updatedAt
 }
 
+model ItemMaster {
+  id               String   @id @default(uuid())
+  partNumber       String   @unique
+  partDescription  String
+  pricingBasis     PricingBasis @default(RW)
+  ratePerQuantity  Decimal? @db.Decimal(12, 2)
+  uom              String   @default("NOS")
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([partNumber])
+  @@index([active])
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([active])
+}
+
+model JobWorkStandard {
+  id                     String   @id @default(uuid())
+  processId              String
+  process                Process  @relation(fields: [processId], references: [id])
+  partNumber             String
+  standardLossPercentage Decimal? @db.Decimal(5, 2) @default(0)
+  turnaroundDays         Int      @default(15)
+  ratePerQuantity        Decimal? @db.Decimal(12, 2)
+  active                 Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([processId])
+  @@index([partNumber])
+  @@index([active])
+}
+
 // ---------------------- DELIVERY CHALLAN ----------------------
 
 enum PricingBasis {
   RM
   FG
+  RW
 }
 
 enum DcStatus {
@@ -265,10 +311,14 @@ model DeliveryChallan {
   width                       Decimal?  @db.Decimal(10, 2)
   height                      Decimal?  @db.Decimal(10, 2)
   outwardBoringWeight         Decimal?  @db.Decimal(12, 3)
+  rmUom                       String?
+  fgUom                       String?
+  dimensionUom                String?
 
   // Mandatory Pricing Fields
   pricingBasis                 PricingBasis?
   ratePerQuantity              Decimal?  @db.Decimal(12, 2)
+  pricingQuantitySnapshot      Decimal?  @db.Decimal(12, 3)
   expectedAmount               Decimal?  @db.Decimal(14, 2)
 
   // Security Dispatch Fields
@@ -302,6 +352,8 @@ model DeliveryChallan {
   // Store Receipt & Verification Fields
   storeReceivedQty             Decimal?  @db.Decimal(12, 3)
   storeReceivedDate            DateTime?
+  storeGatingWeight            Decimal?  @db.Decimal(12, 3)
+  storeBoringWeight            Decimal?  @db.Decimal(12, 3)
   storeConfirmedBy             String?
   storeVerifiedFgQuantity      Decimal?  @db.Decimal(12, 3)
   storeVerifiedRejectionQuantity Decimal? @db.Decimal(12, 3)

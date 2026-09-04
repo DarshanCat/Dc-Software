@@ -90,8 +90,10 @@ export const ADMIN_NAVIGATION: NavSection[] = [
   {
     label: "Masters",
     items: [
-      { label: "Vendors", href: "/masters/vendors", permission: P.VENDOR_VIEW },
-      { label: "Items", href: "/masters/items", permission: P.ITEM_VIEW },
+      { label: "Supplier Master", href: "/masters/suppliers", permission: P.VENDOR_VIEW },
+      { label: "Part / Item Master", href: "/masters/items", permission: P.ITEM_VIEW },
+      { label: "Department Master", href: "/masters/departments", permission: P.SYSTEM_SETTINGS },
+      { label: "Pricing Master", href: "/masters/pricing", permission: P.ITEM_VIEW },
       { label: "Processes", href: "/masters/processes", permission: P.PROCESS_VIEW },
       { label: "Job Work Standards", href: "/masters/job-work-standards", permission: P.JOB_WORK_STANDARD_VIEW },
       { label: "Scrap Types", href: "/masters/scrap-types", permission: P.PROCESS_VIEW },

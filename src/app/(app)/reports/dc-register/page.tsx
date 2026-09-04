@@ -5,6 +5,8 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { getDcRegisterRows } from "@/server/reports/dc-register";
 
+import { getVendorScope } from "@/server/dcs/vendor-scope";
+
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 25;
@@ -48,8 +50,9 @@ export default async function DcRegisterReportPage({
   }
 
   const page = Math.max(1, Number(sp.page) || 1);
+  const vendorScope = getVendorScope(user);
   const filters = {
-    vendorId: sp.vendorId || undefined,
+    vendorId: vendorScope.vendorId ?? (sp.vendorId || undefined),
     status: sp.status || undefined,
     purpose: sp.purpose || undefined,
     processId: sp.processId || undefined,

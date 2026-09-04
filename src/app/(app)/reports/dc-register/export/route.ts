@@ -4,6 +4,8 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { getDcRegisterRows, rowsToCsv } from "@/server/reports/dc-register";
 
+import { getVendorScope } from "@/server/dcs/vendor-scope";
+
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
   if (!user) {
@@ -15,8 +17,9 @@ export async function GET(request: NextRequest) {
   }
 
   const params = request.nextUrl.searchParams;
+  const vendorScope = getVendorScope(user);
   const filters = {
-    vendorId: user.roleKeys.includes("VENDOR") && user.vendorId ? user.vendorId : params.get("vendorId") || undefined,
+    vendorId: vendorScope.vendorId ?? (params.get("vendorId") || undefined),
     status: params.get("status") || undefined,
     purpose: params.get("purpose") || undefined,
     processId: params.get("processId") || undefined,

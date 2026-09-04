@@ -40,10 +40,10 @@ describe("DC Mandatory Pricing & Calculations", () => {
     expect(validateRate(1000).ok).toBe(true);
   });
 
-  it("validates that exactly one pricing basis must be selected", () => {
+  it("validates that exactly one pricing basis must be selected (RW or FG)", () => {
     const validateBasis = (basis?: string) => {
-      if (!basis || !["RM", "FG"].includes(basis)) {
-        return { ok: false, error: "Please select a pricing basis: RM Quantity or FG Quantity." };
+      if (!basis || !["RW", "FG", "RM"].includes(basis)) {
+        return { ok: false, error: "Please select a pricing basis: RW Quantity or FG Quantity." };
       }
       return { ok: true };
     };
@@ -51,7 +51,26 @@ describe("DC Mandatory Pricing & Calculations", () => {
     expect(validateBasis("").ok).toBe(false);
     expect(validateBasis(undefined).ok).toBe(false);
     expect(validateBasis("INVALID").ok).toBe(false);
-    expect(validateBasis("RM").ok).toBe(true);
+    expect(validateBasis("RW").ok).toBe(true);
     expect(validateBasis("FG").ok).toBe(true);
   });
+
+  it("calculates pricingQuantitySnapshot and expectedAmount correctly for RW and FG pricing basis", () => {
+    const calculatePricing = (basis: "RW" | "FG", outwardQtyRw: number, returningFgQty: number, rate: number) => {
+      const pricingQty = basis === "RW" ? outwardQtyRw : returningFgQty;
+      const expectedAmount = Number((pricingQty * rate).toFixed(2));
+      return { pricingQty, expectedAmount };
+    };
+
+    // RW Basis calculation: 50.5 NOS * 120 Rate = 6060.00
+    const rwResult = calculatePricing("RW", 50.5, 48, 120);
+    expect(rwResult.pricingQty).toBe(50.5);
+    expect(rwResult.expectedAmount).toBe(6060);
+
+    // FG Basis calculation: 48 NOS * 120 Rate = 5760.00
+    const fgResult = calculatePricing("FG", 50.5, 48, 120);
+    expect(fgResult.pricingQty).toBe(48);
+    expect(fgResult.expectedAmount).toBe(5760);
+  });
 });
+

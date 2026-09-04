@@ -27,9 +27,9 @@ export function QualityInspectionForm({ dcs }: Props) {
   const router = useRouter();
 
   const [selectedDcId, setSelectedDcId] = useState("");
-  const [goodQty, setGoodQty] = useState<string>("0");
-  const [rejectionQty, setRejectionQty] = useState<string>("0");
-  const [scrapQty, setScrapQty] = useState<string>("0");
+  const [goodQty, setGoodQty] = useState<string>("");
+  const [rejectionQty, setRejectionQty] = useState<string>("");
+  const [scrapQty, setScrapQty] = useState<string>("");
   const [qualityDecision, setQualityDecision] = useState<"PASSED" | "PARTIAL_ACCEPTANCE" | "REJECTED" | "SCRAPPED">("PASSED");
   const [remarks, setRemarks] = useState("");
 
@@ -39,12 +39,13 @@ export function QualityInspectionForm({ dcs }: Props) {
 
   const selectedDc = dcs.find((d) => d.id === selectedDcId);
   const actualInward = selectedDc ? selectedDc.actualInwardQty : 0;
+  const storeReceived = selectedDc ? (selectedDc.storeReceivedQty ?? selectedDc.actualInwardQty) : 0;
 
   const numGood = parseFloat(goodQty) || 0;
   const numReject = parseFloat(rejectionQty) || 0;
   const numScrap = parseFloat(scrapQty) || 0;
 
-  const reconciliation = stageResultBalance(numGood, numReject, numScrap, actualInward);
+  const reconciliation = stageResultBalance(numGood, numReject, numScrap, storeReceived);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,8 +53,8 @@ export function QualityInspectionForm({ dcs }: Props) {
     setSuccess(null);
 
     if (!selectedDcId) return setError("Please select a Delivery Challan.");
-    if (!reconciliation.isValid) {
-      return setError(`Reconciliation Balance Error: Good (${numGood}) + Rejection (${numReject}) + Scrap (${numScrap}) = ${reconciliation.total}, which does not equal Actual Inward Qty (${actualInward}).`);
+    if (!reconciliation.isValid || (numGood + numReject + numScrap) !== storeReceived) {
+      return setError("Good + Rejection + Scrap must equal the Store Received Qty.");
     }
 
     setLoading(true);
@@ -87,25 +88,22 @@ export function QualityInspectionForm({ dcs }: Props) {
           value={selectedDcId}
           onChange={(e) => {
             setSelectedDcId(e.target.value);
-            const dc = dcs.find((d) => d.id === e.target.value);
-            if (dc) {
-              setGoodQty(String(dc.actualInwardQty));
-              setRejectionQty("0");
-              setScrapQty("0");
-            }
+            setGoodQty("");
+            setRejectionQty("");
+            setScrapQty("");
           }}
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
         >
           <option value="">-- Select Pending DC --</option>
           {dcs.map((d) => (
             <option key={d.id} value={d.id}>
-              {d.dcNumber} — {d.vendorName} (WO: {d.woNumber}, Inward Qty: {d.actualInwardQty} NOS)
+              {d.dcNumber} — {d.vendorName} (WO: {d.woNumber}, Store Rec: {d.storeReceivedQty ?? d.actualInwardQty} NOS)
             </option>
           ))}
         </select>
 
         {selectedDc && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 rounded-md bg-slate-50 p-4 border border-slate-200 text-xs">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 rounded-md bg-slate-50 p-4 border border-slate-200 text-xs">
             <div>
               <span className="text-slate-500 block">Supplier</span>
               <span className="font-semibold text-slate-900">{selectedDc.vendorName}</span>
@@ -119,8 +117,12 @@ export function QualityInspectionForm({ dcs }: Props) {
               <span className="font-semibold text-slate-900">{selectedDc.department}</span>
             </div>
             <div>
-              <span className="text-slate-500 block">Actual Inward Qty</span>
-              <span className="font-bold text-blue-700 text-sm">{selectedDc.actualInwardQty} NOS</span>
+              <span className="text-slate-500 block">Security Inward Qty</span>
+              <span className="font-bold text-slate-700 text-sm">{selectedDc.actualInwardQty} NOS</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block">Store Received Qty</span>
+              <span className="font-bold text-blue-700 text-sm">{selectedDc.storeReceivedQty ?? selectedDc.actualInwardQty} NOS</span>
             </div>
           </div>
         )}
@@ -155,6 +157,7 @@ export function QualityInspectionForm({ dcs }: Props) {
                   min="0"
                   value={goodQty}
                   onChange={(e) => setGoodQty(e.target.value)}
+                  placeholder="Enter good qty"
                   className="w-full rounded-md border border-emerald-300 px-3 py-2 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   required
                 />
@@ -168,6 +171,7 @@ export function QualityInspectionForm({ dcs }: Props) {
                   min="0"
                   value={rejectionQty}
                   onChange={(e) => setRejectionQty(e.target.value)}
+                  placeholder="Enter rejection qty"
                   className="w-full rounded-md border border-red-300 px-3 py-2 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500"
                   required
                 />
@@ -181,6 +185,7 @@ export function QualityInspectionForm({ dcs }: Props) {
                   min="0"
                   value={scrapQty}
                   onChange={(e) => setScrapQty(e.target.value)}
+                  placeholder="Enter scrap qty"
                   className="w-full rounded-md border border-amber-300 px-3 py-2 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   required
                 />
@@ -201,7 +206,7 @@ export function QualityInspectionForm({ dcs }: Props) {
                   {reconciliation.isValid ? "RECONCILIATION VALID (Balance: 0)" : `RECONCILIATION MISMATCH (Balance: ${reconciliation.balance})`}
                 </span>
                 <span className="text-xs opacity-90">
-                  Good ({numGood}) + Rejection ({numReject}) + Scrap ({numScrap}) = {reconciliation.total} NOS (Actual Inward: {actualInward} NOS)
+                  Good ({numGood}) + Rejection ({numReject}) + Scrap ({numScrap}) = {reconciliation.total} NOS (Store Received: {storeReceived} NOS)
                 </span>
               </div>
             </div>

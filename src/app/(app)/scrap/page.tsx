@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { evaluateScrap } from "@/services/scrap.service";
+import { getSessionUser } from "@/server/session";
+import { getVendorScope } from "@/server/dcs/vendor-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +15,13 @@ export default async function ScrapDashboardPage({
 }) {
   const { view } = await searchParams;
   const activeView = (view as ScrapView) ?? "all";
+  const user = await getSessionUser();
 
   const dcs = await prisma.deliveryChallan.findMany({
-    where: { status: { notIn: ["DRAFT", "PENDING_APPROVAL", "CANCELLED"] } },
+    where: {
+      status: { notIn: ["DRAFT", "PENDING_APPROVAL", "CANCELLED"] },
+      ...getVendorScope(user),
+    },
     include: { vendor: true, scrapReceipts: { include: { items: true } } },
     orderBy: { createdAt: "desc" },
     take: 200,

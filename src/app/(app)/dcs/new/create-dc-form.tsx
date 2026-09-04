@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createOutwardDc, CreateOutwardDcInput } from "@/server/dcs/extended-actions";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { useTallyNavigation } from "@/hooks/use-tally-navigation";
 
 interface VendorOption {
   id: string;
@@ -24,13 +25,23 @@ interface ItemOption {
   rate: any;
 }
 
+interface DepartmentOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
 interface Props {
   vendors: VendorOption[];
   items?: ItemOption[];
+  departments?: DepartmentOption[];
 }
 
-export function CreateDcForm({ vendors, items = [] }: Props) {
+export function CreateDcForm({ vendors, items = [], departments = [] }: Props) {
   const router = useRouter();
+  const { containerRef, handleKeyDown } = useTallyNavigation({
+    onValidationError: (_el, msg) => setError(msg),
+  });
 
   // Form state according to new business requirements
   const [selectedVendorId, setSelectedVendorId] = useState("");
@@ -53,7 +64,8 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
 
-  const [pricing, setPricing] = useState("");
+  const [pricingBasis, setPricingBasis] = useState<"RW" | "FG">("RW");
+  const [ratePerQuantity, setRatePerQuantity] = useState("");
   const [remarks, setRemarks] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -71,18 +83,21 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
     setSelectedPartId(partId);
     if (!partId) {
       setPartDescription("");
-      setPricing("");
+      setRatePerQuantity("");
       return;
     }
     const foundItem = items.find((i) => i.id === partId);
     if (foundItem) {
       setCustomPartNumber(foundItem.itemCode);
       setPartDescription(foundItem.description || foundItem.itemName || "");
-      if (foundItem.rate) setPricing(String(foundItem.rate));
+      if (foundItem.rate) setRatePerQuantity(String(foundItem.rate));
     }
   }
 
-  async function handleSubmit(isDraft: boolean) {
+  const activePricingQty = pricingBasis === "RW" ? Number(outwardQtyRw || 0) : Number(returningFgQuantity || 0);
+  const calculatedAmount = (activePricingQty * Number(ratePerQuantity || 0)).toFixed(2);
+
+  async function handleSubmit(submitForApproval: boolean) {
     setError(null);
     setSuccess(null);
 
@@ -90,6 +105,18 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
     if (!woNumber.trim()) return setError("WO ID (Work Order) is mandatory.");
     const partNum = customPartNumber.trim() || (items.find((i) => i.id === selectedPartId)?.itemCode || "");
     if (!partNum) return setError("Part Number is mandatory.");
+
+    if (!pricingBasis) return setError("Please select a pricing basis: RW Quantity or Returning FG Quantity.");
+    const rateVal = parseFloat(ratePerQuantity);
+    if (isNaN(rateVal) || rateVal <= 0) return setError("Rate Per Quantity must be greater than zero.");
+
+    if (pricingBasis === "RW") {
+      const rwVal = parseFloat(outwardQtyRw);
+      if (isNaN(rwVal) || rwVal <= 0) return setError("Outward Qty RW must be greater than zero when Price Based On is RW Quantity.");
+    } else if (pricingBasis === "FG") {
+      const fgVal = parseFloat(returningFgQuantity);
+      if (isNaN(fgVal) || fgVal <= 0) return setError("Returning FG Qty must be greater than zero when Price Based On is Returning FG Quantity.");
+    }
 
     setLoading(true);
 
@@ -99,7 +126,8 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
       woNumber: woNumber.trim(),
       partNumber: partNum,
       partDescription: partDescription.trim() || undefined,
-      pricing: pricing ? parseFloat(pricing) : undefined,
+      pricingBasis,
+      ratePerQuantity: rateVal,
       outwardWeight: outwardWeight ? parseFloat(outwardWeight) : undefined,
       outwardGatingWeight: outwardGatingWeight ? parseFloat(outwardGatingWeight) : undefined,
       outwardQtyRw: outwardQtyRw ? parseFloat(outwardQtyRw) : undefined,
@@ -109,15 +137,20 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
       height: height ? parseFloat(height) : undefined,
       outwardBoringWeight: outwardBoringWeight ? parseFloat(outwardBoringWeight) : undefined,
       remarks: remarks.trim() || undefined,
+      submitForApproval,
     };
 
     const res = await createOutwardDc(payload);
     setLoading(false);
 
     if (!res.ok) {
-      setError(res.error || "An error occurred while creating Outward DC.");
+      setError(res.error || "An error occurred while creating Delivery Challan.");
     } else {
-      setSuccess(`Outward DC ${res.dcNumber} created successfully.`);
+      setSuccess(
+        submitForApproval
+          ? `DC ${res.dcNumber} created and submitted for Manager Approval successfully.`
+          : `DC ${res.dcNumber} saved as DRAFT successfully.`
+      );
       setTimeout(() => router.push(`/dcs/${res.dcId}`), 1000);
     }
   }
@@ -125,20 +158,28 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700 border border-red-200">
+        <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700 border border-red-200 font-medium">
           <AlertCircle className="h-5 w-5 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {success && (
-        <div className="flex items-center gap-2 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700 border border-emerald-200">
+        <div className="flex items-center gap-2 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700 border border-emerald-200 font-medium">
           <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
           <span>{success}</span>
         </div>
       )}
 
-      <form onSubmit={(e) => { e.preventDefault(); handleSubmit(false); }} className="space-y-6">
+      <form
+        ref={containerRef as any}
+        onKeyDown={handleKeyDown}
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit(false);
+        }}
+        className="space-y-6"
+      >
         {/* SECTION 1: DOCUMENT INFORMATION */}
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
@@ -148,6 +189,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Supplier Name *</label>
               <select
+                data-tally-id="supplier"
                 value={selectedVendorId}
                 onChange={(e) => handleVendorChange(e.target.value)}
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
@@ -167,6 +209,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
               <input
                 type="text"
                 readOnly
+                data-tally-skip="true"
                 value={selectedVendor ? selectedVendor.address || `${selectedVendor.city || ""}, ${selectedVendor.state || ""}` : ""}
                 className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 focus:outline-none"
                 placeholder="Snapshot from Master Data"
@@ -178,6 +221,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
               <input
                 type="text"
                 readOnly
+                data-tally-skip="true"
                 value={selectedVendor ? selectedVendor.gstNumber || "N/A" : ""}
                 className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 focus:outline-none"
                 placeholder="Snapshot from Master Data"
@@ -190,6 +234,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
               <label className="block text-xs font-semibold text-slate-700 mb-1">Date of Creating DC *</label>
               <input
                 type="date"
+                data-tally-id="dcDate"
                 value={documentDate}
                 onChange={(e) => setDocumentDate(e.target.value)}
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -200,16 +245,27 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Department *</label>
               <select
+                data-tally-id="department"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                 required
               >
-                <option value="PRODUCTION">PRODUCTION</option>
-                <option value="STORES">STORES</option>
-                <option value="FOUNDRY">FOUNDRY</option>
-                <option value="QUALITY">QUALITY</option>
-                <option value="MACHINING">MACHINING</option>
+                {departments.length > 0 ? (
+                  departments.map((d) => (
+                    <option key={d.id} value={d.name}>
+                      {d.name} ({d.code})
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="PRODUCTION">PRODUCTION</option>
+                    <option value="STORES">STORES</option>
+                    <option value="FOUNDRY">FOUNDRY</option>
+                    <option value="QUALITY">QUALITY</option>
+                    <option value="MACHINING">MACHINING</option>
+                  </>
+                )}
               </select>
             </div>
           </div>
@@ -218,13 +274,14 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
         {/* SECTION 2: WORK ORDER / PART INFORMATION */}
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
-            Section 2: Work Order & Part Information
+            Section 2: Work Order &amp; Part Information
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">WO ID (Work Order Number) *</label>
               <input
                 type="text"
+                data-tally-id="woNumber"
                 value={woNumber}
                 onChange={(e) => setWoNumber(e.target.value)}
                 placeholder="e.g. WO-2026-001"
@@ -237,6 +294,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
               <label className="block text-xs font-semibold text-slate-700 mb-1">Part Number *</label>
               {items.length > 0 ? (
                 <select
+                  data-tally-id="partNumber"
                   value={selectedPartId}
                   onChange={(e) => handlePartChange(e.target.value)}
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
@@ -251,6 +309,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
               ) : (
                 <input
                   type="text"
+                  data-tally-id="partNumber"
                   value={customPartNumber}
                   onChange={(e) => setCustomPartNumber(e.target.value)}
                   placeholder="e.g. PN-9988"
@@ -264,10 +323,12 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
               <label className="block text-xs font-semibold text-slate-500 mb-1">Part Description (Auto-filled)</label>
               <input
                 type="text"
+                readOnly
+                disabled
+                data-tally-skip="true"
                 value={partDescription}
-                onChange={(e) => setPartDescription(e.target.value)}
                 placeholder="Auto-filled from Part Master"
-                className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none"
+                className="w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-700 focus:outline-none cursor-not-allowed font-medium"
               />
             </div>
           </div>
@@ -285,6 +346,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
                 type="number"
                 step="0.001"
                 min="0"
+                data-tally-id="outwardQtyRw"
                 value={outwardQtyRw}
                 onChange={(e) => setOutwardQtyRw(e.target.value)}
                 placeholder="Raw material quantity sent (NOS)"
@@ -299,6 +361,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
                 type="number"
                 step="0.001"
                 min="0"
+                data-tally-id="returningFgQuantity"
                 value={returningFgQuantity}
                 onChange={(e) => setReturningFgQuantity(e.target.value)}
                 placeholder="Finished goods expected back (NOS)"
@@ -321,6 +384,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
                 type="number"
                 step="0.001"
                 min="0"
+                data-tally-id="outwardWeight"
                 value={outwardWeight}
                 onChange={(e) => setOutwardWeight(e.target.value)}
                 placeholder="Total outward gross weight"
@@ -335,6 +399,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
                 type="number"
                 step="0.001"
                 min="0"
+                data-tally-id="outwardGatingWeight"
                 value={outwardGatingWeight}
                 onChange={(e) => setOutwardGatingWeight(e.target.value)}
                 placeholder="Gating / runner weight"
@@ -349,6 +414,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
                 type="number"
                 step="0.001"
                 min="0"
+                data-tally-id="outwardBoringWeight"
                 value={outwardBoringWeight}
                 onChange={(e) => setOutwardBoringWeight(e.target.value)}
                 placeholder="Boring / chip weight"
@@ -371,6 +437,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
                 type="number"
                 step="0.01"
                 min="0"
+                data-tally-id="length"
                 value={length}
                 onChange={(e) => setLength(e.target.value)}
                 placeholder="Length"
@@ -384,6 +451,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
                 type="number"
                 step="0.01"
                 min="0"
+                data-tally-id="width"
                 value={width}
                 onChange={(e) => setWidth(e.target.value)}
                 placeholder="Width"
@@ -397,6 +465,7 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
                 type="number"
                 step="0.01"
                 min="0"
+                data-tally-id="height"
                 value={height}
                 onChange={(e) => setHeight(e.target.value)}
                 placeholder="Height"
@@ -406,23 +475,83 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
           </div>
         </div>
 
-        {/* SECTION 6: PRICING */}
-        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
-            Section 6: Pricing
+        {/* SECTION 6: PRICING & COMMERCIAL */}
+        <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-6 shadow-sm space-y-4">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-blue-950 border-b border-blue-200 pb-2">
+            Section 6: Pricing &amp; Commercial
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          <div className="space-y-3">
+            <label className="block text-xs font-bold text-slate-900 uppercase tracking-wide">
+              PRICE BASED ON <span className="text-red-600">*</span>
+            </label>
+            <div className="flex flex-col sm:flex-row gap-4 pt-1">
+              <label className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${pricingBasis === "RW" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
+                <input
+                  type="radio"
+                  name="pricingBasis"
+                  value="RW"
+                  data-tally-id="pricingBasis"
+                  checked={pricingBasis === "RW"}
+                  onChange={() => setPricingBasis("RW")}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                />
+                <div className="text-xs">
+                  <span className="block font-semibold">RW QUANTITY</span>
+                  <span className="text-[11px] opacity-80">Calculated using Outward Qty RW ({outwardQtyRw || 0} NOS)</span>
+                </div>
+              </label>
+
+              <label className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${pricingBasis === "FG" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
+                <input
+                  type="radio"
+                  name="pricingBasis"
+                  value="FG"
+                  checked={pricingBasis === "FG"}
+                  onChange={() => setPricingBasis("FG")}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                />
+                <div className="text-xs">
+                  <span className="block font-semibold">RETURNING FG QUANTITY</span>
+                  <span className="text-[11px] opacity-80">Calculated using Returning FG Qty ({returningFgQuantity || 0} NOS)</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Pricing (Rate / Unit Amount ₹)</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Rate Per Quantity (₹) <span className="text-red-600">*</span>
+              </label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                value={pricing}
-                onChange={(e) => setPricing(e.target.value)}
-                placeholder="Unit rate or standard pricing"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                data-tally-id="ratePerQuantity"
+                value={ratePerQuantity}
+                onChange={(e) => setRatePerQuantity(e.target.value)}
+                placeholder="Rate per NOS"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                required
               />
+            </div>
+
+            <div className="rounded-lg bg-white p-3 border border-slate-200 space-y-1">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Calculated Commercial Output</span>
+              <div className="text-xs space-y-0.5 font-sans">
+                <p className="text-slate-600">
+                  Pricing Basis: <span className="font-bold text-slate-900">{pricingBasis === "RW" ? "RW Quantity" : "Returning FG Quantity"}</span>
+                </p>
+                <p className="text-slate-600">
+                  Quantity Used: <span className="font-mono font-bold text-slate-900">{activePricingQty} NOS</span>
+                  {" × "}
+                  Rate: <span className="font-mono font-bold text-slate-900">₹{ratePerQuantity || "0.00"}</span>
+                </p>
+                <p className="text-sm font-bold text-emerald-800 pt-1">
+                  Calculated Amount: <span className="font-mono text-base">₹{calculatedAmount}</span>
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -430,12 +559,13 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
         {/* SECTION 7: REMARKS */}
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
-            Section 7: Remarks & Attachments
+            Section 7: Remarks &amp; Attachments
           </h2>
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Remarks / Notes</label>
             <input
               type="text"
+              data-tally-id="remarks"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               placeholder="Special job work instructions or transport notes"
@@ -445,27 +575,43 @@ export function CreateDcForm({ vendors, items = [] }: Props) {
         </div>
 
         {/* ACTION BUTTONS */}
-        <div className="flex justify-end gap-3 border-t pt-4">
+        <div className="flex flex-col sm:flex-row items-center justify-end gap-3 border-t pt-4">
           <Button
             type="button"
             variant="secondary"
+            data-tally-id="cancelBtn"
             onClick={() => router.back()}
             disabled={loading}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
+
           <Button
-            type="submit"
+            type="button"
+            variant="secondary"
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6"
+            data-tally-id="saveDraftBtn"
+            onClick={() => handleSubmit(false)}
+            className="w-full sm:w-auto border-blue-600 text-blue-700 hover:bg-blue-50 font-semibold px-5"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "SAVE AS DRAFT"}
+          </Button>
+
+          <Button
+            type="button"
+            disabled={loading}
+            data-tally-id="submitBtn"
+            onClick={() => handleSubmit(true)}
+            className="w-full sm:w-auto bg-blue-700 hover:bg-blue-800 text-white font-bold px-6"
           >
             {loading ? (
               <span className="flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Creating Outward DC...
+                Submitting DC...
               </span>
             ) : (
-              "CREATE OUTWARD DC"
+              "SUBMIT FOR APPROVAL"
             )}
           </Button>
         </div>

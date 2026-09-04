@@ -8,6 +8,13 @@ export function filterDcDataForRole<T extends Record<string, any>>(dc: T, userRo
 
   if (userRole === "SECURITY") {
     const sanitized = { ...dc };
+    delete sanitized.goodQty;
+    delete sanitized.rejectionQty;
+    delete sanitized.scrapQty;
+    delete sanitized.qualityDecision;
+    delete sanitized.inspectionRemarks;
+    delete sanitized.storeGatingWeight;
+    delete sanitized.storeBoringWeight;
     delete sanitized.storeVerifiedFgQuantity;
     delete sanitized.storeVerifiedRejectionQuantity;
     delete sanitized.storeVerifiedScrapQuantity;
@@ -26,6 +33,11 @@ export function filterDcDataForRole<T extends Record<string, any>>(dc: T, userRo
 
   if (userRole === "STORES") {
     const sanitized = { ...dc };
+    delete sanitized.goodQty;
+    delete sanitized.rejectionQty;
+    delete sanitized.scrapQty;
+    delete sanitized.qualityDecision;
+    delete sanitized.inspectionRemarks;
     delete sanitized.securityFgQuantity;
     delete sanitized.securityRejectionQuantity;
     delete sanitized.securityScrapQuantity;

@@ -4,7 +4,9 @@ import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { filterDcDataForRole } from "@/server/dcs/sanitizer";
+import { getVendorScope } from "@/server/dcs/vendor-scope";
 import { Button } from "@/components/ui/button";
+import { DcListRowActions } from "./dc-list-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +44,9 @@ export default async function DcsPage({
   const roleKeys = user?.roleKeys || [];
   const isAdmin = roleKeys.includes("ADMIN");
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = {
+    ...getVendorScope(user),
+  };
 
   if (!isAdmin) {
     let allowed: string[] = [];
@@ -105,12 +109,13 @@ export default async function DcsPage({
               <th className="px-4 py-2.5 font-bold text-right">RM Qty</th>
               <th className="px-4 py-2.5 font-bold text-right">Exp FG Qty</th>
               <th className="px-4 py-2.5 font-bold">Status</th>
+              <th className="px-4 py-2.5 font-bold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs">
             {dcs.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400 italic">
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-400 italic">
                   No Delivery Challans found for your role or requested queue.
                 </td>
               </tr>
@@ -134,6 +139,14 @@ export default async function DcsPage({
                       <span className={`rounded border px-2 py-0.5 text-[11px] font-bold ${STATUS_COLORS[dc.status] ?? "bg-slate-100 text-slate-600"}`}>
                         {dc.status.replace(/_/g, " ")}
                       </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <DcListRowActions
+                        dcId={dc.id}
+                        dcNumber={dc.dcNumber}
+                        status={dc.status}
+                        canEdit={canCreate}
+                      />
                     </td>
                   </tr>
                 );

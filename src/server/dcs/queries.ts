@@ -109,7 +109,7 @@ export async function getManagementFinalApprovalQueue(roleKey: string = "MANAGEM
 
 export async function getManagementPaymentApprovalQueue(roleKey: string = "MANAGEMENT") {
   const dcs = await prisma.deliveryChallan.findMany({
-    where: { status: "FINAL_APPROVED" },
+    where: { status: { in: ["QUALITY_COMPLETED", "MANAGER_APPROVAL_PENDING", "FINAL_APPROVED"] } },
     include: { vendor: { select: { vendorName: true } }, process: { select: { name: true } } },
     orderBy: { updatedAt: "desc" },
   });

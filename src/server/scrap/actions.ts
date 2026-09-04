@@ -9,6 +9,7 @@ import { writeAudit } from "@/server/audit";
 import { nextNumber, fiscalYearOf } from "@/services/number-sequence.service";
 import { evaluateScrap } from "@/services/scrap.service";
 import { calculateReconciliation } from "@/server/reconciliation/calculate";
+import { getToleranceSettings } from "@/server/settings/tolerances";
 import { scrapReceiptSchema, type ScrapReceiptInput } from "@/lib/validation/scrap-receipt";
 
 export type ActionResult =
@@ -54,8 +55,9 @@ export async function createScrapReceipt(input: ScrapReceiptInput): Promise<Acti
         );
       }
 
+      const tolerances = await getToleranceSettings(tx as never);
       const expectedScrapWeight = Number(dc.expectedScrap ?? 0);
-      const tolerancePercentage = 0;
+      const tolerancePercentage = tolerances.scrapTolerancePercentage;
 
       const alreadyReceived = dc.scrapReceipts.reduce(
         (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),

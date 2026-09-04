@@ -27,6 +27,8 @@ export function StoreReceiptForm({ dcs }: Props) {
   const [selectedDcId, setSelectedDcId] = useState("");
   const [storeReceivedQty, setStoreReceivedQty] = useState<string>("");
   const [storeReceivedDate, setStoreReceivedDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [storeGatingWeight, setStoreGatingWeight] = useState<string>("");
+  const [storeBoringWeight, setStoreBoringWeight] = useState<string>("");
   const [remarks, setRemarks] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -54,6 +56,8 @@ export function StoreReceiptForm({ dcs }: Props) {
       dcId: selectedDcId,
       storeReceivedQty: numQty,
       storeReceivedDate,
+      storeGatingWeight: storeGatingWeight ? parseFloat(storeGatingWeight) : undefined,
+      storeBoringWeight: storeBoringWeight ? parseFloat(storeBoringWeight) : undefined,
       storeRemarks: remarks.trim() || undefined,
     };
 
@@ -162,6 +166,30 @@ export function StoreReceiptForm({ dcs }: Props) {
             </div>
 
             <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Store Gating Weight (KG)</label>
+              <input
+                type="number"
+                step="0.001"
+                value={storeGatingWeight}
+                onChange={(e) => setStoreGatingWeight(e.target.value)}
+                placeholder="0.000 (KG)"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Store Boring Weight (KG)</label>
+              <input
+                type="number"
+                step="0.001"
+                value={storeBoringWeight}
+                onChange={(e) => setStoreBoringWeight(e.target.value)}
+                placeholder="0.000 (KG)"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-slate-700 mb-1">Store Remarks</label>
               <input
                 type="text"

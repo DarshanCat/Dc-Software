@@ -15,6 +15,7 @@ import {
   submitAccountsPaymentEntry,
   closeDc,
 } from "@/server/dcs/actions";
+import { deleteDraftDc } from "@/server/dcs/extended-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -23,6 +24,7 @@ export function DcActions({
   status,
   userRole,
   permissions,
+  closeEligibility,
   dcData,
 }: {
   dcId: string;
@@ -40,16 +42,22 @@ export function DcActions({
     canAccountsEntry: boolean;
     canClose: boolean;
   };
+  closeEligibility?: {
+    eligible: boolean;
+    missingFields: string[];
+  };
   dcData: {
+    dcNumber?: string;
     rmQuantity?: number | null;
     returnFgQuantity?: number | null;
+    actualInwardQty?: number | null;
+    storeReceivedQty?: number | null;
+    goodQty?: number | null;
+    rejectionQty?: number | null;
+    scrapQty?: number | null;
+    ratePerQuantity?: number | null;
+    pricingBasis?: string | null;
     securityDispatchQuantity?: number | null;
-    securityFgQuantity?: number | null;
-    securityRejectionQuantity?: number | null;
-    securityScrapQuantity?: number | null;
-    storeVerifiedFgQuantity?: number | null;
-    storeVerifiedRejectionQuantity?: number | null;
-    storeVerifiedScrapQuantity?: number | null;
     invoiceNumber?: string | null;
     invoiceDate?: string | null;
     invoiceAmount?: number | null;
@@ -70,6 +78,7 @@ export function DcActions({
     | "STORE_VERIFY"
     | "FINAL_APPROVE"
     | "ACCOUNTS_ENTRY"
+    | "DELETE_DRAFT"
     | null
   >(null);
 
@@ -83,23 +92,22 @@ export function DcActions({
   const [dispatchTransporter, setDispatchTransporter] = useState("");
   const [dispatchRemarks, setDispatchRemarks] = useState("");
 
-  // Security Return
-  const [secFg, setSecFg] = useState(String(dcData.returnFgQuantity || ""));
-  const [secRej, setSecRej] = useState("0");
-  const [secScrap, setSecScrap] = useState("0");
+  // Security Inward / Return (Security records ONLY physical material received)
+  const [secActualInwardQty, setSecActualInwardQty] = useState(String(dcData.actualInwardQty || dcData.returnFgQuantity || ""));
+  const [secInwardDate, setSecInwardDate] = useState(new Date().toISOString().split("T")[0]);
+  const [secDocNo, setSecDocNo] = useState("");
+  const [secInvoiceNo, setSecInvoiceNo] = useState(dcData.invoiceNumber || "");
   const [secVehicle, setSecVehicle] = useState("");
   const [secRemarks, setSecRemarks] = useState("");
 
-  // Store Verification
-  const [storeFg, setStoreFg] = useState(String(dcData.returnFgQuantity || ""));
-  const [storeRej, setStoreRej] = useState("0");
-  const [storeScrap, setStoreScrap] = useState("0");
+  // Store Verification (Store records storeReceivedQty and store weights)
+  const [storeReceivedQtyInput, setStoreReceivedQtyInput] = useState(String(dcData.storeReceivedQty || dcData.actualInwardQty || dcData.returnFgQuantity || ""));
+  const [storeReceivedDate, setStoreReceivedDate] = useState(new Date().toISOString().split("T")[0]);
+  const [storeGatingWeight, setStoreGatingWeight] = useState("");
+  const [storeBoringWeight, setStoreBoringWeight] = useState("");
   const [storeRemarks, setStoreRemarks] = useState("");
 
-  // Manager Final Approval
-  const [finalFg, setFinalFg] = useState(String(dcData.returnFgQuantity || ""));
-  const [finalRej, setFinalRej] = useState("0");
-  const [finalScrap, setFinalScrap] = useState("0");
+  // Manager Payment Approval (Quality results are read-only)
   const [managerRemarks, setManagerRemarks] = useState("");
 
   // Accounts Payment Entry
@@ -112,14 +120,19 @@ export function DcActions({
   const [accountsFieldErrors, setAccountsFieldErrors] = useState<Record<string, string>>({});
   const [accountsSuccessMsg, setAccountsSuccessMsg] = useState<string | null>(null);
 
-  // Readiness logic for CLOSE DC action
-  const isReadyToClose =
-    status === "APPROVED_FOR_PAYMENT" &&
-    !!dcData.invoiceNumber?.trim() &&
-    !!dcData.invoiceDate &&
-    Number(dcData.invoiceAmount ?? 0) > 0 &&
-    !!dcData.paymentReferenceNumber?.trim() &&
-    !!dcData.paymentDate;
+  // Authoritative Readiness logic for CLOSE DC action
+  const isReadyToClose = closeEligibility
+    ? closeEligibility.eligible
+    : status === "APPROVED_FOR_PAYMENT" &&
+      !!(dcData.invoiceNumber || invNum)?.trim() &&
+      !!(dcData.invoiceDate || invDate) &&
+      Number(dcData.invoiceAmount ?? invAmount ?? 0) > 0 &&
+      !!(dcData.paymentReferenceNumber || payRef)?.trim() &&
+      !!(dcData.paymentDate || payDate);
+
+  const missingFeedback = closeEligibility && closeEligibility.missingFields.length > 0
+    ? closeEligibility.missingFields.join(", ")
+    : "Complete required Invoice and Payment details";
 
   async function handleAction(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setBusy(true);
@@ -153,11 +166,29 @@ export function DcActions({
       )}
 
       <div className="flex flex-wrap items-center gap-3 pt-1">
-        {/* 1. DRAFT -> PENDING_APPROVAL */}
-        {status === "DRAFT" && permissions.canSubmit && (
-          <Button disabled={busy} onClick={() => handleAction(() => submitForApproval(dcId))} className="bg-blue-600 text-white hover:bg-blue-700">
-            Submit for Approval
-          </Button>
+        {/* 1. DRAFT or SENT_BACK -> PENDING_APPROVAL / EDIT / DELETE */}
+        {(status === "DRAFT" || status === "SENT_BACK") && permissions.canSubmit && (
+          <>
+            <Button
+              disabled={busy}
+              variant="secondary"
+              onClick={() => router.push(`/dcs/${dcId}/edit`)}
+              className="border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              Edit DC
+            </Button>
+            <Button
+              disabled={busy}
+              variant="danger"
+              onClick={() => setModal("DELETE_DRAFT")}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold"
+            >
+              Delete Draft
+            </Button>
+            <Button disabled={busy} onClick={() => handleAction(() => submitForApproval(dcId))} className="bg-blue-600 text-white hover:bg-blue-700">
+              Submit for Approval
+            </Button>
+          </>
         )}
 
         {/* 2. PENDING_APPROVAL -> APPROVED / DRAFT */}
@@ -200,17 +231,10 @@ export function DcActions({
           </Button>
         )}
 
-        {/* 7. STORE_VERIFIED -> FINAL_APPROVED */}
-        {status === "STORE_VERIFIED" && permissions.canManagerFinalApprove && (
-          <Button disabled={busy} onClick={() => setModal("FINAL_APPROVE")} className="bg-teal-700 hover:bg-teal-800 text-white">
-            Manager Final Approval &amp; Quantities
-          </Button>
-        )}
-
-        {/* 8. FINAL_APPROVED -> APPROVED_FOR_PAYMENT */}
-        {status === "FINAL_APPROVED" && permissions.canPaymentApprove && (
-          <Button disabled={busy} onClick={() => handleAction(() => submitPaymentApproval(dcId))} className="bg-emerald-700 hover:bg-emerald-800 text-white">
-            Approve for Payment
+        {/* 7 & 8. QUALITY_COMPLETED / FINAL_APPROVED -> APPROVED_FOR_PAYMENT */}
+        {(status === "QUALITY_COMPLETED" || status === "FINAL_APPROVED" || status === "STORE_VERIFIED") && permissions.canPaymentApprove && (
+          <Button disabled={busy} onClick={() => setModal("FINAL_APPROVE")} className="bg-emerald-700 hover:bg-emerald-800 text-white">
+            Manager Payment Approval
           </Button>
         )}
 
@@ -244,7 +268,7 @@ export function DcActions({
                 ) : (
                   <Button
                     disabled={true}
-                    title="Complete required Invoice and Payment details to close this DC."
+                    title={`Cannot close DC. Requirements: ${missingFeedback}`}
                     className="bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed font-bold opacity-70 px-5 py-2"
                   >
                     CLOSE DC
@@ -261,7 +285,7 @@ export function DcActions({
                   </span>
                 ) : (
                   <span className="text-amber-800 font-medium bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-md flex items-center gap-1.5">
-                    ⚠ Complete required Invoice and Payment details to enable CLOSE DC.
+                    ⚠ Complete requirements to enable CLOSE DC: {missingFeedback}
                   </span>
                 )}
               </div>
@@ -384,21 +408,33 @@ export function DcActions({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 space-y-4">
             <h3 className="text-base font-bold text-slate-900">Security Gate Return Entry</h3>
-            <div className="space-y-3">
+            <p className="text-xs text-slate-500">Record physical material received at the security gate.</p>
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Returned FG Quantity *</label>
-                <Input type="number" step="0.001" value={secFg} onChange={(e) => setSecFg(e.target.value)} />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Actual Inward Qty (NOS) *</label>
+                <Input
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  value={secActualInwardQty}
+                  onChange={(e) => setSecActualInwardQty(e.target.value)}
+                  placeholder="Actual inward quantity received"
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Rejection Quantity *</label>
-                <Input type="number" step="0.001" value={secRej} onChange={(e) => setSecRej(e.target.value)} />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Inward Date *</label>
+                <Input type="date" value={secInwardDate} onChange={(e) => setSecInwardDate(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Scrap Quantity *</label>
-                <Input type="number" step="0.001" value={secScrap} onChange={(e) => setSecScrap(e.target.value)} />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Inward Document Number</label>
+                <Input value={secDocNo} onChange={(e) => setSecDocNo(e.target.value)} placeholder="Gate inward pass no." />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Return Vehicle Number</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Supplier Invoice Number</label>
+                <Input value={secInvoiceNo} onChange={(e) => setSecInvoiceNo(e.target.value)} placeholder="e.g. INV-12345" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Vehicle Number</label>
                 <Input value={secVehicle} onChange={(e) => setSecVehicle(e.target.value)} placeholder="e.g. KA-02-CD-5678" />
               </div>
               <div>
@@ -412,15 +448,16 @@ export function DcActions({
                 onClick={() =>
                   handleAction(() =>
                     submitSecurityReturn(dcId, {
-                      securityFgQuantity: Number(secFg),
-                      securityRejectionQuantity: Number(secRej),
-                      securityScrapQuantity: Number(secScrap),
+                      actualInwardQty: Number(secActualInwardQty),
+                      inwardDate: secInwardDate,
+                      inwardDocumentNo: secDocNo,
+                      invoiceNumber: secInvoiceNo,
                       vehicleNumber: secVehicle,
                       remarks: secRemarks,
                     }),
                   )
                 }
-                disabled={busy}
+                disabled={busy || !secActualInwardQty || Number(secActualInwardQty) <= 0}
                 className="bg-amber-600 text-white"
               >
                 Submit Security Return
@@ -434,23 +471,62 @@ export function DcActions({
       {modal === "STORE_VERIFY" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Store Verification Entry</h3>
+            <h3 className="text-base font-bold text-slate-900">Store Receipt Confirmation</h3>
+            <p className="text-xs text-slate-500">Confirm physical material receipt into store inventory.</p>
+
+            <div className="rounded-md bg-slate-50 p-3 border border-slate-200 text-xs">
+              <span className="text-slate-500 block">Security Actual Inward Qty</span>
+              <span className="font-bold text-blue-900 text-sm">{dcData.actualInwardQty ?? 0} NOS</span>
+            </div>
+
+            {Number(storeReceivedQtyInput) !== (dcData.actualInwardQty ?? 0) && Number(storeReceivedQtyInput) > 0 && (
+              <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-md text-xs font-medium">
+                ⚠ Store Received Qty ({storeReceivedQtyInput}) differs from Security Actual Inward Qty ({dcData.actualInwardQty ?? 0}). Variance will be recorded.
+              </div>
+            )}
+
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Verified FG Quantity *</label>
-                <Input type="number" step="0.001" value={storeFg} onChange={(e) => setStoreFg(e.target.value)} />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Store Received Quantity (NOS) *</label>
+                <Input
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  value={storeReceivedQtyInput}
+                  onChange={(e) => setStoreReceivedQtyInput(e.target.value)}
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Verified Rejection Quantity *</label>
-                <Input type="number" step="0.001" value={storeRej} onChange={(e) => setStoreRej(e.target.value)} />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Store Receipt Date *</label>
+                <Input
+                  type="date"
+                  value={storeReceivedDate}
+                  onChange={(e) => setStoreReceivedDate(e.target.value)}
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Verified Scrap Quantity *</label>
-                <Input type="number" step="0.001" value={storeScrap} onChange={(e) => setStoreScrap(e.target.value)} />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Store Gating Weight (KG)</label>
+                <Input
+                  type="number"
+                  step="0.001"
+                  value={storeGatingWeight}
+                  onChange={(e) => setStoreGatingWeight(e.target.value)}
+                  placeholder="0.000 (KG)"
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Store Inspection Remarks</label>
-                <Input value={storeRemarks} onChange={(e) => setStoreRemarks(e.target.value)} placeholder="Store verification notes" />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Store Boring Weight (KG)</label>
+                <Input
+                  type="number"
+                  step="0.001"
+                  value={storeBoringWeight}
+                  onChange={(e) => setStoreBoringWeight(e.target.value)}
+                  placeholder="0.000 (KG)"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Store Remarks</label>
+                <Input value={storeRemarks} onChange={(e) => setStoreRemarks(e.target.value)} placeholder="Store location or verification notes" />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
@@ -459,14 +535,15 @@ export function DcActions({
                 onClick={() =>
                   handleAction(() =>
                     submitStoreVerification(dcId, {
-                      storeVerifiedFgQuantity: Number(storeFg),
-                      storeVerifiedRejectionQuantity: Number(storeRej),
-                      storeVerifiedScrapQuantity: Number(storeScrap),
+                      storeReceivedQty: Number(storeReceivedQtyInput),
+                      storeReceivedDate: storeReceivedDate,
+                      storeGatingWeight: storeGatingWeight ? Number(storeGatingWeight) : undefined,
+                      storeBoringWeight: storeBoringWeight ? Number(storeBoringWeight) : undefined,
                       storeRemarks,
                     }),
                   )
                 }
-                disabled={busy}
+                disabled={busy || !storeReceivedQtyInput || Number(storeReceivedQtyInput) <= 0}
                 className="bg-cyan-700 text-white"
               >
                 Submit Store Verification
@@ -476,52 +553,54 @@ export function DcActions({
         </div>
       )}
 
-      {/* MANAGER FINAL APPROVAL MODAL */}
+      {/* MANAGER PAYMENT APPROVAL MODAL */}
       {modal === "FINAL_APPROVE" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-xl p-6 space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Manager Final Approval &amp; Quantities</h3>
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Final Approved FG *</label>
-                  <Input type="number" step="0.001" value={finalFg} onChange={(e) => setFinalFg(e.target.value)} />
+            <h3 className="text-base font-bold text-slate-900">Manager Payment Approval</h3>
+            <p className="text-xs text-slate-500">Review Quality inspection results and approve DC for payment processing.</p>
+
+            <div className="rounded-md bg-slate-50 p-4 border border-slate-200 space-y-3 text-xs">
+              <div className="font-semibold text-slate-700 uppercase tracking-wide text-[11px] border-b border-slate-200 pb-1">
+                Quality Inspection Results (Read-Only)
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-white p-2.5 rounded border border-slate-200">
+                  <span className="text-slate-500 text-[10px] block font-semibold">GOOD QTY</span>
+                  <span className="font-mono font-bold text-emerald-700 text-sm">{dcData.goodQty ?? 0} NOS</span>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Final Approved Rejection *</label>
-                  <Input type="number" step="0.001" value={finalRej} onChange={(e) => setFinalRej(e.target.value)} />
+                <div className="bg-white p-2.5 rounded border border-slate-200">
+                  <span className="text-slate-500 text-[10px] block font-semibold">REJECTION QTY</span>
+                  <span className="font-mono font-bold text-red-700 text-sm">{dcData.rejectionQty ?? 0} NOS</span>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Final Approved Scrap *</label>
-                  <Input type="number" step="0.001" value={finalScrap} onChange={(e) => setFinalScrap(e.target.value)} />
+                <div className="bg-white p-2.5 rounded border border-slate-200">
+                  <span className="text-slate-500 text-[10px] block font-semibold">SCRAP QTY</span>
+                  <span className="font-mono font-bold text-amber-700 text-sm">{dcData.scrapQty ?? 0} NOS</span>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Manager Correction Remarks</label>
-                <Input
-                  value={managerRemarks}
-                  onChange={(e) => setManagerRemarks(e.target.value)}
-                  placeholder="Mandatory if Security and Store quantities differ or process loss occurred"
-                />
+
+              <div className="pt-2 border-t border-slate-200 flex items-center justify-between font-sans">
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-semibold">Pricing Basis / Rate</span>
+                  <span className="font-semibold text-slate-800">{dcData.pricingBasis || "FG"} Basis @ ₹{dcData.ratePerQuantity ?? 0}/unit</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-slate-500 block text-[10px] uppercase font-semibold">Auto-Calculated Final Payable</span>
+                  <span className="font-mono font-bold text-emerald-800 text-base">
+                    ₹{((dcData.pricingBasis === "RM" ? (dcData.rmQuantity ?? 0) : (dcData.goodQty ?? 0)) * (dcData.ratePerQuantity ?? 0)).toFixed(2)}
+                  </span>
+                </div>
               </div>
             </div>
+
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="secondary" onClick={() => setModal(null)} disabled={busy}>Cancel</Button>
               <Button
-                onClick={() =>
-                  handleAction(() =>
-                    submitManagerFinalApproval(dcId, {
-                      finalApprovedFgQuantity: Number(finalFg),
-                      finalApprovedRejectionQuantity: Number(finalRej),
-                      finalApprovedScrapQuantity: Number(finalScrap),
-                      managerCorrectionRemarks: managerRemarks,
-                    }),
-                  )
-                }
+                onClick={() => handleAction(() => submitPaymentApproval(dcId))}
                 disabled={busy}
-                className="bg-teal-700 text-white"
+                className="bg-emerald-700 text-white font-bold"
               >
-                Approve Final Quantities
+                Confirm Payment Approval
               </Button>
             </div>
           </div>
@@ -685,6 +764,48 @@ export function DcActions({
                 className="bg-blue-800 hover:bg-blue-900 text-white font-semibold"
               >
                 Save Payment Details
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE DRAFT CONFIRMATION MODAL */}
+      {modal === "DELETE_DRAFT" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-red-700 border-b pb-2">Delete Draft DC?</h3>
+            <div className="space-y-2 text-sm text-slate-700">
+              <p className="font-semibold text-slate-900">
+                DC Number: <span className="font-mono">{dcData.dcNumber || dcId}</span>
+              </p>
+              <p className="text-slate-600 bg-red-50 border border-red-200 p-3 rounded-md text-xs font-medium">
+                This action will permanently delete this Draft DC and cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" disabled={busy} onClick={() => setModal(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError(null);
+                  const res = await deleteDraftDc(dcId);
+                  setBusy(false);
+                  if (!res.ok) {
+                    setError(res.error || "Failed to delete Draft DC.");
+                    setModal(null);
+                  } else {
+                    setModal(null);
+                    router.push("/dcs");
+                  }
+                }}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold"
+              >
+                {busy ? "Deleting Draft..." : "Delete Draft"}
               </Button>
             </div>
           </div>

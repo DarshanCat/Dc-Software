@@ -9,6 +9,8 @@ import { filterDcDataForRole } from "@/server/dcs/sanitizer";
 import { DcActions } from "./dc-actions";
 import { DocumentsPanel } from "@/components/documents-panel";
 
+import { canCloseDc } from "@/server/dcs/actions";
+
 export const dynamic = "force-dynamic";
 
 export default async function DcDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,7 +26,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
     },
   });
 
-  if (!dcRaw) {
+  if (!dcRaw || (user?.roleKeys?.includes("VENDOR") && (!user.vendorId || user.vendorId !== dcRaw.vendorId))) {
     return (
       <div className="mx-auto max-w-lg rounded-xl border border-amber-200 bg-amber-50 p-6 text-center shadow-sm my-12">
         <h2 className="text-lg font-bold text-amber-900 font-sans">Record Not Available</h2>
@@ -61,6 +63,8 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
   const canViewHistory = user ? await hasPermission(user.id, PERMISSIONS.DC_HISTORY_FULL) : false;
   const canUploadDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_UPLOAD) : false;
   const canDeleteDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_DELETE) : false;
+
+  const closeEligibility = await canCloseDc(dc.id, user?.id);
 
   const qrDataUrl = dc.qrToken ? await QRCode.toDataURL(buildDcPublicUrl(dc.qrToken), { margin: 1, width: 160 }) : null;
 
@@ -103,11 +107,24 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
 
   switch (dc.status) {
     case "DRAFT":
-      nextActionPrompt = "Draft DC created. Click 'Submit Outward DC' to finalize outward dispatch.";
-      responsibleRoleText = "Security / PPC";
+      nextActionPrompt = "Draft DC created. Click 'Submit for Approval' to send for Manager pre-outward approval.";
+      responsibleRoleText = "DC Creator";
       break;
+    case "PENDING_APPROVAL":
+      nextActionPrompt = "Pre-Outward Manager approval pending. Review DC details before outward gate dispatch.";
+      responsibleRoleText = "Manager";
+      break;
+    case "SENT_BACK":
+      nextActionPrompt = "DC sent back by Manager for corrections. Review remarks and resubmit.";
+      responsibleRoleText = "DC Creator";
+      break;
+    case "REJECTED":
+      nextActionPrompt = "DC was rejected by Manager. Outward dispatch terminated.";
+      responsibleRoleText = "DC Creator";
+      break;
+    case "APPROVED":
     case "OUTWARD_CREATED":
-      nextActionPrompt = "Outward DC created. Material ready to move out at gate.";
+      nextActionPrompt = "Manager approved DC. Material ready for Security Gate dispatch.";
       responsibleRoleText = "Security Gate";
       break;
     case "MATERIAL_OUT":
@@ -209,21 +226,24 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
           canAccountsEntry,
           canClose,
         }}
+        closeEligibility={closeEligibility}
         dcData={{
+          dcNumber: dc.dcNumber,
           rmQuantity: dc.outwardQtyRw ? Number(dc.outwardQtyRw) : Number(dc.rmQuantity ?? 0),
           returnFgQuantity: dc.returnFgQuantity ? Number(dc.returnFgQuantity) : null,
+          actualInwardQty: dc.actualInwardQty ? Number(dc.actualInwardQty) : null,
+          storeReceivedQty: dc.storeReceivedQty ? Number(dc.storeReceivedQty) : null,
+          goodQty: dc.goodQty ? Number(dc.goodQty) : null,
+          rejectionQty: dc.rejectionQty ? Number(dc.rejectionQty) : null,
+          scrapQty: dc.scrapQty ? Number(dc.scrapQty) : null,
+          ratePerQuantity: dc.ratePerQuantity ? Number(dc.ratePerQuantity) : null,
+          pricingBasis: dc.pricingBasis || "FG",
           securityDispatchQuantity: dc.outwardWeight ? Number(dc.outwardWeight) : null,
-          securityFgQuantity: dc.actualInwardQty ? Number(dc.actualInwardQty) : null,
-          securityRejectionQuantity: dc.rejectionQty ? Number(dc.rejectionQty) : null,
-          securityScrapQuantity: dc.scrapQty ? Number(dc.scrapQty) : null,
-          storeVerifiedFgQuantity: dc.storeReceivedQty ? Number(dc.storeReceivedQty) : null,
-          storeVerifiedRejectionQuantity: dc.rejectionQty ? Number(dc.rejectionQty) : null,
-          storeVerifiedScrapQuantity: dc.scrapQty ? Number(dc.scrapQty) : null,
           invoiceNumber: dc.invoiceNumber,
           invoiceDate: dc.invoiceDate ? dc.invoiceDate.toISOString().split("T")[0] : null,
-          invoiceAmount: dc.pricingSnapshot ? Number(dc.pricingSnapshot) : Number(dc.invoiceAmount ?? 0),
-          paymentReferenceNumber: dc.paymentReference || dc.paymentReferenceNumber,
-          paymentDate: dc.paymentApprovedAt ? dc.paymentApprovedAt.toISOString().split("T")[0] : null,
+          invoiceAmount: dc.invoiceAmount != null ? Number(dc.invoiceAmount) : (dc.pricingSnapshot ? Number(dc.pricingSnapshot) : 0),
+          paymentReferenceNumber: dc.paymentReferenceNumber || dc.paymentReference,
+          paymentDate: dc.paymentDate ? dc.paymentDate.toISOString().split("T")[0] : null,
         }}
       />
 

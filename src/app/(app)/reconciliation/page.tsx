@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { getSessionUser } from "@/server/session";
+import { getVendorScope } from "@/server/dcs/vendor-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -9,9 +11,16 @@ export default async function ReconciliationListPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const { status } = await searchParams;
+  const user = await getSessionUser();
+
+  const whereClause: Record<string, unknown> = status ? { status: status as never } : {};
+  const vendorScope = getVendorScope(user);
+  if (vendorScope.vendorId) {
+    whereClause.dc = vendorScope;
+  }
 
   const reconciliations = await prisma.reconciliation.findMany({
-    where: status ? { status: status as never } : undefined,
+    where: whereClause,
     include: { dc: { include: { vendor: true } } },
     orderBy: { calculatedAt: "desc" },
     take: 200,

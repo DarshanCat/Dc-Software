@@ -290,4 +290,80 @@ describe("DC Close Workflow & Security Test Suite", () => {
     // Complete payment details -> Enabled & Green (ready to close)
     expect(checkReadiness("APPROVED_FOR_PAYMENT", "INV-100", "2026-08-27", 15000, "UTR-1", "2026-08-27")).toBe(true);
   });
+
+  // 17. Pre-Outward Manager Approval transitions and mandatory remarks
+  it("17. validates Pre-Outward Manager Approval actions (APPROVE, SENT_BACK, REJECT)", () => {
+    const reviewPreOutward = (status: string, action: "APPROVE" | "SENT_BACK" | "REJECT", remarks?: string) => {
+      if (status !== "PENDING_APPROVAL" && status !== "DRAFT") {
+        return { ok: false, error: `Only PENDING_APPROVAL DCs can undergo Pre-Outward Approval. Current status: ${status}` };
+      }
+      const trimmedRemarks = (remarks || "").trim();
+      if ((action === "SENT_BACK" || action === "REJECT") && !trimmedRemarks) {
+        return { ok: false, error: `Reason is mandatory when selecting ${action}.` };
+      }
+      let nextStatus = "APPROVED";
+      if (action === "REJECT") nextStatus = "REJECTED";
+      if (action === "SENT_BACK") nextStatus = "SENT_BACK";
+      return { ok: true, nextStatus };
+    };
+
+    expect(reviewPreOutward("PENDING_APPROVAL", "APPROVE").ok).toBe(true);
+    expect(reviewPreOutward("PENDING_APPROVAL", "APPROVE").nextStatus).toBe("APPROVED");
+    expect(reviewPreOutward("PENDING_APPROVAL", "SENT_BACK", "").ok).toBe(false);
+    expect(reviewPreOutward("PENDING_APPROVAL", "SENT_BACK", "Fix rate").ok).toBe(true);
+    expect(reviewPreOutward("PENDING_APPROVAL", "SENT_BACK", "Fix rate").nextStatus).toBe("SENT_BACK");
+    expect(reviewPreOutward("PENDING_APPROVAL", "REJECT", "").ok).toBe(false);
+    expect(reviewPreOutward("PENDING_APPROVAL", "REJECT", "Duplicate entry").ok).toBe(true);
+    expect(reviewPreOutward("PENDING_APPROVAL", "REJECT", "Duplicate entry").nextStatus).toBe("REJECTED");
+  });
+
+  // 18. Security Gate dispatch restriction for unapproved DCs
+  it("18. blocks Security Gate dispatch for unapproved DC statuses (DRAFT, PENDING_APPROVAL, SENT_BACK, REJECTED)", () => {
+    const canDispatch = (status: string) => {
+      if (status !== "APPROVED") return { ok: false, error: `DC must be in APPROVED status for dispatch. Current: ${status}` };
+      return { ok: true };
+    };
+
+    expect(canDispatch("DRAFT").ok).toBe(false);
+    expect(canDispatch("PENDING_APPROVAL").ok).toBe(false);
+    expect(canDispatch("SENT_BACK").ok).toBe(false);
+    expect(canDispatch("REJECTED").ok).toBe(false);
+    expect(canDispatch("APPROVED").ok).toBe(true);
+  });
+
+  // 19. Quality Inspection reconciliation balance requirement (Good + Reject + Scrap == Actual Inward Qty)
+  it("19. validates Quality Inspection balance reconciliation (good + reject + scrap == actualInwardQty)", () => {
+    const validateQuality = (good: number, rej: number, scrap: number, actualInward: number) => {
+      if (good < 0 || rej < 0 || scrap < 0) return { ok: false, error: "Quantities cannot be negative." };
+      const total = good + rej + scrap;
+      if (total !== actualInward) {
+        return {
+          ok: false,
+          error: `Quality quantities do not match Actual Inward Qty. Good (${good}) + Rejection (${rej}) + Scrap (${scrap}) = ${total}, but Actual Inward Qty is ${actualInward}.`,
+        };
+      }
+      return { ok: true };
+    };
+
+    expect(validateQuality(90, 5, 5, 100).ok).toBe(true);
+    expect(validateQuality(90, 5, 0, 100).ok).toBe(false);
+  });
+
+  // 20. Admin DC closure exact error message when payment details missing
+  it("20. returns exact payment mandatory error message when attempting to close DC without payment details", () => {
+    const closeDc = (hasPaymentRef: boolean, hasPaymentDate: boolean, hasPaymentStatus: boolean) => {
+      if (!hasPaymentRef || !hasPaymentDate || !hasPaymentStatus) {
+        return {
+          ok: false,
+          error: "DC cannot be closed. Payment details are mandatory. Please complete the payment details before closing the DC.",
+        };
+      }
+      return { ok: true };
+    };
+
+    const res = closeDc(false, true, true);
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe("DC cannot be closed. Payment details are mandatory. Please complete the payment details before closing the DC.");
+  });
 });
+

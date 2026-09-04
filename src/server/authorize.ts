@@ -54,9 +54,15 @@ export async function requirePermission(
   return user;
 }
 
-export function assertVendorScope(user: SessionUser, dcVendorId: string): void {
-  if (user.roleKeys.includes("ADMIN")) return; // Admin bypasses vendor scope restriction
-  if (user.roleKeys.includes("VENDOR") && user.vendorId !== dcVendorId) {
-    throw new ForbiddenError("VENDOR_SCOPE");
+export function assertVendorScope(user: SessionUser | null | undefined, dcVendorId?: string | null): void {
+  if (!user) throw new UnauthenticatedError();
+  if (user.roleKeys?.includes("ADMIN")) return;
+  if (user.roleKeys?.includes("VENDOR")) {
+    if (!user.vendorId) {
+      throw new ForbiddenError("VENDOR_SCOPE_MISSING");
+    }
+    if (user.vendorId !== dcVendorId) {
+      throw new ForbiddenError("VENDOR_SCOPE");
+    }
   }
 }

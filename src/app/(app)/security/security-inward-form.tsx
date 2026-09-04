@@ -25,15 +25,13 @@ export function SecurityInwardForm({ dc, onSuccess }: SecurityInwardFormProps) {
   const [success, setSuccess] = useState(false);
 
   const todayStr = new Date().toISOString().split("T")[0];
-  const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 
-  const [returnDate, setReturnDate] = useState(todayStr);
-  const [returnTime, setReturnTime] = useState(timeStr);
-  const [fgQuantity, setFgQuantity] = useState<number | "">(
+  const [inwardDate, setInwardDate] = useState(todayStr);
+  const [actualInwardQty, setActualInwardQty] = useState<number | "">(
     dc.returnFgQuantity != null ? Number(dc.returnFgQuantity) : 0,
   );
-  const [rejectionQuantity, setRejectionQuantity] = useState<number | "">(0);
-  const [scrapQuantity, setScrapQuantity] = useState<number | "">(0);
+  const [inwardDocNo, setInwardDocNo] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [transporter, setTransporter] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -42,16 +40,14 @@ export function SecurityInwardForm({ dc, onSuccess }: SecurityInwardFormProps) {
     e.preventDefault();
     setError(null);
 
-    const fg = fgQuantity === "" ? 0 : Number(fgQuantity);
-    const rej = rejectionQuantity === "" ? 0 : Number(rejectionQuantity);
-    const scrap = scrapQuantity === "" ? 0 : Number(scrapQuantity);
+    const numQty = actualInwardQty === "" ? 0 : Number(actualInwardQty);
 
-    if (fg < 0 || rej < 0 || scrap < 0) {
-      setError("Quantities cannot be negative.");
+    if (numQty <= 0) {
+      setError("Actual Inward Quantity must be greater than zero.");
       return;
     }
-    if (!returnDate || !returnTime) {
-      setError("Return Date and Return Time are mandatory.");
+    if (!inwardDate) {
+      setError("Inward Date is mandatory.");
       return;
     }
 
@@ -59,11 +55,10 @@ export function SecurityInwardForm({ dc, onSuccess }: SecurityInwardFormProps) {
 
     try {
       const res = await submitSecurityReturn(dc.id, {
-        securityFgQuantity: fg,
-        securityRejectionQuantity: rej,
-        securityScrapQuantity: scrap,
-        returnDate,
-        returnTime,
+        actualInwardQty: numQty,
+        inwardDate,
+        inwardDocumentNo: inwardDocNo.trim() || undefined,
+        invoiceNumber: invoiceNumber.trim() || undefined,
         vehicleNumber: vehicleNumber.trim() || undefined,
         transporter: transporter.trim() || undefined,
         remarks: remarks.trim() || undefined,
@@ -145,66 +140,49 @@ export function SecurityInwardForm({ dc, onSuccess }: SecurityInwardFormProps) {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Return Date *</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Actual Inward Qty (NOS) *</label>
                     <input
-                      type="date"
+                      type="number"
+                      step="0.001"
+                      min="0.001"
                       required
-                      value={returnDate}
-                      onChange={(e) => setReturnDate(e.target.value)}
-                      className="w-full rounded border border-slate-300 p-2 text-xs font-mono"
+                      value={actualInwardQty}
+                      onChange={(e) => setActualInwardQty(e.target.value === "" ? "" : Number(e.target.value))}
+                      className="w-full rounded border border-slate-300 p-2 text-xs font-mono font-bold text-blue-900"
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Return Time *</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Inward Date *</label>
                     <input
-                      type="time"
+                      type="date"
                       required
-                      value={returnTime}
-                      onChange={(e) => setReturnTime(e.target.value)}
+                      value={inwardDate}
+                      onChange={(e) => setInwardDate(e.target.value)}
                       className="w-full rounded border border-slate-300 p-2 text-xs font-mono"
                     />
                   </div>
                 </div>
 
-                <div className="border-t border-slate-200 pt-3">
-                  <p className="font-bold text-slate-900 uppercase tracking-wider mb-2">Gate Return Quantities (Security Entry)</p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">FG Quantity *</label>
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        required
-                        value={fgQuantity}
-                        onChange={(e) => setFgQuantity(e.target.value === "" ? "" : Number(e.target.value))}
-                        className="w-full rounded border border-slate-300 p-2 text-xs font-mono font-bold text-slate-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Rejection Qty *</label>
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        required
-                        value={rejectionQuantity}
-                        onChange={(e) => setRejectionQuantity(e.target.value === "" ? "" : Number(e.target.value))}
-                        className="w-full rounded border border-slate-300 p-2 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Scrap Qty *</label>
-                      <input
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        required
-                        value={scrapQuantity}
-                        onChange={(e) => setScrapQuantity(e.target.value === "" ? "" : Number(e.target.value))}
-                        className="w-full rounded border border-slate-300 p-2 text-xs font-mono"
-                      />
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Inward Document No</label>
+                    <input
+                      type="text"
+                      placeholder="Gate Inward Pass No"
+                      value={inwardDocNo}
+                      onChange={(e) => setInwardDocNo(e.target.value)}
+                      className="w-full rounded border border-slate-300 p-2 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Supplier Invoice Number</label>
+                    <input
+                      type="text"
+                      placeholder="INV-12345"
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                      className="w-full rounded border border-slate-300 p-2 text-xs font-mono"
+                    />
                   </div>
                 </div>
 

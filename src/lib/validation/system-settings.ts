@@ -11,6 +11,9 @@ export const systemSettingsSchema = z.object({
   weightUnit: z.string().max(10).optional().or(z.literal("")),
   dateFormat: z.string().max(20).optional().or(z.literal("")),
   fiscalYearStartMonth: z.coerce.number().min(1).max(12).optional(),
+  unaccountedTolerancePercentage: z.coerce.number().min(0).max(100).optional(),
+  scrapTolerancePercentage: z.coerce.number().min(0).max(100).optional(),
+  approvedProcessLossPercentage: z.coerce.number().min(0).max(100).optional(),
 });
 
 export type SystemSettingsInput = z.infer<typeof systemSettingsSchema>;
@@ -26,4 +29,7 @@ export const SETTINGS_FIELDS: { key: keyof SystemSettingsInput; label: string; g
   { key: "weightUnit", label: "Weight Unit", group: "Regional" },
   { key: "dateFormat", label: "Date Format", group: "Regional" },
   { key: "fiscalYearStartMonth", label: "Fiscal Year Start Month (1-12)", group: "Regional" },
+  { key: "unaccountedTolerancePercentage", label: "Unaccounted Weight Tolerance %", group: "Reconciliation" },
+  { key: "scrapTolerancePercentage", label: "Scrap Tolerance %", group: "Reconciliation" },
+  { key: "approvedProcessLossPercentage", label: "Approved Process Loss %", group: "Reconciliation" },
 ];

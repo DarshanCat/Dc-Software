@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
-import { requirePermission, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
+import { requirePermission, hasPermission, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { writeAudit } from "@/server/audit";
 import { nextNumber, fiscalYearOf } from "@/services/number-sequence.service";
 import { generateQrToken } from "@/services/dispatch.service";
-import { Prisma, DcPurpose } from "@prisma/client";
+import { Prisma, DcPurpose, DcStatus } from "@prisma/client";
 import { stageResultBalance } from "@/analytics/math-engine";
 import { notifyUsersWithPermission } from "@/server/notifications/service";
 
@@ -24,6 +24,14 @@ async function checkPermission(user: any, permission: string): Promise<{ ok: tru
   }
 }
 
+function safeRevalidatePath(path: string) {
+  try {
+    revalidatePath(path);
+  } catch {
+    // Ignore revalidation errors during dynamic dev manifest invalidation
+  }
+}
+
 // ---------------- 1. OUTWARD DC CREATION ----------------
 
 export interface CreateOutwardDcInput {
@@ -32,17 +40,22 @@ export interface CreateOutwardDcInput {
   woNumber: string;
   partNumber: string;
   partDescription?: string;
-  pricing?: number;
+  pricingBasis?: "RW" | "FG";
+  ratePerQuantity?: number;
   outwardWeight?: number;
   outwardGatingWeight?: number;
   outwardQtyRw?: number;
   returningFgQuantity?: number;
+  rmUom?: string;
+  fgUom?: string;
+  dimensionUom?: string;
   length?: number;
   width?: number;
   height?: number;
   outwardBoringWeight?: number;
   remarks?: string;
   purpose?: DcPurpose;
+  submitForApproval?: boolean;
 }
 
 export async function createOutwardDc(input: CreateOutwardDcInput) {
@@ -54,9 +67,51 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
   if (!input.woNumber) return { ok: false, error: "Work Order (WO ID) is mandatory." };
   if (!input.department) return { ok: false, error: "Department is mandatory." };
 
+  if (!input.pricingBasis) {
+    return { ok: false, error: "Please select a pricing basis: RW Quantity or Returning FG Quantity." };
+  }
+  const rate = input.ratePerQuantity ?? 0;
+  if (rate <= 0) {
+    return { ok: false, error: "Rate Per Quantity must be greater than zero." };
+  }
+
+  let pricingQty = 0;
+  if (input.pricingBasis === "RW") {
+    if (!input.outwardQtyRw || input.outwardQtyRw <= 0) {
+      return { ok: false, error: "Outward Qty RW must be greater than zero when Price Based On is RW Quantity." };
+    }
+    pricingQty = input.outwardQtyRw;
+  } else if (input.pricingBasis === "FG") {
+    if (!input.returningFgQuantity || input.returningFgQuantity <= 0) {
+      return { ok: false, error: "Returning FG Qty must be greater than zero when Price Based On is Returning FG Quantity." };
+    }
+    pricingQty = input.returningFgQuantity;
+  } else {
+    return { ok: false, error: "Invalid pricing basis selected." };
+  }
+
+  const expectedAmount = Number((rate * pricingQty).toFixed(2));
+  const initialStatus: DcStatus = input.submitForApproval ? "PENDING_APPROVAL" : "DRAFT";
+  const initialReason = input.submitForApproval
+    ? "DC Created and Submitted for Manager Approval"
+    : "DC Created as Draft";
+
   const vendor = await prisma.vendor.findUnique({ where: { id: input.vendorId } });
   if (!vendor) return { ok: false, error: "Selected Supplier was not found." };
-  if (!vendor.active) return { ok: false, error: "Selected Supplier is inactive." };
+  if (!vendor.active) return { ok: false, error: "Selected Supplier is inactive and cannot be used for a new DC." };
+
+  const partNum = input.partNumber ? input.partNumber.trim() : "";
+  let partDescriptionSnapshot: string | null = input.partDescription ? input.partDescription.trim() : null;
+
+  if (partNum) {
+    const itemMaster = await prisma.itemMaster.findFirst({ where: { partNumber: partNum } });
+    if (itemMaster) {
+      if (!itemMaster.active) {
+        return { ok: false, error: "Selected Part is inactive and cannot be used for a new DC." };
+      }
+      partDescriptionSnapshot = itemMaster.partDescription;
+    }
+  }
 
   const now = new Date();
   const fy = fiscalYearOf(now);
@@ -70,32 +125,42 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         dcNumber,
         dcDate: now,
         woNumber: input.woNumber.trim(),
-        partNumber: input.partNumber ? input.partNumber.trim() : null,
+        partNumber: partNum || null,
+        rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
+        returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
         vendorId: input.vendorId,
         department: input.department.trim(),
         purpose: input.purpose || "JOB_WORK",
 
-        // Master Snapshot
+        // Master Snapshot (Authoritative)
         supplierNameSnapshot: vendor.vendorName,
         supplierAddressSnapshot: vendor.address || `${vendor.city || ""}, ${vendor.state || ""}`,
         supplierGstSnapshot: vendor.gstNumber || null,
-        partNumberSnapshot: input.partNumber ? input.partNumber.trim() : null,
-        partDescriptionSnapshot: input.partDescription ? input.partDescription.trim() : null,
-        pricingSnapshot: input.pricing ? new Prisma.Decimal(input.pricing) : null,
+        partNumberSnapshot: partNum || null,
+        partDescriptionSnapshot: partDescriptionSnapshot,
+        pricingSnapshot: new Prisma.Decimal(expectedAmount),
+
+        // Commercial & Pricing Snapshot
+        pricingBasis: input.pricingBasis,
+        ratePerQuantity: new Prisma.Decimal(rate),
+        pricingQuantitySnapshot: new Prisma.Decimal(pricingQty),
+        expectedAmount: new Prisma.Decimal(expectedAmount),
 
         // Outward Fields
         outwardDate: now,
         outwardWeight: input.outwardWeight ? new Prisma.Decimal(input.outwardWeight) : null,
         outwardGatingWeight: input.outwardGatingWeight ? new Prisma.Decimal(input.outwardGatingWeight) : null,
         outwardQtyRw: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
-        returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
+        rmUom: input.rmUom || "NOS",
+        fgUom: input.fgUom || "NOS",
+        dimensionUom: input.dimensionUom || "mm",
         length: input.length ? new Prisma.Decimal(input.length) : null,
         width: input.width ? new Prisma.Decimal(input.width) : null,
         height: input.height ? new Prisma.Decimal(input.height) : null,
         outwardBoringWeight: input.outwardBoringWeight ? new Prisma.Decimal(input.outwardBoringWeight) : null,
         remarks: input.remarks || null,
 
-        status: "OUTWARD_CREATED",
+        status: initialStatus,
         createdBy: user!.id,
         preparedByName: user!.email || "Factory User",
         qrToken,
@@ -105,9 +170,9 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
     await tx.statusHistory.create({
       data: {
         dcId: dc.id,
-        toStatus: "OUTWARD_CREATED",
+        toStatus: initialStatus,
         changedBy: user!.id,
-        reason: "Outward DC Created",
+        reason: initialReason,
       },
     });
 
@@ -123,8 +188,229 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
     reason: `Outward DC ${result.dcNumber} created for supplier ${vendor.vendorName}`,
   });
 
-  revalidatePath("/dcs");
+  safeRevalidatePath("/dcs");
   return { ok: true, dcId: result.id, dcNumber: result.dcNumber };
+}
+
+export interface UpdateOutwardDcInput extends CreateOutwardDcInput {
+  dcId: string;
+}
+
+export async function updateOutwardDc(input: UpdateOutwardDcInput) {
+  const user = await getSessionUser();
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_CREATE);
+  if (!permCheck.ok) return permCheck;
+
+  if (!input.dcId) return { ok: false, error: "DC ID is required for update." };
+  if (!input.vendorId) return { ok: false, error: "Supplier (Vendor) is mandatory." };
+  if (!input.woNumber) return { ok: false, error: "Work Order (WO ID) is mandatory." };
+  if (!input.department) return { ok: false, error: "Department is mandatory." };
+
+  const existingDc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
+  if (!existingDc) return { ok: false, error: "Delivery Challan not found." };
+
+  if (existingDc.status !== "DRAFT" && existingDc.status !== "SENT_BACK") {
+    return { ok: false, error: `Delivery Challan cannot be edited in current status (${existingDc.status}).` };
+  }
+
+  if (!input.pricingBasis) {
+    return { ok: false, error: "Please select a pricing basis: RW Quantity or Returning FG Quantity." };
+  }
+  const rate = input.ratePerQuantity ?? 0;
+  if (rate <= 0) {
+    return { ok: false, error: "Rate Per Quantity must be greater than zero." };
+  }
+
+  let pricingQty = 0;
+  if (input.pricingBasis === "RW") {
+    if (!input.outwardQtyRw || input.outwardQtyRw <= 0) {
+      return { ok: false, error: "Outward Qty RW must be greater than zero when Price Based On is RW Quantity." };
+    }
+    pricingQty = input.outwardQtyRw;
+  } else if (input.pricingBasis === "FG") {
+    if (!input.returningFgQuantity || input.returningFgQuantity <= 0) {
+      return { ok: false, error: "Returning FG Qty must be greater than zero when Price Based On is Returning FG Quantity." };
+    }
+    pricingQty = input.returningFgQuantity;
+  } else {
+    return { ok: false, error: "Invalid pricing basis selected." };
+  }
+
+  const expectedAmount = Number((rate * pricingQty).toFixed(2));
+  const newStatus: DcStatus = input.submitForApproval ? "PENDING_APPROVAL" : "DRAFT";
+  const updateReason = input.submitForApproval
+    ? "DC Updated and Submitted for Manager Approval"
+    : "DC Edits Saved";
+
+  const vendor = await prisma.vendor.findUnique({ where: { id: input.vendorId } });
+  if (!vendor) return { ok: false, error: "Selected Supplier was not found." };
+  if (!vendor.active) return { ok: false, error: "Selected Supplier is inactive." };
+
+  const partNum = input.partNumber ? input.partNumber.trim() : "";
+  let partDescriptionSnapshot: string | null = input.partDescription ? input.partDescription.trim() : null;
+
+  if (partNum) {
+    const itemMaster = await prisma.itemMaster.findFirst({ where: { partNumber: partNum } });
+    if (itemMaster) {
+      if (!itemMaster.active) {
+        return { ok: false, error: "Selected Part is inactive." };
+      }
+      partDescriptionSnapshot = itemMaster.partDescription;
+    }
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const dc = await tx.deliveryChallan.update({
+      where: { id: input.dcId },
+      data: {
+        woNumber: input.woNumber.trim(),
+        partNumber: partNum || null,
+        rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
+        returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
+        vendorId: input.vendorId,
+        department: input.department.trim(),
+        purpose: input.purpose || "JOB_WORK",
+
+        // Master Snapshots
+        supplierNameSnapshot: vendor.vendorName,
+        supplierAddressSnapshot: vendor.address || `${vendor.city || ""}, ${vendor.state || ""}`,
+        supplierGstSnapshot: vendor.gstNumber || null,
+        partNumberSnapshot: partNum || null,
+        partDescriptionSnapshot: partDescriptionSnapshot,
+        pricingSnapshot: new Prisma.Decimal(expectedAmount),
+
+        // Commercial & Pricing Snapshot
+        pricingBasis: input.pricingBasis,
+        ratePerQuantity: new Prisma.Decimal(rate),
+        pricingQuantitySnapshot: new Prisma.Decimal(pricingQty),
+        expectedAmount: new Prisma.Decimal(expectedAmount),
+
+        // Outward Fields
+        outwardWeight: input.outwardWeight ? new Prisma.Decimal(input.outwardWeight) : null,
+        outwardGatingWeight: input.outwardGatingWeight ? new Prisma.Decimal(input.outwardGatingWeight) : null,
+        outwardQtyRw: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
+        length: input.length ? new Prisma.Decimal(input.length) : null,
+        width: input.width ? new Prisma.Decimal(input.width) : null,
+        height: input.height ? new Prisma.Decimal(input.height) : null,
+        outwardBoringWeight: input.outwardBoringWeight ? new Prisma.Decimal(input.outwardBoringWeight) : null,
+        remarks: input.remarks || null,
+
+        status: newStatus,
+      },
+    });
+
+    await tx.statusHistory.create({
+      data: {
+        dcId: dc.id,
+        fromStatus: existingDc.status,
+        toStatus: newStatus,
+        changedBy: user!.id,
+        reason: updateReason,
+      },
+    });
+
+    return dc;
+  });
+
+  await writeAudit(prisma, {
+    userId: user!.id,
+    action: "OUTWARD_DC_UPDATED",
+    module: "DeliveryChallan",
+    entityType: "DeliveryChallan",
+    entityId: result.id,
+    reason: `Outward DC ${result.dcNumber} updated`,
+  });
+
+  safeRevalidatePath("/dcs");
+  safeRevalidatePath(`/dcs/${result.id}`);
+  return { ok: true, dcId: result.id, dcNumber: result.dcNumber };
+}
+
+// ---------------- 1B. DRAFT DC DELETION (DRAFT ONLY) ----------------
+
+export async function deleteDraftDc(dcId: string) {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  if (!dcId) return { ok: false, error: "DC ID is required." };
+
+  const dc = await prisma.deliveryChallan.findUnique({
+    where: { id: dcId },
+    include: {
+      dispatch: true,
+      receipts: true,
+      scrapReceipts: true,
+      reconciliation: true,
+      exceptions: true,
+      recoveryRequirements: true,
+      recoveryReceipts: true,
+      classifications: true,
+      statusHistory: true,
+    },
+  });
+
+  if (!dc) return { ok: false, error: "Delivery Challan not found." };
+
+  // Rule: ONLY DRAFT DCs can be deleted!
+  if (dc.status !== "DRAFT") {
+    return { ok: false, error: "Only Draft DCs can be deleted." };
+  }
+
+  // Authorization Check: Only creator or Admin/DC_CREATE user can delete their Draft DC
+  const isCreator = dc.createdBy === user.id;
+  const isAdmin = user.roleKeys?.includes("ADMIN");
+  const hasCreatePerm = await hasPermission(user.id, PERMISSIONS.DC_CREATE);
+
+  if (!isCreator && !isAdmin && !hasCreatePerm) {
+    return { ok: false, error: "You are not authorized to delete this Draft DC." };
+  }
+
+  // Verify operational child record safety (Rule 9: No Cascade Damage)
+  const hasOperationalRecords =
+    dc.dispatch !== null ||
+    dc.receipts.length > 0 ||
+    dc.scrapReceipts.length > 0 ||
+    dc.reconciliation !== null ||
+    dc.exceptions.length > 0 ||
+    dc.recoveryRequirements.length > 0 ||
+    dc.recoveryReceipts.length > 0 ||
+    dc.classifications.length > 0;
+
+  if (hasOperationalRecords) {
+    return { ok: false, error: "Cannot delete DC with existing operational history." };
+  }
+
+  // Also check status history: if there are transitions beyond DRAFT/SENT_BACK, prevent deletion
+  const operationalHistory = dc.statusHistory.filter(
+    (sh) => sh.toStatus !== "DRAFT" && sh.toStatus !== "SENT_BACK"
+  );
+  if (operationalHistory.length > 0) {
+    return { ok: false, error: "Cannot delete DC with existing operational history." };
+  }
+
+  // Transaction: Delete initial statusHistory, then DeliveryChallan
+  await prisma.$transaction(async (tx) => {
+    await tx.statusHistory.deleteMany({
+      where: { dcId: dc.id },
+    });
+    await tx.deliveryChallan.delete({
+      where: { id: dc.id },
+    });
+  });
+
+  // Audit Logging (Rule 14: Audit)
+  await writeAudit(prisma, {
+    userId: user.id,
+    action: "DRAFT_DELETED",
+    module: "DeliveryChallan",
+    entityType: "DeliveryChallan",
+    entityId: dc.id,
+    reason: `Draft DC ${dc.dcNumber} deleted by ${user.email || user.id} (Role: ${user.roleKeys?.[0] || "USER"})`,
+  });
+
+  safeRevalidatePath("/dcs");
+  safeRevalidatePath(`/dcs/${dc.id}`);
+  return { ok: true, dcId: dc.id, dcNumber: dc.dcNumber };
 }
 
 // ---------------- 2. INWARD RECEIPT (SECURITY ROLE) ----------------
@@ -161,6 +447,7 @@ export async function recordInwardReceipt(input: RecordInwardReceiptInput) {
       data: {
         status: "INWARD_RECEIVED",
         actualInwardQty: new Prisma.Decimal(input.actualInwardQty),
+        securityFgQuantity: new Prisma.Decimal(input.actualInwardQty),
         inwardDate,
         inwardDocumentNo: input.inwardDocumentNo || null,
         invoiceNumber: input.invoiceNumber || dc.invoiceNumber,
@@ -184,7 +471,7 @@ export async function recordInwardReceipt(input: RecordInwardReceiptInput) {
 
   await writeAudit(prisma, {
     userId: user!.id,
-    action: "INWARD_RECEIPT_RECORDED",
+    action: "SECURITY_INWARD_RECORDED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: input.dcId,
@@ -215,6 +502,8 @@ export interface ConfirmStoreReceiptInput {
   dcId: string;
   storeReceivedQty: number;
   storeReceivedDate?: string;
+  storeGatingWeight?: number;
+  storeBoringWeight?: number;
   storeRemarks?: string;
 }
 
@@ -244,7 +533,10 @@ export async function confirmStoreReceipt(input: ConfirmStoreReceiptInput) {
       data: {
         status: "QUALITY_PENDING",
         storeReceivedQty: new Prisma.Decimal(input.storeReceivedQty),
+        storeVerifiedFgQuantity: new Prisma.Decimal(input.storeReceivedQty),
         storeReceivedDate: recDate,
+        storeGatingWeight: input.storeGatingWeight !== undefined ? new Prisma.Decimal(input.storeGatingWeight) : undefined,
+        storeBoringWeight: input.storeBoringWeight !== undefined ? new Prisma.Decimal(input.storeBoringWeight) : undefined,
         storeConfirmedBy: user!.id,
         storeRemarks: input.storeRemarks || null,
         storeVerifiedBy: user!.id,
@@ -305,9 +597,9 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
   const permCheck = await checkPermission(user, PERMISSIONS.RECEIPT_EDIT);
   if (!permCheck.ok) return permCheck;
 
-  // Strict Backend Role Check: SECURITY and STORE roles are strictly forbidden from creating/editing Quality quantities
+  // Strict Backend Role Check: SECURITY and STORE roles are strictly prohibited from creating/editing Quality quantities
   const roleKeys = user?.roleKeys || [];
-  const isQualityAuthorized = roleKeys.some((r: string) => ["QUALITY", "ADMIN", "SUPERADMIN"].includes(r));
+  const isQualityAuthorized = roleKeys.some((r: string) => ["QUALITY", "ADMIN"].includes(r));
   if (!isQualityAuthorized) {
     return {
       ok: false,
@@ -322,14 +614,16 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
 
-  const actualInward = Number(dc.actualInwardQty ?? dc.storeReceivedQty ?? dc.securityFgQuantity ?? 0);
+  const storeReceived = dc.storeReceivedQty !== null ? Number(dc.storeReceivedQty) : null;
+  const actualInward = dc.actualInwardQty !== null ? Number(dc.actualInwardQty) : (dc.securityFgQuantity !== null ? Number(dc.securityFgQuantity) : 0);
+  const targetQty = storeReceived !== null ? storeReceived : actualInward;
 
-  // Mandatory Quantity Reconciliation Validation: Good + Rejection + Scrap == Actual Inward Qty
-  const balanceCheck = stageResultBalance(input.goodQty, input.rejectionQty, input.scrapQty, actualInward);
-  if (!balanceCheck.isValid) {
+  // Mandatory Quantity Reconciliation Validation: Good + Rejection + Scrap == Store Received Qty
+  const sum = input.goodQty + input.rejectionQty + input.scrapQty;
+  if (sum !== targetQty) {
     return {
       ok: false,
-      error: `Quality quantities do not match Actual Inward Qty. Good (${input.goodQty}) + Rejection (${input.rejectionQty}) + Scrap (${input.scrapQty}) = ${balanceCheck.total}, but Actual Inward Qty is ${actualInward}. Variance balance: ${balanceCheck.balance}.`,
+      error: "Good + Rejection + Scrap must equal the Store Received Qty.",
     };
   }
 
@@ -339,7 +633,7 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
     prisma.deliveryChallan.update({
       where: { id: input.dcId },
       data: {
-        status: "MANAGER_APPROVAL_PENDING",
+        status: "QUALITY_COMPLETED",
         goodQty: new Prisma.Decimal(input.goodQty),
         rejectionQty: new Prisma.Decimal(input.rejectionQty),
         scrapQty: new Prisma.Decimal(input.scrapQty),
@@ -358,7 +652,7 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
       data: {
         dcId: input.dcId,
         fromStatus: dc.status,
-        toStatus: "MANAGER_APPROVAL_PENDING",
+        toStatus: "QUALITY_COMPLETED",
         changedBy: user!.id,
         reason: `Quality Inspection Completed (Good: ${input.goodQty}, Reject: ${input.rejectionQty}, Scrap: ${input.scrapQty}). Decision: ${input.qualityDecision}`,
       },
@@ -367,11 +661,11 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
 
   await writeAudit(prisma, {
     userId: user!.id,
-    action: "QUALITY_INSPECTION_SUBMITTED",
+    action: "QUALITY_DECISION_SUBMITTED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: input.dcId,
-    reason: `Quality Inspection submitted: Decision ${input.qualityDecision} (Good: ${input.goodQty})`,
+    reason: `Quality Decision submitted: Decision ${input.qualityDecision} (Good: ${input.goodQty})`,
   });
 
   await notifyUsersWithPermission(
@@ -392,7 +686,77 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
   return { ok: true };
 }
 
-// ---------------- 5. MANAGER APPROVAL (MANAGER ROLE) ----------------
+// ---------------- 5A. PRE-OUTWARD MANAGER APPROVAL ----------------
+
+export interface ReviewPreOutwardManagerApprovalInput {
+  dcId: string;
+  action: "APPROVE" | "REJECT" | "SEND_BACK" | "HOLD";
+  approvalRemarks?: string;
+}
+
+export async function reviewPreOutwardManagerApproval(input: ReviewPreOutwardManagerApprovalInput) {
+  const user = await getSessionUser();
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_APPROVE);
+  if (!permCheck.ok) return permCheck;
+
+  const dc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
+  if (!dc) return { ok: false, error: "DC not found." };
+
+  if (dc.status !== "PENDING_APPROVAL" && dc.status !== "DRAFT") {
+    return { ok: false, error: `Only PENDING_APPROVAL DCs can undergo Pre-Outward Approval. Current status: ${dc.status}` };
+  }
+
+  const remarks = (input.approvalRemarks || "").trim();
+  if ((input.action === "SEND_BACK" || input.action === "REJECT") && !remarks) {
+    return { ok: false, error: `Reason is mandatory when selecting ${input.action.replace(/_/g, " ")}.` };
+  }
+
+  let nextStatus: DcStatus = "APPROVED";
+  if (input.action === "APPROVE") nextStatus = "APPROVED";
+  else if (input.action === "REJECT") nextStatus = "REJECTED";
+  else if (input.action === "SEND_BACK") nextStatus = "SENT_BACK";
+  else if (input.action === "HOLD") nextStatus = "HOLD";
+
+  const now = new Date();
+
+  await prisma.$transaction([
+    prisma.deliveryChallan.update({
+      where: { id: input.dcId },
+      data: {
+        status: nextStatus,
+        approvalStatus: input.action,
+        approvalRemarks: remarks || null,
+        approvedBy: user!.id,
+        approvedByName: user!.email || "Manager",
+        approvedAt: now,
+      },
+    }),
+    prisma.statusHistory.create({
+      data: {
+        dcId: input.dcId,
+        fromStatus: dc.status,
+        toStatus: nextStatus,
+        changedBy: user!.id,
+        reason: `Manager Pre-Outward Action: ${input.action}.${remarks ? ` Remarks: ${remarks}` : ""}`,
+      },
+    }),
+  ]);
+
+  await writeAudit(prisma, {
+    userId: user!.id,
+    action: `MANAGER_PRE_OUTWARD_${input.action}`,
+    module: "DeliveryChallan",
+    entityType: "DeliveryChallan",
+    entityId: input.dcId,
+    reason: `Manager Pre-Outward review for DC ${dc.dcNumber}: ${input.action}`,
+  });
+
+  revalidatePath(`/dcs/${input.dcId}`);
+  revalidatePath("/dcs");
+  return { ok: true };
+}
+
+// ---------------- 5B. POST-QUALITY MANAGER PAYMENT APPROVAL ----------------
 
 export interface ReviewManagerApprovalInput {
   dcId: string;
@@ -408,8 +772,8 @@ export async function reviewManagerApproval(input: ReviewManagerApprovalInput) {
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
 
-  let nextStatus: string = "PAYMENT_APPROVED";
-  if (input.action === "APPROVE") nextStatus = "PAYMENT_APPROVED";
+  let nextStatus: DcStatus = "APPROVED_FOR_PAYMENT";
+  if (input.action === "APPROVE") nextStatus = "APPROVED_FOR_PAYMENT";
   else if (input.action === "REJECT") nextStatus = "REJECTED";
   else if (input.action === "SEND_BACK") nextStatus = "SENT_BACK";
   else if (input.action === "HOLD") nextStatus = "HOLD";
@@ -420,14 +784,14 @@ export async function reviewManagerApproval(input: ReviewManagerApprovalInput) {
     prisma.deliveryChallan.update({
       where: { id: input.dcId },
       data: {
-        status: nextStatus as any,
+        status: nextStatus,
         approvalStatus: input.action,
         approvalRemarks: input.approvalRemarks || null,
         finalApprovedBy: user!.id,
         finalApprovedAt: now,
 
         // Also set payment status if approved
-        paymentStatus: input.action === "APPROVE" ? "PAYMENT_APPROVED" : dc.paymentStatus,
+        paymentStatus: input.action === "APPROVE" ? "APPROVED_FOR_PAYMENT" : dc.paymentStatus,
         paymentApprovedBy: input.action === "APPROVE" ? user!.id : dc.paymentApprovedBy,
         paymentApprovedAt: input.action === "APPROVE" ? now : dc.paymentApprovedAt,
       },
@@ -438,7 +802,7 @@ export async function reviewManagerApproval(input: ReviewManagerApprovalInput) {
         fromStatus: dc.status,
         toStatus: nextStatus,
         changedBy: user!.id,
-        reason: `Manager action: ${input.action}. Remarks: ${input.approvalRemarks || "None"}`,
+        reason: `Manager Payment Action: ${input.action}. Remarks: ${input.approvalRemarks || "None"}`,
       },
     }),
   ]);

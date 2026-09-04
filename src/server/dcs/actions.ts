@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
-import { requirePermission, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
+import { requirePermission, hasPermission, ForbiddenError, UnauthenticatedError } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { writeAudit } from "@/server/audit";
 import { nextNumber, fiscalYearOf } from "@/services/number-sequence.service";
@@ -439,22 +439,40 @@ export async function confirmDcAtVendor(dcId: string): Promise<{ ok: boolean; er
 export async function submitSecurityReturn(
   dcId: string,
   input: {
-    securityFgQuantity: number;
-    securityRejectionQuantity: number;
-    securityScrapQuantity: number;
-    returnDate?: string;
-    returnTime?: string;
+    actualInwardQty: number;
+    inwardDate?: string;
+    inwardDocumentNo?: string;
+    invoiceNumber?: string;
     vehicleNumber?: string;
     transporter?: string;
     remarks?: string;
+    // Disallowed payload properties for security testing
+    storeGatingWeight?: any;
+    storeBoringWeight?: any;
+    goodQty?: any;
+    rejectionQty?: any;
+    scrapQty?: any;
+    qualityDecision?: any;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.SECURITY_RETURN);
   if (!permCheck.ok) return permCheck;
 
-  if (input.securityFgQuantity < 0 || input.securityRejectionQuantity < 0 || input.securityScrapQuantity < 0) {
-    return { ok: false, error: "Quantities cannot be negative." };
+  // Server-side Payload Rejection for unauthorized fields
+  if (
+    input.storeGatingWeight !== undefined ||
+    input.storeBoringWeight !== undefined ||
+    input.goodQty !== undefined ||
+    input.rejectionQty !== undefined ||
+    input.scrapQty !== undefined ||
+    input.qualityDecision !== undefined
+  ) {
+    return { ok: false, error: "Security action cannot accept weights or Quality classification fields." };
+  }
+
+  if (input.actualInwardQty <= 0) {
+    return { ok: false, error: "Actual Inward Quantity must be greater than zero." };
   }
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
@@ -464,16 +482,20 @@ export async function submitSecurityReturn(
   }
 
   const now = new Date();
+  const inwardDate = input.inwardDate ? new Date(input.inwardDate) : now;
+
   await prisma.$transaction([
     prisma.deliveryChallan.update({
       where: { id: dcId },
       data: {
         status: "SECURITY_RETURNED",
-        securityFgQuantity: new Prisma.Decimal(input.securityFgQuantity),
-        securityRejectionQuantity: new Prisma.Decimal(input.securityRejectionQuantity),
-        securityScrapQuantity: new Prisma.Decimal(input.securityScrapQuantity),
-        securityReturnDate: input.returnDate ? new Date(input.returnDate) : now,
-        securityReturnTime: input.returnTime || now.toLocaleTimeString(),
+        actualInwardQty: new Prisma.Decimal(input.actualInwardQty),
+        securityFgQuantity: new Prisma.Decimal(input.actualInwardQty),
+        inwardDate,
+        inwardDocumentNo: input.inwardDocumentNo || null,
+        invoiceNumber: input.invoiceNumber || dc.invoiceNumber,
+        securityReturnDate: inwardDate,
+        securityReturnTime: now.toLocaleTimeString(),
         securityVehicleNumber: input.vehicleNumber || null,
         securityTransporter: input.transporter || null,
         securityReturnRemarks: input.remarks || null,
@@ -487,18 +509,18 @@ export async function submitSecurityReturn(
         fromStatus: dc.status,
         toStatus: "SECURITY_RETURNED",
         changedBy: user!.id,
-        reason: `Security Return recorded (FG: ${input.securityFgQuantity}, Rej: ${input.securityRejectionQuantity}, Scrap: ${input.securityScrapQuantity})`,
+        reason: `Security Inward recorded (Actual Inward: ${input.actualInwardQty})`,
       },
     }),
   ]);
 
   await writeAudit(prisma, {
     userId: user!.id,
-    action: "SECURITY_RETURN_SUBMITTED",
+    action: "SECURITY_INWARD_RECORDED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: dcId,
-    reason: `Security Return (FG: ${input.securityFgQuantity})`,
+    reason: `Security Inward recorded (Actual Inward Qty: ${input.actualInwardQty})`,
   });
 
   await notifyUsersWithPermission(
@@ -524,18 +546,34 @@ export async function submitSecurityReturn(
 export async function submitStoreVerification(
   dcId: string,
   input: {
-    storeVerifiedFgQuantity: number;
-    storeVerifiedRejectionQuantity: number;
-    storeVerifiedScrapQuantity: number;
+    storeReceivedQty: number;
+    storeReceivedDate?: string;
+    storeGatingWeight?: number;
+    storeBoringWeight?: number;
     storeRemarks?: string;
+    // Disallowed payload properties for security testing
+    goodQty?: any;
+    rejectionQty?: any;
+    scrapQty?: any;
+    qualityDecision?: any;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.STORE_VERIFY);
   if (!permCheck.ok) return permCheck;
 
-  if (input.storeVerifiedFgQuantity < 0 || input.storeVerifiedRejectionQuantity < 0 || input.storeVerifiedScrapQuantity < 0) {
-    return { ok: false, error: "Verified quantities cannot be negative." };
+  // Server-side Payload Rejection for Quality fields
+  if (
+    input.goodQty !== undefined ||
+    input.rejectionQty !== undefined ||
+    input.scrapQty !== undefined ||
+    input.qualityDecision !== undefined
+  ) {
+    return { ok: false, error: "Store action cannot accept Quality classification fields." };
+  }
+
+  if (input.storeReceivedQty <= 0) {
+    return { ok: false, error: "Store Received Quantity must be greater than zero." };
   }
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
@@ -545,14 +583,18 @@ export async function submitStoreVerification(
   }
 
   const now = new Date();
+  const storeDate = input.storeReceivedDate ? new Date(input.storeReceivedDate) : now;
+
   await prisma.$transaction([
     prisma.deliveryChallan.update({
       where: { id: dcId },
       data: {
         status: "STORE_VERIFIED",
-        storeVerifiedFgQuantity: new Prisma.Decimal(input.storeVerifiedFgQuantity),
-        storeVerifiedRejectionQuantity: new Prisma.Decimal(input.storeVerifiedRejectionQuantity),
-        storeVerifiedScrapQuantity: new Prisma.Decimal(input.storeVerifiedScrapQuantity),
+        storeReceivedQty: new Prisma.Decimal(input.storeReceivedQty),
+        storeVerifiedFgQuantity: new Prisma.Decimal(input.storeReceivedQty),
+        storeReceivedDate: storeDate,
+        storeGatingWeight: input.storeGatingWeight ? new Prisma.Decimal(input.storeGatingWeight) : null,
+        storeBoringWeight: input.storeBoringWeight ? new Prisma.Decimal(input.storeBoringWeight) : null,
         storeRemarks: input.storeRemarks || null,
         storeVerifiedBy: user!.id,
         storeVerifiedAt: now,
@@ -564,18 +606,18 @@ export async function submitStoreVerification(
         fromStatus: "SECURITY_RETURNED",
         toStatus: "STORE_VERIFIED",
         changedBy: user!.id,
-        reason: `Store Verification completed (FG: ${input.storeVerifiedFgQuantity}, Rej: ${input.storeVerifiedRejectionQuantity}, Scrap: ${input.storeVerifiedScrapQuantity})`,
+        reason: `Store Verification completed (Received Qty: ${input.storeReceivedQty})`,
       },
     }),
   ]);
 
   await writeAudit(prisma, {
     userId: user!.id,
-    action: "STORE_VERIFICATION_SUBMITTED",
+    action: "STORE_RECEIPT_CONFIRMED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: dcId,
-    reason: `Store Verification (FG: ${input.storeVerifiedFgQuantity})`,
+    reason: `Store confirmed quantity ${input.storeReceivedQty}`,
   });
 
   await notifyUsersWithPermission(
@@ -584,7 +626,7 @@ export async function submitStoreVerification(
     {
       type: "DC_STATUS",
       title: `Store Verified - DC ${dc.dcNumber}`,
-      body: `Store verification complete for DC ${dc.dcNumber}. Manager final review required.`,
+      body: `Store verification complete for DC ${dc.dcNumber}. Quality inspection pending.`,
       entityType: "DeliveryChallan",
       entityId: dcId,
       targetUrl: `/dcs/${dcId}`,
@@ -596,102 +638,50 @@ export async function submitStoreVerification(
   return { ok: true };
 }
 
-// ================= 9. MANAGER FINAL APPROVAL (STORE_VERIFIED -> FINAL_APPROVED) =================
+// ================= 9. MANAGER PAYMENT APPROVAL (QUALITY_COMPLETED -> APPROVED_FOR_PAYMENT) =================
 
-export async function submitManagerFinalApproval(
+export async function submitPaymentApproval(
   dcId: string,
-  input: {
-    finalApprovedFgQuantity: number;
-    finalApprovedRejectionQuantity: number;
-    finalApprovedScrapQuantity: number;
-    managerCorrectionRemarks?: string;
+  input?: {
+    // Disallowed payload properties to prevent manager from editing Quality quantities
+    goodQty?: any;
+    rejectionQty?: any;
+    scrapQty?: any;
   },
 ): Promise<{ ok: boolean; error?: string }> {
-  const user = await getSessionUser();
-  const permCheck = await checkPermission(user, PERMISSIONS.MANAGER_FINAL_APPROVE);
-  if (!permCheck.ok) return permCheck;
-
-  if (input.finalApprovedFgQuantity < 0 || input.finalApprovedRejectionQuantity < 0 || input.finalApprovedScrapQuantity < 0) {
-    return { ok: false, error: "Final approved quantities cannot be negative." };
-  }
-
-  const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
-  if (!dc) return { ok: false, error: "DC not found." };
-  if (dc.status !== "STORE_VERIFIED") {
-    return { ok: false, error: `DC must be in STORE_VERIFIED status for Manager Final Approval. Current: ${dc.status}` };
-  }
-
-  // Discrepancy detection
-  const secTotal = Number(dc.securityFgQuantity ?? 0) + Number(dc.securityRejectionQuantity ?? 0) + Number(dc.securityScrapQuantity ?? 0);
-  const storeTotal = input.finalApprovedFgQuantity + input.finalApprovedRejectionQuantity + input.finalApprovedScrapQuantity;
-  const hasDiscrepancy = secTotal !== storeTotal || storeTotal !== Number(dc.returnFgQuantity ?? 0);
-
-  const remarks = (input.managerCorrectionRemarks || "").trim();
-  if (hasDiscrepancy && !remarks) {
-    return { ok: false, error: "Correction remarks are mandatory when quantities differ." };
-  }
-
-  // Calculate final payable amount
-  const rate = Number(dc.ratePerQuantity ?? 0);
-  let finalPayable = 0;
-  if (dc.pricingBasis === "RM") {
-    finalPayable = Number(dc.rmQuantity ?? 0) * rate;
-  } else {
-    finalPayable = input.finalApprovedFgQuantity * rate;
-  }
-  finalPayable = Number(finalPayable.toFixed(2));
-
-  const now = new Date();
-  await prisma.$transaction([
-    prisma.deliveryChallan.update({
-      where: { id: dcId },
-      data: {
-        status: "FINAL_APPROVED",
-        finalApprovedFgQuantity: new Prisma.Decimal(input.finalApprovedFgQuantity),
-        finalApprovedRejectionQuantity: new Prisma.Decimal(input.finalApprovedRejectionQuantity),
-        finalApprovedScrapQuantity: new Prisma.Decimal(input.finalApprovedScrapQuantity),
-        managerCorrectionRemarks: remarks || null,
-        finalApprovedBy: user!.id,
-        finalApprovedAt: now,
-        finalPayableAmount: new Prisma.Decimal(finalPayable),
-      },
-    }),
-    prisma.statusHistory.create({
-      data: {
-        dcId,
-        fromStatus: "STORE_VERIFIED",
-        toStatus: "FINAL_APPROVED",
-        changedBy: user!.id,
-        reason: `Final approved quantities set (Payable: ₹${finalPayable})`,
-      },
-    }),
-  ]);
-
-  await writeAudit(prisma, {
-    userId: user!.id,
-    action: "MANAGER_FINAL_APPROVAL_SUBMITTED",
-    module: "DeliveryChallan",
-    entityType: "DeliveryChallan",
-    entityId: dcId,
-    reason: `Final Approved Payable ₹${finalPayable}`,
-  });
-
-  revalidatePath(`/dcs/${dcId}`);
-  revalidatePath("/dcs");
-  return { ok: true };
-}
-
-// ================= 10. APPROVE FOR PAYMENT (FINAL_APPROVED -> APPROVED_FOR_PAYMENT) =================
-
-export async function submitPaymentApproval(dcId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.PAYMENT_APPROVE);
   if (!permCheck.ok) return permCheck;
 
+  // Server-side Payload Rejection if Manager attempts to modify Quality quantities
+  if (
+    input?.goodQty !== undefined ||
+    input?.rejectionQty !== undefined ||
+    input?.scrapQty !== undefined
+  ) {
+    return { ok: false, error: "Manager action cannot modify Quality classification quantities." };
+  }
+
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
-  if (dc.status !== "FINAL_APPROVED") {
-    return { ok: false, error: `DC must be in FINAL_APPROVED status for Payment Approval. Current: ${dc.status}` };
+
+  if (dc.status !== "QUALITY_COMPLETED" && dc.status !== "FINAL_APPROVED") {
+    return { ok: false, error: `DC must be in QUALITY_COMPLETED status for Payment Approval. Current: ${dc.status}` };
+  }
+
+  const rate = Number(dc.ratePerQuantity ?? 0);
+  let finalPayable = 0;
+
+  if (dc.pricingBasis === "RM") {
+    const rmQty = Number(dc.rmQuantity ?? dc.outwardQtyRw ?? 0);
+    finalPayable = Number((rmQty * rate).toFixed(2));
+  } else {
+    // FG Pricing Basis require valid Quality-approved Good Qty
+    if (dc.goodQty === null || dc.goodQty === undefined) {
+      return { ok: false, error: "Quality inspection (Good Qty) is required before payment approval." };
+    }
+    const good = Number(dc.goodQty);
+    finalPayable = Number((good * rate).toFixed(2));
   }
 
   const now = new Date();
@@ -702,26 +692,27 @@ export async function submitPaymentApproval(dcId: string): Promise<{ ok: boolean
         status: "APPROVED_FOR_PAYMENT",
         approvedForPaymentBy: user!.id,
         approvedForPaymentAt: now,
+        finalPayableAmount: new Prisma.Decimal(finalPayable),
       },
     }),
     prisma.statusHistory.create({
       data: {
         dcId,
-        fromStatus: "FINAL_APPROVED",
+        fromStatus: dc.status,
         toStatus: "APPROVED_FOR_PAYMENT",
         changedBy: user!.id,
-        reason: "Approved for payment",
+        reason: `Approved for payment (Final Payable: ₹${finalPayable})`,
       },
     }),
   ]);
 
   await writeAudit(prisma, {
     userId: user!.id,
-    action: "DC_APPROVED_FOR_PAYMENT",
+    action: "MANAGER_PAYMENT_APPROVED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: dcId,
-    reason: "Approved for payment",
+    reason: `Approved for payment (Final Payable: ₹${finalPayable})`,
   });
 
   await notifyUsersWithPermission(
@@ -742,7 +733,15 @@ export async function submitPaymentApproval(dcId: string): Promise<{ ok: boolean
   return { ok: true };
 }
 
-// ================= 11. ACCOUNTS PAYMENT ENTRY (REMAINS APPROVED_FOR_PAYMENT) =================
+// Legacy alias for backwards compatibility with existing UI calls
+export async function submitManagerFinalApproval(
+  dcId: string,
+  _input: any,
+): Promise<{ ok: boolean; error?: string }> {
+  return submitPaymentApproval(dcId);
+}
+
+// ================= 10. ACCOUNTS PAYMENT ENTRY (REMAINS APPROVED_FOR_PAYMENT) =================
 
 export async function submitAccountsPaymentEntry(
   dcId: string,
@@ -792,7 +791,7 @@ export async function submitAccountsPaymentEntry(
 
   await writeAudit(prisma, {
     userId: user!.id,
-    action: "ACCOUNTS_PAYMENT_ENTRY_RECORDED",
+    action: "PAYMENT_ENTRY_COMPLETED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: dcId,
@@ -804,64 +803,50 @@ export async function submitAccountsPaymentEntry(
   return { ok: true };
 }
 
-// ================= 12. UPDATE TRANSPORT DETAILS =================
+// ================= 11. SINGLE AUTHORITATIVE CAN_CLOSE_DC VALIDATION =================
 
-export async function updateDcTransportDetails(
+export async function canCloseDc(
   dcId: string,
-  input: {
-    vehicleNumber?: string;
-    transporter?: string;
-    ewayBillNumber?: string;
-    eSugamNumber?: string;
-  },
-): Promise<{ ok: boolean; error?: string }> {
-  const user = await getSessionUser();
-  const permCheck = await checkPermission(user, PERMISSIONS.DC_EDIT);
-  if (!permCheck.ok) return permCheck;
+  userId?: string,
+): Promise<{ eligible: boolean; missingFields: string[] }> {
+  const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
+  if (!dc) return { eligible: false, missingFields: ["DC not found"] };
 
-  await prisma.deliveryChallan.update({
-    where: { id: dcId },
-    data: {
-      vehicleNumber: input.vehicleNumber || null,
-      transporter: input.transporter || null,
-      ewayBillNumber: input.ewayBillNumber || null,
-      eSugamNumber: input.eSugamNumber || null,
-    },
-  });
+  const missing: string[] = [];
 
-  revalidatePath(`/dcs/${dcId}`);
-  return { ok: true };
+  if (userId) {
+    const userCanClose = await hasPermission(userId, PERMISSIONS.DC_CLOSE);
+    if (!userCanClose) missing.push("Missing DC_CLOSE permission");
+  }
+
+  if (dc.status !== "APPROVED_FOR_PAYMENT") missing.push("Status must be APPROVED_FOR_PAYMENT");
+  if (!dc.invoiceNumber || !dc.invoiceNumber.trim()) missing.push("Missing invoice number");
+  if (!dc.invoiceDate) missing.push("Missing invoice date");
+  if (!dc.invoiceAmount || Number(dc.invoiceAmount) <= 0) missing.push("Invoice amount must be greater than zero");
+  if (!dc.paymentReferenceNumber || !dc.paymentReferenceNumber.trim()) missing.push("Missing payment reference number");
+  if (!dc.paymentDate) missing.push("Missing payment date");
+
+  return { eligible: missing.length === 0, missingFields: missing };
 }
 
-// ================= 13. CLOSE DC (APPROVED_FOR_PAYMENT -> CLOSED) =================
+// ================= 12. CLOSE DC (APPROVED_FOR_PAYMENT -> CLOSED) =================
 
 export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.DC_CLOSE);
   if (!permCheck.ok) return permCheck;
 
-  const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
-  if (!dc) return { ok: false, error: "DC not found." };
-  if (dc.status !== "APPROVED_FOR_PAYMENT") {
-    return { ok: false, error: `DC must be in APPROVED_FOR_PAYMENT status to close. Current: ${dc.status}` };
-  }
-
-  // Mandatory closure validations
-  const missingFields: string[] = [];
-  if (!dc.invoiceNumber || !dc.invoiceNumber.trim()) missingFields.push("Invoice Number");
-  if (!dc.invoiceDate) missingFields.push("Invoice Date");
-  if (!dc.invoiceAmount || Number(dc.invoiceAmount) <= 0) missingFields.push("Invoice Amount");
-  if (!dc.paymentReferenceNumber || !dc.paymentReferenceNumber.trim()) missingFields.push("Payment Reference Number");
-  if (!dc.paymentDate) missingFields.push("Payment Date");
-
-  if (missingFields.length > 0) {
+  const check = await canCloseDc(dcId);
+  if (!check.eligible) {
     return {
       ok: false,
-      error: `Cannot close DC. Please complete: ${missingFields.join(", ")}.`,
+      error: `DC cannot be closed. Missing requirements: ${check.missingFields.join(", ")}.`,
     };
   }
 
+  const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   const now = new Date();
+
   await prisma.$transaction([
     prisma.deliveryChallan.update({
       where: { id: dcId },
@@ -888,10 +873,40 @@ export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: stri
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: dcId,
-    reason: "Delivery Challan closed with complete payment details",
+    reason: `DC ${dc?.dcNumber} closed with complete payment details`,
   });
 
   revalidatePath(`/dcs/${dcId}`);
   revalidatePath("/dcs");
+  return { ok: true };
+}
+
+export async function updateDcTransportDetails(
+  dcId: string,
+  input: {
+    vehicleNumber?: string;
+    transporter?: string;
+    ewayBillNumber?: string;
+    eSugamNumber?: string;
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_CREATE);
+  if (!permCheck.ok) return permCheck;
+
+  const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
+  if (!dc) return { ok: false, error: "DC not found." };
+
+  await prisma.deliveryChallan.update({
+    where: { id: dcId },
+    data: {
+      vehicleNumber: input.vehicleNumber !== undefined ? input.vehicleNumber : dc.vehicleNumber,
+      transporter: input.transporter !== undefined ? input.transporter : dc.transporter,
+      ewayBillNumber: input.ewayBillNumber !== undefined ? input.ewayBillNumber : dc.ewayBillNumber,
+      eSugamNumber: input.eSugamNumber !== undefined ? input.eSugamNumber : dc.eSugamNumber,
+    },
+  });
+
+  revalidatePath(`/dcs/${dcId}`);
   return { ok: true };
 }

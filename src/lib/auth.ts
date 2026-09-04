@@ -5,7 +5,7 @@ import { prisma } from "./db";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET || "dev-secret-key-1234567890",
   pages: { signIn: "/login" },
   providers: [
     CredentialsProvider({
