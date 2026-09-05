@@ -96,7 +96,7 @@ export default async function ScrapDashboardPage({
                       {dc.dcNumber}
                     </Link>
                   </td>
-                  <td className="px-4 py-2 text-slate-900">{dc.vendor.vendorName}</td>
+                  <td className="px-4 py-2 text-slate-900">{dc.vendor?.vendorName || dc.supplierNameSnapshot || "N/A"}</td>
                   <td className="px-4 py-2 text-right font-mono">{expectedScrapWeight.toFixed(3)} kg</td>
                   <td className="px-4 py-2 text-right font-mono">{receivedScrapWeight.toFixed(3)} kg</td>
                   <td className="px-4 py-2 text-right font-mono">

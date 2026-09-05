@@ -19,7 +19,7 @@ export default async function StoreReceiptPage() {
   const dcsFormatted = dcs.map((dc) => ({
     id: dc.id,
     dcNumber: dc.dcNumber,
-    vendorName: dc.vendor.vendorName,
+    vendorName: dc.supplierNameSnapshot || dc.vendor?.vendorName || "INTERNAL",
     woNumber: dc.woNumber,
     partNumber: dc.partNumber || "N/A",
     department: dc.department || "STORES",

@@ -21,10 +21,11 @@ export async function GET() {
 
   const byVendor = new Map<string, { name: string; sentWeight: number; returnedWeight: number; dcCount: number }>();
   for (const dc of dcs) {
+    if (!dc.vendorId) continue;
     const sentWeight = Number(dc.rmQuantity ?? 0);
     const returnedWeight = dc.receipts.reduce(
       (s, r) => s + r.items.reduce((si, ri) => si + Number(ri.weightReceived), 0), 0);
-    const entry = byVendor.get(dc.vendorId) ?? { name: dc.vendor.vendorName, sentWeight: 0, returnedWeight: 0, dcCount: 0 };
+    const entry = byVendor.get(dc.vendorId) ?? { name: dc.vendor?.vendorName || dc.supplierNameSnapshot || "N/A", sentWeight: 0, returnedWeight: 0, dcCount: 0 };
     entry.sentWeight += sentWeight;
     entry.returnedWeight += returnedWeight;
     entry.dcCount += 1;

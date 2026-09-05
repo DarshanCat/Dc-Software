@@ -34,7 +34,7 @@ export default async function MaterialOutsidePage() {
         0,
       );
       const outstanding = Math.max(totalInput - totalReceivedNet, 0);
-      return { dcId: dc.id, dcNumber: dc.dcNumber, vendorName: dc.vendor.vendorName, status: dc.status, outstanding };
+      return { dcId: dc.id, dcNumber: dc.dcNumber, vendorName: dc.vendor?.vendorName || dc.supplierNameSnapshot || "N/A", status: dc.status, outstanding };
     })
     .filter((r) => r.outstanding > 0)
     .sort((a, b) => b.outstanding - a.outstanding);

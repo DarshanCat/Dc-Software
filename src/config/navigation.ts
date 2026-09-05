@@ -43,6 +43,16 @@ export const ADMIN_NAVIGATION: NavSection[] = [
     ],
   },
   {
+    label: "OPERATIONAL DASHBOARDS",
+    items: [
+      { label: "Security Dashboard", href: "/security/dashboard", permission: P.DASHBOARD_VIEW },
+      { label: "Store Dashboard", href: "/stores/dashboard", permission: P.DASHBOARD_VIEW },
+      { label: "Management Dashboard", href: "/management/dashboard", permission: P.DASHBOARD_VIEW },
+      { label: "Accounts Dashboard", href: "/accounts/dashboard", permission: P.DASHBOARD_VIEW },
+      { label: "Production Dashboard", href: "/production/dashboard", permission: P.DASHBOARD_VIEW },
+    ],
+  },
+  {
     label: "Delivery Challans",
     items: [
       { label: "All DCs", href: "/dcs", permission: P.DC_VIEW },
@@ -54,7 +64,8 @@ export const ADMIN_NAVIGATION: NavSection[] = [
       { label: "At Vendor", href: "/dcs?status=AT_VENDOR", permission: P.DC_VIEW },
       { label: "Security Returned", href: "/dcs?status=SECURITY_RETURNED", permission: P.DC_VIEW },
       { label: "Store Verified", href: "/dcs?status=STORE_VERIFIED", permission: P.DC_VIEW },
-      { label: "Final Approved", href: "/dcs?status=FINAL_APPROVED", permission: P.DC_VIEW },
+      { label: "Custodian Verified", href: "/dcs?status=CUSTODIAN_VERIFIED", permission: P.DC_VIEW },
+      { label: "Quality Completed", href: "/dcs?status=QUALITY_COMPLETED", permission: P.DC_VIEW },
       { label: "Approved for Payment", href: "/dcs?status=APPROVED_FOR_PAYMENT", permission: P.DC_VIEW },
       { label: "Close DC", href: "/dcs/close", permission: P.DC_VIEW },
     ],
@@ -173,7 +184,7 @@ export const MANAGEMENT_NAVIGATION: NavSection[] = [
       { label: "DCs Requiring Correction", href: "/dcs?status=DRAFT" },
       { label: "Store Verified / Final Approval", href: "/dcs?status=STORE_VERIFIED" },
       { label: "Discrepancies", href: "/dcs/close?stage=manager" },
-      { label: "Payment Approval", href: "/dcs?status=FINAL_APPROVED" },
+      { label: "Payment Approval", href: "/dcs?status=QUALITY_COMPLETED" },
       { label: "DC History", href: "/dcs" },
     ],
   },
@@ -217,7 +228,7 @@ export const QUALITY_NAVIGATION: NavSection[] = [
     label: "QUALITY OPERATIONS",
     items: [
       { label: "Quality Inspection", href: "/dcs/quality" },
-      { label: "Pending Inspection", href: "/dcs?status=QUALITY_PENDING" },
+      { label: "Pending Inspection", href: "/dcs?status=STORE_VERIFIED" },
       { label: "Completed Inspection", href: "/dcs?status=QUALITY_COMPLETED" },
     ],
   },

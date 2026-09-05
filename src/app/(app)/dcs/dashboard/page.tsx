@@ -199,7 +199,9 @@ export default async function DcDashboardPage() {
             {dcs.slice(0, 15).map((dc) => (
               <tr key={dc.id} className="hover:bg-slate-50">
                 <td className="px-4 py-2.5 font-mono font-bold text-slate-900">{dc.dcNumber}</td>
-                <td className="px-4 py-2.5 text-slate-800 font-medium">{dc.supplierNameSnapshot || dc.vendor.vendorName}</td>
+                <td className="px-4 py-2.5 text-slate-800 font-medium">
+                  {dc.supplierNameSnapshot || dc.vendor?.vendorName || (dc.destinationDepartment ? `${dc.destinationDepartment} (${dc.responsibleCustodian || ''})` : "Internal Custody")}
+                </td>
                 <td className="px-4 py-2.5 font-mono text-slate-700">{dc.woNumber}</td>
                 <td className="px-4 py-2.5 text-slate-600">{dc.department || "PRODUCTION"}</td>
                 <td className="px-4 py-2.5 text-right font-mono font-bold">{Number(dc.actualInwardQty ?? 0)}</td>

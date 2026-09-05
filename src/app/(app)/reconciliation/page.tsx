@@ -65,7 +65,7 @@ export default async function ReconciliationListPage({
                       {r.dc.dcNumber}
                     </Link>
                   </td>
-                  <td className="px-4 py-2 text-slate-900">{r.dc.vendor.vendorName}</td>
+                  <td className="px-4 py-2 text-slate-900">{r.dc.supplierNameSnapshot || r.dc.vendor?.vendorName || "INTERNAL"}</td>
                   <td className="px-4 py-2 text-right font-mono">{Number(r.totalInputWeight).toFixed(3)} kg</td>
                   <td className="px-4 py-2 text-right font-mono">{Number(r.accountedWeight).toFixed(3)} kg</td>
                   <td className="px-4 py-2 text-right font-mono">{Number(r.unaccountedWeight).toFixed(3)} kg</td>

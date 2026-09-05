@@ -8,9 +8,9 @@ export const dynamic = "force-dynamic";
 
 const ROLE_CLOSURE_STATUSES: Record<string, DcStatus[]> = {
   SECURITY: ["DISPATCHED", "AT_VENDOR"],
-  STORES: ["SECURITY_RETURNED", "STORE_VERIFIED"],
-  MANAGEMENT: ["STORE_VERIFIED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT"],
-  ACCOUNTS: ["APPROVED_FOR_PAYMENT", "CLOSED"],
+  STORES: ["SECURITY_RETURNED", "STORE_VERIFIED", "CUSTODIAN_VERIFIED"],
+  MANAGEMENT: ["STORE_VERIFIED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT", "CUSTODIAN_VERIFIED"],
+  ACCOUNTS: ["APPROVED_FOR_PAYMENT", "CUSTODIAN_VERIFIED", "CLOSED"],
 };
 
 export default async function CloseDcPage({
@@ -30,17 +30,18 @@ export default async function CloseDcPage({
     "AT_VENDOR",
     "SECURITY_RETURNED",
     "STORE_VERIFIED",
+    "CUSTODIAN_VERIFIED",
     "FINAL_APPROVED",
     "APPROVED_FOR_PAYMENT",
     "CLOSED",
   ];
 
   if (stage === "security") statusFilter = ["DISPATCHED", "AT_VENDOR"];
-  else if (stage === "store") statusFilter = ["SECURITY_RETURNED"];
+  else if (stage === "store") statusFilter = ["SECURITY_RETURNED", "CUSTODIAN_VERIFIED"];
   else if (stage === "manager") statusFilter = ["STORE_VERIFIED", "FINAL_APPROVED"];
-  else if (stage === "accounts") statusFilter = ["APPROVED_FOR_PAYMENT"];
+  else if (stage === "accounts") statusFilter = ["APPROVED_FOR_PAYMENT", "CUSTODIAN_VERIFIED"];
   else if (stage === "closed") statusFilter = ["CLOSED"];
-  else statusFilter = ["DISPATCHED", "AT_VENDOR", "SECURITY_RETURNED", "STORE_VERIFIED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT"];
+  else statusFilter = ["DISPATCHED", "AT_VENDOR", "SECURITY_RETURNED", "STORE_VERIFIED", "CUSTODIAN_VERIFIED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT"];
 
   // Enforce role-based DC filtering for non-admin users
   if (!isAdmin) {
@@ -75,9 +76,11 @@ export default async function CloseDcPage({
       case "AT_VENDOR":
         return { stage: "Awaiting Security Return", role: "Security", color: "bg-amber-100 text-amber-900 border-amber-300" };
       case "SECURITY_RETURNED":
-        return { stage: "Awaiting Store Verification", role: "Stores", color: "bg-cyan-100 text-cyan-900 border-cyan-300" };
+        return { stage: "Awaiting Store / Custodian Verification", role: "Stores / Custodian", color: "bg-cyan-100 text-cyan-900 border-cyan-300" };
       case "STORE_VERIFIED":
-        return { stage: "Awaiting Manager Approval", role: "Manager / Admin", color: "bg-teal-100 text-teal-900 border-teal-300" };
+        return { stage: "Awaiting Quality Inspection", role: "Quality / Manager", color: "bg-teal-100 text-teal-900 border-teal-300" };
+      case "CUSTODIAN_VERIFIED":
+        return { stage: "Custodian Verified / Ready to Close", role: "Custodian / Admin", color: "bg-sky-100 text-sky-900 border-sky-300" };
       case "FINAL_APPROVED":
         return { stage: "Awaiting Payment Approval", role: "Manager / Admin", color: "bg-emerald-100 text-emerald-900 border-emerald-300" };
       case "APPROVED_FOR_PAYMENT":

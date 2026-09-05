@@ -91,7 +91,7 @@ export default async function WorkOrdersPage({
                             {dc.dcNumber}
                           </Link>
                         </td>
-                        <td>{dc.vendor.vendorName}</td>
+                        <td>{dc.vendor?.vendorName || dc.supplierNameSnapshot || "N/A"}</td>
                         <td>{dc.process?.name ?? "—"}</td>
                         <td className="text-right font-mono">
                           {Number(dc.returnFgQuantity ?? 0).toFixed(3)}

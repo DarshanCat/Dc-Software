@@ -10,6 +10,7 @@ import {
   confirmDcAtVendor,
   submitSecurityReturn,
   submitStoreVerification,
+  submitCustodianVerification,
   submitManagerFinalApproval,
   submitPaymentApproval,
   submitAccountsPaymentEntry,
@@ -48,6 +49,8 @@ export function DcActions({
   };
   dcData: {
     dcNumber?: string;
+    movementType?: string;
+    isCommercialService?: boolean;
     rmQuantity?: number | null;
     returnFgQuantity?: number | null;
     actualInwardQty?: number | null;
@@ -76,6 +79,7 @@ export function DcActions({
     | "DISPATCH"
     | "SEC_RETURN"
     | "STORE_VERIFY"
+    | "CUSTODIAN_VERIFY"
     | "FINAL_APPROVE"
     | "ACCOUNTS_ENTRY"
     | "DELETE_DRAFT"
@@ -203,8 +207,8 @@ export function DcActions({
           </>
         )}
 
-        {/* 3. APPROVED -> DISPATCHED */}
-        {status === "APPROVED" && permissions.canSecurityDispatch && (
+        {/* 3. APPROVED (or DRAFT for non-material) -> DISPATCHED */}
+        {((status === "APPROVED") || (status === "DRAFT" && dcData.movementType !== "MATERIAL")) && permissions.canSecurityDispatch && (
           <Button disabled={busy} onClick={() => setModal("DISPATCH")} className="bg-indigo-600 hover:bg-indigo-700 text-white">
             Security Dispatch Entry
           </Button>
@@ -224,15 +228,28 @@ export function DcActions({
           </Button>
         )}
 
-        {/* 6. SECURITY_RETURNED -> STORE_VERIFIED */}
-        {status === "SECURITY_RETURNED" && permissions.canStoreVerify && (
+        {/* 6. SECURITY_RETURNED -> STORE_VERIFIED (Material) or CUSTODIAN_VERIFIED (Other DCs) */}
+        {status === "SECURITY_RETURNED" && dcData.movementType === "MATERIAL" && permissions.canStoreVerify && (
           <Button disabled={busy} onClick={() => setModal("STORE_VERIFY")} className="bg-cyan-700 hover:bg-cyan-800 text-white">
             Store Material Verification
           </Button>
         )}
 
+        {status === "SECURITY_RETURNED" && dcData.movementType !== "MATERIAL" && (
+          <Button disabled={busy} onClick={() => setModal("CUSTODIAN_VERIFY")} className="bg-sky-700 hover:bg-sky-800 text-white">
+            Custodian Return Verification
+          </Button>
+        )}
+
+        {/* CUSTODIAN_VERIFIED -> CLOSE DC for non-commercial DCs */}
+        {status === "CUSTODIAN_VERIFIED" && !dcData.isCommercialService && permissions.canClose && (
+          <Button disabled={busy} onClick={() => handleAction(() => closeDc(dcId))} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2">
+            CLOSE DC (Custodian Verified)
+          </Button>
+        )}
+
         {/* 7 & 8. QUALITY_COMPLETED / FINAL_APPROVED -> APPROVED_FOR_PAYMENT */}
-        {(status === "QUALITY_COMPLETED" || status === "FINAL_APPROVED" || status === "STORE_VERIFIED") && permissions.canPaymentApprove && (
+        {(status === "QUALITY_COMPLETED" || status === "FINAL_APPROVED" || (status === "STORE_VERIFIED" && dcData.movementType === "MATERIAL")) && permissions.canPaymentApprove && (
           <Button disabled={busy} onClick={() => setModal("FINAL_APPROVE")} className="bg-emerald-700 hover:bg-emerald-800 text-white">
             Manager Payment Approval
           </Button>
@@ -547,6 +564,38 @@ export function DcActions({
                 className="bg-cyan-700 text-white"
               >
                 Submit Store Verification
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTODIAN VERIFICATION MODAL */}
+      {modal === "CUSTODIAN_VERIFY" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-6 space-y-4">
+            <h3 className="text-base font-bold text-slate-900">Custodian Return Verification</h3>
+            <p className="text-xs text-slate-500">Verify returned tool/asset items and record condition upon inward arrival.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Custodian / Department Remarks</label>
+                <Input value={storeRemarks} onChange={(e) => setStoreRemarks(e.target.value)} placeholder="Condition, serial verification notes" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="secondary" onClick={() => setModal(null)} disabled={busy}>Cancel</Button>
+              <Button
+                onClick={() =>
+                  handleAction(() =>
+                    submitCustodianVerification(dcId, {
+                      remarks: storeRemarks,
+                    }),
+                  )
+                }
+                disabled={busy}
+                className="bg-sky-700 text-white"
+              >
+                Confirm Custodian Verification
               </Button>
             </div>
           </div>

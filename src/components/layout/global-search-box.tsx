@@ -29,10 +29,10 @@ export function GlobalSearchBox() {
     isVisible = true;
     placeholder = "Search DC number or WO ID...";
     targetUrl = "/search";
-  } else if (pathname === "/masters/vendors") {
+  } else if (pathname === "/masters/vendors" || pathname === "/masters/suppliers") {
     isVisible = true;
-    placeholder = "Search vendor name or code...";
-    targetUrl = "/masters/vendors";
+    placeholder = "Search supplier name or code...";
+    targetUrl = "/masters/suppliers";
   } else if (pathname === "/masters/items") {
     isVisible = true;
     placeholder = "Search item code or name...";

@@ -34,7 +34,7 @@ interface DepartmentOption {
 interface DcData {
   id: string;
   dcNumber: string;
-  vendorId: string;
+  vendorId: string | null;
   department: string;
   woNumber: string;
   partNumber: string | null;

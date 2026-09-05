@@ -18,6 +18,8 @@ const STATUS_COLORS: Record<string, string> = {
   AT_VENDOR: "bg-purple-100 text-purple-800 border-purple-300",
   SECURITY_RETURNED: "bg-amber-100 text-amber-900 border-amber-400",
   STORE_VERIFIED: "bg-cyan-100 text-cyan-900 border-cyan-400",
+  CUSTODIAN_VERIFIED: "bg-sky-100 text-sky-900 border-sky-400",
+  QUALITY_COMPLETED: "bg-purple-100 text-purple-900 border-purple-400",
   FINAL_APPROVED: "bg-teal-100 text-teal-900 border-teal-400",
   APPROVED_FOR_PAYMENT: "bg-emerald-100 text-emerald-900 border-emerald-400",
   CLOSED: "bg-slate-200 text-slate-800 border-slate-400",
@@ -25,11 +27,12 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const ROLE_ALLOWED_STATUSES: Record<string, string[]> = {
-  SECURITY: ["APPROVED", "DISPATCHED", "AT_VENDOR", "SECURITY_RETURNED"],
-  STORES: ["DRAFT", "PENDING_APPROVAL", "SECURITY_RETURNED", "STORE_VERIFIED"],
-  MANAGEMENT: ["PENDING_APPROVAL", "STORE_VERIFIED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT", "CLOSED"],
-  ACCOUNTS: ["APPROVED_FOR_PAYMENT", "CLOSED"],
+  SECURITY: ["DRAFT", "APPROVED", "DISPATCHED", "AT_VENDOR", "SECURITY_RETURNED"],
+  STORES: ["DRAFT", "PENDING_APPROVAL", "SECURITY_RETURNED", "STORE_VERIFIED", "CUSTODIAN_VERIFIED"],
+  MANAGEMENT: ["PENDING_APPROVAL", "STORE_VERIFIED", "QUALITY_COMPLETED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT", "CUSTODIAN_VERIFIED", "CLOSED"],
+  ACCOUNTS: ["APPROVED_FOR_PAYMENT", "CUSTODIAN_VERIFIED", "CLOSED"],
   PRODUCTION: ["DRAFT", "PENDING_APPROVAL", "APPROVED"],
+  QUALITY: ["STORE_VERIFIED", "QUALITY_COMPLETED"],
 };
 
 export default async function DcsPage({
@@ -131,7 +134,9 @@ export default async function DcsPage({
                       </Link>
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{dc.dcDate.toLocaleDateString()}</td>
-                    <td className="px-4 py-2.5 font-semibold text-slate-900">{dc.vendor.vendorName}</td>
+                    <td className="px-4 py-2.5 font-semibold text-slate-900">
+                      {dc.supplierNameSnapshot || dc.vendor?.vendorName || (dc.destinationDepartment ? `${dc.destinationDepartment} (${dc.responsibleCustodian || ''})` : "Internal Custody")}
+                    </td>
                     <td className="px-4 py-2.5 text-slate-600">{dc.process?.name ?? "—"}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{inputWt.toFixed(3)} kg</td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{expFg.toFixed(3)} kg</td>

@@ -22,10 +22,11 @@ export async function GET() {
 
   const byVendor = new Map<string, { name: string; expected: number; received: number; dcCount: number }>();
   for (const dc of dcs) {
+    if (!dc.vendorId) continue;
     const expected = Number(dc.expectedScrap ?? 0);
     const received = dc.scrapReceipts.reduce((s, r) => s + r.items.reduce((si, ri) => si + Number(ri.weight), 0), 0);
     if (expected <= 0 && received <= 0) continue;
-    const entry = byVendor.get(dc.vendorId) ?? { name: dc.vendor.vendorName, expected: 0, received: 0, dcCount: 0 };
+    const entry = byVendor.get(dc.vendorId) ?? { name: dc.vendor?.vendorName || dc.supplierNameSnapshot || "N/A", expected: 0, received: 0, dcCount: 0 };
     entry.expected += expected;
     entry.received += received;
     entry.dcCount += 1;

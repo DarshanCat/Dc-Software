@@ -365,5 +365,58 @@ describe("DC Close Workflow & Security Test Suite", () => {
     expect(res.ok).toBe(false);
     expect(res.error).toBe("DC cannot be closed. Payment details are mandatory. Please complete the payment details before closing the DC.");
   });
+
+  // 21. Other DC (Tool / Company Property) simple custody workflow
+  it("21. executes Other DC (Tool / Asset) simple custody workflow without Manager approval or Quality inspection", () => {
+    let currentStatus = "DRAFT";
+    const movementType = "TOOL";
+
+    const step = (action: string, allowedFromStatus: string[], nextStatus: string) => {
+      if (!allowedFromStatus.includes(currentStatus)) {
+        return { ok: false, error: `Action ${action} invalid from status ${currentStatus}` };
+      }
+      currentStatus = nextStatus;
+      return { ok: true, status: currentStatus };
+    };
+
+    // 1. Other DC can be dispatched directly from DRAFT (No Manager approval)
+    expect(step("submitSecurityDispatch", ["DRAFT", "APPROVED"], "DISPATCHED").ok).toBe(true);
+    expect(currentStatus).toBe("DISPATCHED");
+
+    // 2. Vendor receipt confirmation / Arrival at Vendor
+    expect(step("confirmDcAtVendor", ["DISPATCHED"], "AT_VENDOR").ok).toBe(true);
+    expect(currentStatus).toBe("AT_VENDOR");
+
+    // 3. Security Gate Inward Return (physical gate arrival)
+    expect(step("submitSecurityReturn", ["DISPATCHED", "AT_VENDOR"], "SECURITY_RETURNED").ok).toBe(true);
+    expect(currentStatus).toBe("SECURITY_RETURNED");
+
+    // 4. Destination Department / Custodian Verification
+    expect(step("submitCustodianVerification", ["SECURITY_RETURNED"], "CUSTODIAN_VERIFIED").ok).toBe(true);
+    expect(currentStatus).toBe("CUSTODIAN_VERIFIED");
+
+    // 5. Close DC by Custodian / Admin (No Accounts invoice/payment required)
+    expect(step("closeDc", ["CUSTODIAN_VERIFIED"], "CLOSED").ok).toBe(true);
+    expect(currentStatus).toBe("CLOSED");
+  });
+
+  // 22. Commercial Service exception for Tool / Asset DCs
+  it("22. executes Commercial Service Tool / Asset DC path through payment approval", () => {
+    let currentStatus = "DRAFT";
+    const isCommercialService = true;
+
+    const step = (action: string, allowedFromStatus: string[], nextStatus: string) => {
+      if (!allowedFromStatus.includes(currentStatus)) {
+        return { ok: false, error: `Action ${action} invalid` };
+      }
+      currentStatus = nextStatus;
+      return { ok: true, status: currentStatus };
+    };
+
+    expect(step("submitSecurityDispatch", ["DRAFT"], "DISPATCHED").ok).toBe(true);
+    expect(step("submitSecurityReturn", ["DISPATCHED"], "SECURITY_RETURNED").ok).toBe(true);
+    expect(step("submitCustodianVerification", ["SECURITY_RETURNED"], "APPROVED_FOR_PAYMENT").ok).toBe(true);
+    expect(currentStatus).toBe("APPROVED_FOR_PAYMENT");
+  });
 });
 

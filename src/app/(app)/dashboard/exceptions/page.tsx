@@ -43,7 +43,7 @@ export default async function ExceptionsPage() {
                   <Link href={"/dcs/" + e.dcId} className="font-mono text-sm text-blue-700 hover:underline">
                     {e.dc.dcNumber}
                   </Link>
-                  <span className="ml-2 text-sm text-slate-500">{e.dc.vendor.vendorName}</span>
+                  <span className="ml-2 text-sm text-slate-500">{e.dc.vendor?.vendorName || e.dc.supplierNameSnapshot || "N/A"}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{e.type.replace(/_/g, " ")}</span>

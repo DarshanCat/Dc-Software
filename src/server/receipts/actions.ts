@@ -88,7 +88,7 @@ export async function createReceipt(input: CreateReceiptInput): Promise<ActionRe
           receiptNumber,
           receiptDate: now,
           dcId: data.dcId,
-          vendorId: dc.vendorId,
+          vendorId: dc.vendorId || "",
           receivedBy: user!.id,
           remarks: data.remarks || null,
           documentReference: data.documentReference || null,

@@ -238,6 +238,12 @@ enum PricingBasis {
   RW
 }
 
+enum DcMovementType {
+  MATERIAL
+  TOOL
+  COMPANY_PROPERTY
+}
+
 enum DcStatus {
   DRAFT
   PENDING_APPROVAL
@@ -246,6 +252,7 @@ enum DcStatus {
   AT_VENDOR
   SECURITY_RETURNED
   STORE_VERIFIED
+  CUSTODIAN_VERIFIED
   FINAL_APPROVED
   APPROVED_FOR_PAYMENT
   CLOSED
@@ -398,8 +405,12 @@ model DeliveryChallan {
   closedBy                     String?
   closedAt                     DateTime?
 
-  vendorId           String
-  vendor             Vendor    @relation(fields: [vendorId], references: [id])
+  vendorId           String?
+  vendor             Vendor?   @relation(fields: [vendorId], references: [id])
+  movementType       DcMovementType @default(MATERIAL)
+  isCommercialService Boolean       @default(false)
+  destinationDepartment String?
+  responsibleCustodian String?
   purpose            DcPurpose
   processId          String?
   process            Process?  @relation(fields: [processId], references: [id])
@@ -423,6 +434,7 @@ model DeliveryChallan {
   cancelledBy        String?
   cancellationReason String?
   qrToken            String?   @unique
+  items              DeliveryChallanItem[]
   recoveryRequirements RecoveryRequirement[]
   recoveryReceipts   RecoveryReceipt[]
   classifications    MaterialClassification[]
@@ -441,8 +453,79 @@ model DeliveryChallan {
   @@index([woNumber])
   @@index([vendorId])
   @@index([status])
+  @@index([movementType])
   @@index([expectedReturnDate])
   @@index([vendorId, status])
+}
+
+model DeliveryChallanItem {
+  id                   String          @id @default(uuid())
+  dcId                 String
+  dc                   DeliveryChallan @relation(fields: [dcId], references: [id], onDelete: Cascade)
+  itemCode             String?
+  itemDescription      String
+  quantity             Decimal         @db.Decimal(12, 3)
+  uom                  String          @default("NOS")
+  returnedQuantity     Decimal?        @db.Decimal(12, 3)
+  goodQty              Decimal?        @db.Decimal(12, 3)
+  rejectionQty         Decimal?        @db.Decimal(12, 3)
+  scrapQty             Decimal?        @db.Decimal(12, 3)
+  qualityDecision      String?
+  inspectionRemarks    String?
+  conditionIn          String?
+  toolInstanceId       String?
+  assetMasterId        String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([dcId])
+}
+
+model ToolMaster {
+  id                   String         @id @default(uuid())
+  toolCode             String         @unique
+  toolName             String
+  category             String?
+  specification        String?
+  uom                  String         @default("NOS")
+  active               Boolean        @default(true)
+  instances            ToolInstance[]
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@index([toolCode])
+}
+
+model ToolInstance {
+  id                   String       @id @default(uuid())
+  toolMasterId         String
+  toolMaster           ToolMaster   @relation(fields: [toolMasterId], references: [id])
+  serialNumber         String       @unique
+  currentStatus        String       @default("AVAILABLE")
+  location             String?
+  lastCalibratedAt     DateTime?
+  nextCalibrationDue   DateTime?
+  active               Boolean      @default(true)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  @@index([toolMasterId])
+  @@index([serialNumber])
+}
+
+model AssetMaster {
+  id                   String   @id @default(uuid())
+  assetTag             String   @unique
+  assetName            String
+  category             String?
+  serialNumber         String?
+  department           String?
+  currentStatus        String   @default("AVAILABLE")
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([assetTag])
 }
 
 model DcAmendment {

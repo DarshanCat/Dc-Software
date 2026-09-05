@@ -11,6 +11,7 @@ import { generateQrToken } from "@/services/dispatch.service";
 import { Prisma, DcPurpose, DcStatus } from "@prisma/client";
 import { stageResultBalance } from "@/analytics/math-engine";
 import { notifyUsersWithPermission } from "@/server/notifications/service";
+import { closeDc } from "./actions";
 
 async function checkPermission(user: any, permission: string): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!user) return { ok: false, error: "Not signed in." };
@@ -35,10 +36,14 @@ function safeRevalidatePath(path: string) {
 // ---------------- 1. OUTWARD DC CREATION ----------------
 
 export interface CreateOutwardDcInput {
+  movementType?: "MATERIAL" | "TOOL" | "COMPANY_PROPERTY";
+  isCommercialService?: boolean;
+  destinationDepartment?: string;
+  responsibleCustodian?: string;
   vendorId: string;
   department: string;
-  woNumber: string;
-  partNumber: string;
+  woNumber?: string;
+  partNumber?: string;
   partDescription?: string;
   pricingBasis?: "RW" | "FG";
   ratePerQuantity?: number;
@@ -64,30 +69,26 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
   if (!permCheck.ok) return permCheck;
 
   if (!input.vendorId) return { ok: false, error: "Supplier (Vendor) is mandatory." };
-  if (!input.woNumber) return { ok: false, error: "Work Order (WO ID) is mandatory." };
-  if (!input.department) return { ok: false, error: "Department is mandatory." };
 
-  if (!input.pricingBasis) {
-    return { ok: false, error: "Please select a pricing basis: RW Quantity or Returning FG Quantity." };
+  const movementType = input.movementType || "MATERIAL";
+  if (movementType === "MATERIAL") {
+    if (!input.woNumber) return { ok: false, error: "Work Order (WO ID) is mandatory for Material DCs." };
+    if (!input.department) return { ok: false, error: "Department is mandatory." };
+    if (!input.pricingBasis) {
+      return { ok: false, error: "Please select a pricing basis: RW Quantity or Returning FG Quantity." };
+    }
+    const rate = input.ratePerQuantity ?? 0;
+    if (rate <= 0) {
+      return { ok: false, error: "Rate Per Quantity must be greater than zero." };
+    }
   }
+
   const rate = input.ratePerQuantity ?? 0;
-  if (rate <= 0) {
-    return { ok: false, error: "Rate Per Quantity must be greater than zero." };
-  }
-
   let pricingQty = 0;
   if (input.pricingBasis === "RW") {
-    if (!input.outwardQtyRw || input.outwardQtyRw <= 0) {
-      return { ok: false, error: "Outward Qty RW must be greater than zero when Price Based On is RW Quantity." };
-    }
-    pricingQty = input.outwardQtyRw;
+    pricingQty = input.outwardQtyRw || 0;
   } else if (input.pricingBasis === "FG") {
-    if (!input.returningFgQuantity || input.returningFgQuantity <= 0) {
-      return { ok: false, error: "Returning FG Qty must be greater than zero when Price Based On is Returning FG Quantity." };
-    }
-    pricingQty = input.returningFgQuantity;
-  } else {
-    return { ok: false, error: "Invalid pricing basis selected." };
+    pricingQty = input.returningFgQuantity || 0;
   }
 
   const expectedAmount = Number((rate * pricingQty).toFixed(2));
@@ -124,12 +125,16 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
       data: {
         dcNumber,
         dcDate: now,
-        woNumber: input.woNumber.trim(),
+        movementType,
+        isCommercialService: input.isCommercialService || false,
+        destinationDepartment: input.destinationDepartment || null,
+        responsibleCustodian: input.responsibleCustodian || null,
+        woNumber: input.woNumber ? input.woNumber.trim() : "N/A",
         partNumber: partNum || null,
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
         vendorId: input.vendorId,
-        department: input.department.trim(),
+        department: input.department ? input.department.trim() : null,
         purpose: input.purpose || "JOB_WORK",
 
         // Master Snapshot (Authoritative)
@@ -263,7 +268,7 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
     const dc = await tx.deliveryChallan.update({
       where: { id: input.dcId },
       data: {
-        woNumber: input.woNumber.trim(),
+        woNumber: input.woNumber ? input.woNumber.trim() : "N/A",
         partNumber: partNum || null,
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
@@ -531,7 +536,7 @@ export async function confirmStoreReceipt(input: ConfirmStoreReceiptInput) {
     prisma.deliveryChallan.update({
       where: { id: input.dcId },
       data: {
-        status: "QUALITY_PENDING",
+        status: "STORE_VERIFIED",
         storeReceivedQty: new Prisma.Decimal(input.storeReceivedQty),
         storeVerifiedFgQuantity: new Prisma.Decimal(input.storeReceivedQty),
         storeReceivedDate: recDate,
@@ -547,9 +552,9 @@ export async function confirmStoreReceipt(input: ConfirmStoreReceiptInput) {
       data: {
         dcId: input.dcId,
         fromStatus: dc.status,
-        toStatus: "QUALITY_PENDING",
+        toStatus: "STORE_VERIFIED",
         changedBy: user!.id,
-        reason: `Store Receipt Confirmed (${input.storeReceivedQty}). Moved to QUALITY_PENDING.`,
+        reason: `Store Receipt Confirmed (${input.storeReceivedQty}). Moved to STORE_VERIFIED.`,
       },
     }),
   ]);
@@ -613,6 +618,9 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
+  if (dc.status !== "STORE_VERIFIED" && dc.status !== "QUALITY_PENDING") {
+    return { ok: false, error: `DC must be in STORE_VERIFIED status for Quality Inspection. Current: ${dc.status}` };
+  }
 
   const storeReceived = dc.storeReceivedQty !== null ? Number(dc.storeReceivedQty) : null;
   const actualInward = dc.actualInwardQty !== null ? Number(dc.actualInwardQty) : (dc.securityFgQuantity !== null ? Number(dc.securityFgQuantity) : 0);
@@ -824,70 +832,5 @@ export async function reviewManagerApproval(input: ReviewManagerApprovalInput) {
 // ---------------- 6. ADMIN CLOSE DC (MANDATORY PAYMENT VALIDATION) ----------------
 
 export async function closeDcByAdmin(dcId: string) {
-  const user = await getSessionUser();
-  const permCheck = await checkPermission(user, PERMISSIONS.DC_CLOSE);
-  if (!permCheck.ok) return permCheck;
-
-  const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
-  if (!dc) return { ok: false, error: "DC not found." };
-
-  if (dc.status === "CLOSED") {
-    return { ok: false, error: "DC is already CLOSED." };
-  }
-
-  // MANDATORY BUSINESS RULE: ADMIN CANNOT CLOSE A DC WITHOUT PAYMENT DETAILS.
-  const paymentRef = (dc.paymentReference || dc.paymentReferenceNumber || "").trim();
-  const invoiceRef = (dc.invoiceNumber || "").trim();
-  const hasPaymentRef = paymentRef.length > 0 || invoiceRef.length > 0;
-  const hasPaymentDate = !!(dc.paymentApprovedAt || dc.paymentDate || dc.invoiceDate);
-  const hasValidPaymentStatus =
-    dc.paymentStatus === "COMPLETED" ||
-    dc.paymentStatus === "PAID" ||
-    dc.paymentStatus === "PAYMENT_APPROVED" ||
-    dc.status === "PAYMENT_APPROVED" ||
-    dc.status === "APPROVED_FOR_PAYMENT" ||
-    dc.status === "FINAL_APPROVED";
-
-  if (!hasPaymentRef || !hasPaymentDate || !hasValidPaymentStatus) {
-    return {
-      ok: false,
-      error: "DC cannot be closed. Payment details are mandatory. Please complete the payment details before closing the DC.",
-    };
-  }
-
-  const now = new Date();
-
-  await prisma.$transaction([
-    prisma.deliveryChallan.update({
-      where: { id: dcId },
-      data: {
-        status: "CLOSED",
-        paymentStatus: "CLOSED",
-        closedBy: user!.id,
-        closedAt: now,
-      },
-    }),
-    prisma.statusHistory.create({
-      data: {
-        dcId,
-        fromStatus: dc.status,
-        toStatus: "CLOSED",
-        changedBy: user!.id,
-        reason: "DC Closed after mandatory payment verification",
-      },
-    }),
-  ]);
-
-  await writeAudit(prisma, {
-    userId: user!.id,
-    action: "DC_CLOSED",
-    module: "DeliveryChallan",
-    entityType: "DeliveryChallan",
-    entityId: dcId,
-    reason: `Admin closed DC ${dc.dcNumber} with verified payment details`,
-  });
-
-  revalidatePath(`/dcs/${dcId}`);
-  revalidatePath("/dcs");
-  return { ok: true };
+  return closeDc(dcId);
 }

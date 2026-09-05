@@ -50,7 +50,7 @@ export default async function OpenDcsPage() {
                   <td className="px-3 py-2">
                     <Link href={"/dcs/" + dc.id} className="font-mono text-blue-700 hover:underline">{dc.dcNumber}</Link>
                   </td>
-                  <td className="px-3 py-2 text-slate-900">{dc.vendor.vendorName}</td>
+                  <td className="px-3 py-2 text-slate-900">{dc.vendor?.vendorName || dc.supplierNameSnapshot || "N/A"}</td>
                   <td className="px-3 py-2 text-slate-600">{dc.process?.name ?? "—"}</td>
                   <td className="px-3 py-2 text-slate-600">{dc.dcDate.toLocaleDateString()}</td>
                   <td className="px-3 py-2">

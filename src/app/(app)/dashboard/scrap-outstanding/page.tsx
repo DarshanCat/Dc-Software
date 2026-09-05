@@ -31,7 +31,7 @@ export default async function ScrapOutstandingPage() {
         0,
       );
       const outstanding = Math.max(expectedScrap - receivedScrap, 0);
-      return { dcId: dc.id, dcNumber: dc.dcNumber, vendorName: dc.vendor.vendorName, expectedScrap, receivedScrap, outstanding };
+      return { dcId: dc.id, dcNumber: dc.dcNumber, vendorName: dc.vendor?.vendorName || dc.supplierNameSnapshot || "N/A", expectedScrap, receivedScrap, outstanding };
     })
     .filter((r) => r.outstanding > 0)
     .sort((a, b) => b.outstanding - a.outstanding);

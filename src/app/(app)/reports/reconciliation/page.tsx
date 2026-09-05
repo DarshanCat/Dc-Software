@@ -123,7 +123,7 @@ export default async function ReconciliationReportPage({
                         {r.dc.dcNumber}
                       </Link>
                     </td>
-                    <td className="px-3 py-2 text-slate-900">{r.dc.vendor.vendorName}</td>
+                    <td className="px-3 py-2 text-slate-900">{r.dc.vendor?.vendorName || r.dc.supplierNameSnapshot || "N/A"}</td>
                     <td className="px-3 py-2 text-right font-mono">{Number(r.totalInputWeight).toFixed(3)}</td>
                     <td className="px-3 py-2 text-right font-mono">{Number(r.accountedWeight).toFixed(3)}</td>
                     <td className="px-3 py-2 text-right font-mono">{Number(r.unaccountedWeight).toFixed(3)}</td>

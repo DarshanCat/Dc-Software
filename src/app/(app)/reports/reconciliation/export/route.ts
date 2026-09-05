@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   for (const r of reconciliations) {
     lines.push([
       csvEscape(r.dc.dcNumber),
-      csvEscape(r.dc.vendor.vendorName),
+      csvEscape(r.dc.vendor?.vendorName || r.dc.supplierNameSnapshot || "N/A"),
       Number(r.totalInputWeight).toFixed(3),
       Number(r.accountedWeight).toFixed(3),
       Number(r.unaccountedWeight).toFixed(3),

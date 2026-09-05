@@ -86,7 +86,7 @@ export async function getDcRegisterRows(
       returnFgQuantity: returnFgQty,
       heatNumber: dc.heatNumber ?? "—",
       expectedScrap: dc.expectedScrap != null ? Number(dc.expectedScrap) : 0,
-      vendorName: dc.vendor.vendorName,
+      vendorName: dc.vendor?.vendorName || dc.supplierNameSnapshot || "INTERNAL / N/A",
       processName: dc.process?.name ?? "—",
       ewayBillNumber: dc.ewayBillNumber ?? "—",
       eSugamNumber: dc.eSugamNumber ?? "—",

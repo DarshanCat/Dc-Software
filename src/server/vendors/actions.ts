@@ -63,6 +63,7 @@ export async function createVendor(input: VendorInput): Promise<ActionResult> {
     });
   });
 
+  revalidatePath("/masters/suppliers");
   revalidatePath("/masters/vendors");
   return { ok: true };
 }
@@ -122,6 +123,7 @@ export async function updateVendor(id: string, input: VendorInput): Promise<Acti
     });
   });
 
+  revalidatePath("/masters/suppliers");
   revalidatePath("/masters/vendors");
   return { ok: true };
 }
@@ -153,6 +155,7 @@ export async function toggleVendorActive(id: string, active: boolean): Promise<A
     });
   });
 
+  revalidatePath("/masters/suppliers");
   revalidatePath("/masters/vendors");
   return { ok: true };
 }
@@ -196,6 +199,7 @@ export async function deleteVendor(id: string): Promise<ActionResult> {
     });
   });
 
+  revalidatePath("/masters/suppliers");
   revalidatePath("/masters/vendors");
   return { ok: true };
 }

@@ -29,7 +29,7 @@ interface DcRowLike {
   approvedBy: string | null;
   preparedByName: string | null;
   approvedByName: string | null;
-  vendor: { vendorName: string; address: string | null; gstNumber: string | null; panNumber: string | null };
+  vendor: { vendorName: string; address: string | null; gstNumber: string | null; panNumber: string | null } | null;
   process: { name: string } | null;
 }
 
@@ -102,10 +102,10 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
     dcDate: dc.dcDate.toLocaleDateString(),
     woNumber: dc.woNumber,
     status: dc.status.replace(/_/g, " "),
-    vendorName: dc.vendor.vendorName,
-    vendorAddress: dc.vendor.address || "",
-    vendorGst: dc.vendor.gstNumber || "",
-    vendorPan: dc.vendor.panNumber || "",
+    vendorName: dc.vendor?.vendorName || "INTERNAL",
+    vendorAddress: dc.vendor?.address || "",
+    vendorGst: dc.vendor?.gstNumber || "",
+    vendorPan: dc.vendor?.panNumber || "",
     purpose: dc.purpose.replace(/_/g, " "),
     processName: dc.process?.name ?? "—",
     partNumber: dc.partNumber || "—",

@@ -94,7 +94,7 @@ export default async function SearchPage({
                   </td>
                   <td className="px-3 py-2 font-mono text-slate-700">{dc.partNumber || "—"}</td>
                   <td className="px-3 py-2 font-mono text-slate-700">{dc.heatNumber || "—"}</td>
-                  <td className="px-3 py-2 text-slate-900">{dc.vendor.vendorName}</td>
+                  <td className="px-3 py-2 text-slate-900">{dc.vendor?.vendorName || dc.supplierNameSnapshot || "N/A"}</td>
                   <td className="px-3 py-2 text-slate-600">{dc.process?.name ?? "—"}</td>
                   <td className="px-3 py-2 text-right font-mono">{dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"}</td>
                   <td className="px-3 py-2 text-right font-mono">{dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"}</td>

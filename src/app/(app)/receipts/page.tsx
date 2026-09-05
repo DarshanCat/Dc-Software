@@ -65,7 +65,7 @@ export default async function ReceiptsPage({
                         {r.dc.dcNumber}
                       </Link>
                     </td>
-                    <td className="px-4 py-2 text-slate-900">{r.dc.vendor.vendorName}</td>
+                    <td className="px-4 py-2 text-slate-900">{r.dc.supplierNameSnapshot || r.dc.vendor?.vendorName || "INTERNAL"}</td>
                     <td className="px-4 py-2 text-right font-mono">{qty}</td>
                     <td className="px-4 py-2 text-right font-mono">{weight.toFixed(3)} kg</td>
                     <td className="px-4 py-2">

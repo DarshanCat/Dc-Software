@@ -80,7 +80,7 @@ export async function createScrapReceipt(input: ScrapReceiptInput): Promise<Acti
         data: {
           scrapReceiptNumber,
           dcId: data.dcId,
-          vendorId: dc.vendorId,
+          vendorId: dc.vendorId || "",
           receiptDate: now,
           receivedBy: user!.id,
           weighmentSlipNumber: data.weighmentSlipNumber || null,

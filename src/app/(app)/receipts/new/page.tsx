@@ -57,7 +57,7 @@ export default async function NewReceiptPage() {
                 return (
                   <tr key={dc.id} className="hover:bg-slate-50">
                     <td className="px-4 py-2.5 font-mono text-slate-800 font-medium">{dc.dcNumber}</td>
-                    <td className="px-4 py-2.5 text-slate-900">{dc.vendor.vendorName}</td>
+                    <td className="px-4 py-2.5 text-slate-900">{dc.supplierNameSnapshot || dc.vendor?.vendorName || "INTERNAL"}</td>
                     <td className="px-4 py-2.5 text-right font-mono">{qty}</td>
                     <td className="px-4 py-2.5">
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">

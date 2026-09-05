@@ -85,7 +85,7 @@ export default async function DashboardPage() {
       finishedPendingKg += outstanding;
 
       if (outstanding > 0) {
-        const vendorName = dc.vendor.vendorName;
+        const vendorName = dc.supplierNameSnapshot || dc.vendor?.vendorName || "INTERNAL";
         vendorOutstanding.set(vendorName, (vendorOutstanding.get(vendorName) ?? 0) + outstanding);
       }
     }

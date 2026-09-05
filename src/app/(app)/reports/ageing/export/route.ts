@@ -37,11 +37,11 @@ export async function GET(request: NextRequest) {
     if (basis === "dispatch") {
       if (!dc.dispatch) continue;
       const days = Math.floor((now.getTime() - dc.dispatch.dispatchedAt.getTime()) / 86400000);
-      rows.push({ dcNumber: dc.dcNumber, vendorName: dc.vendor.vendorName, status: dc.status, referenceDate: dc.dispatch.dispatchedAt, days, bucket: ageingBucket(days) });
+      rows.push({ dcNumber: dc.dcNumber, vendorName: dc.supplierNameSnapshot || dc.vendor?.vendorName || "INTERNAL", status: dc.status, referenceDate: dc.dispatch.dispatchedAt, days, bucket: ageingBucket(days) });
     } else {
       if (!dc.expectedReturnDate || dc.expectedReturnDate >= now) continue;
       const days = Math.floor((now.getTime() - dc.expectedReturnDate.getTime()) / 86400000);
-      rows.push({ dcNumber: dc.dcNumber, vendorName: dc.vendor.vendorName, status: dc.status, referenceDate: dc.expectedReturnDate, days, bucket: ageingBucket(days) });
+      rows.push({ dcNumber: dc.dcNumber, vendorName: dc.supplierNameSnapshot || dc.vendor?.vendorName || "INTERNAL", status: dc.status, referenceDate: dc.expectedReturnDate, days, bucket: ageingBucket(days) });
     }
   }
   rows.sort((a, b) => b.days - a.days);

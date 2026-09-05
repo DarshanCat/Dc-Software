@@ -39,6 +39,7 @@ export async function getVendorOutstandingRows(): Promise<VendorOutstandingRow[]
 
   const dcsByVendor = new Map<string, typeof dcs>();
   for (const dc of dcs) {
+    if (!dc.vendorId) continue;
     const list = dcsByVendor.get(dc.vendorId) ?? [];
     list.push(dc);
     dcsByVendor.set(dc.vendorId, list);

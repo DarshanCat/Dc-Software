@@ -13,7 +13,12 @@ import type { DeliveryChallan } from "@prisma/client";
 
 export async function getSecurityDispatchQueue(roleKey: string = "SECURITY") {
   const dcs = await prisma.deliveryChallan.findMany({
-    where: { status: "APPROVED" },
+    where: {
+      OR: [
+        { status: "APPROVED" },
+        { status: "DRAFT", movementType: { in: ["TOOL", "COMPANY_PROPERTY"] } },
+      ],
+    },
     include: { vendor: { select: { vendorName: true } }, process: { select: { name: true } } },
     orderBy: { updatedAt: "desc" },
   });
@@ -68,7 +73,7 @@ export async function getStorePendingApprovalQueue(roleKey: string = "STORES") {
 
 export async function getStoreVerificationQueue(roleKey: string = "STORES") {
   const dcs = await prisma.deliveryChallan.findMany({
-    where: { status: "SECURITY_RETURNED" },
+    where: { status: "SECURITY_RETURNED", movementType: "MATERIAL" },
     include: { vendor: { select: { vendorName: true } }, process: { select: { name: true } } },
     orderBy: { updatedAt: "desc" },
   });
@@ -86,12 +91,25 @@ export async function getStoreCompletedQueue(roleKey: string = "STORES") {
 }
 
 // ==========================================================
+// CUSTODIAN QUEUE (Other DCs: Tool / Asset)
+// ==========================================================
+
+export async function getCustodianVerificationQueue(roleKey: string = "STORES") {
+  const dcs = await prisma.deliveryChallan.findMany({
+    where: { status: "SECURITY_RETURNED", movementType: { in: ["TOOL", "COMPANY_PROPERTY"] } },
+    include: { vendor: { select: { vendorName: true } }, items: true },
+    orderBy: { updatedAt: "desc" },
+  });
+  return dcs.map((dc) => filterDcDataForRole(dc, roleKey));
+}
+
+// ==========================================================
 // MANAGEMENT QUEUES
 // ==========================================================
 
 export async function getManagementPendingApprovalQueue(roleKey: string = "MANAGEMENT") {
   const dcs = await prisma.deliveryChallan.findMany({
-    where: { status: "PENDING_APPROVAL" },
+    where: { status: "PENDING_APPROVAL", movementType: "MATERIAL" },
     include: { vendor: { select: { vendorName: true } }, process: { select: { name: true } } },
     orderBy: { updatedAt: "desc" },
   });

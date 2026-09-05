@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
 
   const dcsByVendor = new Map<string, typeof dcs>();
   for (const dc of dcs) {
+    if (!dc.vendorId) continue;
     const list = dcsByVendor.get(dc.vendorId) ?? [];
     list.push(dc);
     dcsByVendor.set(dc.vendorId, list);

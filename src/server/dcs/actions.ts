@@ -31,27 +31,71 @@ async function checkPermission(
 // ================= SCHEMAS =================
 
 const createDcSchema = z.object({
-  woNumber: z.string().min(1, "WO ID is required").max(60),
-  partNumber: z.string().trim().min(1, "Part Number is required.").max(60, "Part Number cannot exceed 60 characters."),
-  rmQuantity: z.coerce.number().positive("RM Qty must be > 0."),
-  returnFgQuantity: z.coerce.number().positive("Expected Return FG Qty must be > 0."),
-  heatNumber: z.string().trim().min(1, "Heat Number is required.").max(60, "Heat Number cannot exceed 60 characters."),
-  vendorId: z.string().min(1, "Vendor is required"),
-  processId: z.string().min(1, "Process is required"),
+  movementType: z.enum(["MATERIAL", "TOOL", "COMPANY_PROPERTY"]).default("MATERIAL"),
+  isCommercialService: z.boolean().default(false),
+  destinationDepartment: z.string().optional(),
+  responsibleCustodian: z.string().optional(),
+  woNumber: z.string().max(60).optional(),
+  partNumber: z.string().trim().max(60).optional(),
+  rmQuantity: z.coerce.number().optional(),
+  returnFgQuantity: z.coerce.number().optional(),
+  heatNumber: z.string().trim().max(60).optional(),
+  vendorId: z.string().optional(),
+  processId: z.string().optional(),
   purpose: z.enum([
     "JOB_WORK", "MACHINING", "HEAT_TREATMENT", "SURFACE_TREATMENT",
     "REPAIR", "SAMPLE", "TRIAL", "SUBCONTRACTING", "OTHER",
   ]),
-  pricingBasis: z.enum(["RM", "FG"], {
-    required_error: "Please select a pricing basis: RM Quantity or FG Quantity.",
-    invalid_type_error: "Please select a pricing basis: RM Quantity or FG Quantity.",
-  }),
-  ratePerQuantity: z.coerce.number().positive("Rate Per Quantity must be greater than zero."),
+  pricingBasis: z.enum(["RM", "FG"]).optional(),
+  ratePerQuantity: z.coerce.number().optional(),
   preparedByName: z.string().trim().min(1, "Prepared By Name is required.").max(100, "Prepared By Name cannot exceed 100 characters."),
   expectedReturnDate: z.string().optional(),
   ewayBillNumber: z.string().max(60).optional(),
   eSugamNumber: z.string().max(60).optional(),
   remarks: z.string().max(500).optional(),
+  items: z.array(z.object({
+    itemCode: z.string().optional(),
+    itemDescription: z.string().min(1, "Item description is required"),
+    quantity: z.coerce.number().positive("Quantity must be > 0"),
+    uom: z.string().default("NOS"),
+    conditionIn: z.string().optional(),
+    toolInstanceId: z.string().optional(),
+    assetMasterId: z.string().optional(),
+  })).optional(),
+}).superRefine((val, ctx) => {
+  if (val.movementType === "MATERIAL") {
+    if (!val.vendorId || !val.vendorId.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Supplier / Vendor is required for Material DCs.", path: ["vendorId"] });
+    }
+    if (!val.woNumber || !val.woNumber.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WO ID is required for Material DCs.", path: ["woNumber"] });
+    }
+    if (!val.partNumber || !val.partNumber.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Part Number is required for Material DCs.", path: ["partNumber"] });
+    }
+    if (!val.rmQuantity || val.rmQuantity <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "RM Qty must be > 0 for Material DCs.", path: ["rmQuantity"] });
+    }
+    if (!val.returnFgQuantity || val.returnFgQuantity <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Expected Return FG Qty must be > 0 for Material DCs.", path: ["returnFgQuantity"] });
+    }
+    if (!val.heatNumber || !val.heatNumber.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Heat Number is required for Material DCs.", path: ["heatNumber"] });
+    }
+    if (!val.processId || !val.processId.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Process is required for Material DCs.", path: ["processId"] });
+    }
+    if (!val.pricingBasis) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a pricing basis: RM Quantity or FG Quantity.", path: ["pricingBasis"] });
+    }
+    if (!val.ratePerQuantity || val.ratePerQuantity <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rate Per Quantity must be greater than zero.", path: ["ratePerQuantity"] });
+    }
+  } else if (val.isCommercialService) {
+    if (!val.vendorId || !val.vendorId.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Supplier / Vendor is required for Commercial Service DCs.", path: ["vendorId"] });
+    }
+  }
 });
 
 export type CreateDcInput = z.infer<typeof createDcSchema>;
@@ -77,17 +121,24 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
   }
   const data = parsed.data;
 
-  const [vendor, processRec] = await Promise.all([
-    prisma.vendor.findUnique({ where: { id: data.vendorId } }),
-    prisma.process.findUnique({ where: { id: data.processId } }),
-  ]);
-  if (!vendor) return { ok: false, error: "Selected vendor was not found." };
-  if (!vendor.active) return { ok: false, error: "Selected vendor is inactive." };
-  if (!processRec) return { ok: false, error: "Selected process was not found." };
-  if (!processRec.active) return { ok: false, error: "Selected process is inactive." };
+  let vendor: any = null;
+  if (data.vendorId) {
+    vendor = await prisma.vendor.findUnique({ where: { id: data.vendorId } });
+    if (!vendor) return { ok: false, error: "Selected vendor was not found." };
+    if (!vendor.active) return { ok: false, error: "Selected vendor is inactive." };
+  }
 
-  const qty = data.pricingBasis === "RM" ? data.rmQuantity : data.returnFgQuantity;
-  const expectedAmount = Number((qty * data.ratePerQuantity).toFixed(2));
+  if (data.processId) {
+    const processRec = await prisma.process.findUnique({ where: { id: data.processId } });
+    if (!processRec) return { ok: false, error: "Selected process was not found." };
+    if (!processRec.active) return { ok: false, error: "Selected process is inactive." };
+  }
+
+  let expectedAmount = 0;
+  if (data.movementType === "MATERIAL" && data.pricingBasis && data.ratePerQuantity) {
+    const qty = data.pricingBasis === "RM" ? (data.rmQuantity || 0) : (data.returnFgQuantity || 0);
+    expectedAmount = Number((qty * data.ratePerQuantity).toFixed(2));
+  }
 
   const now = new Date();
   const fy = fiscalYearOf(now);
@@ -100,17 +151,24 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
       data: {
         dcNumber,
         dcDate: now,
-        woNumber: data.woNumber,
-        partNumber: data.partNumber.trim(),
-        rmQuantity: new Prisma.Decimal(data.rmQuantity),
-        returnFgQuantity: new Prisma.Decimal(data.returnFgQuantity),
-        heatNumber: data.heatNumber.trim(),
-        pricingBasis: data.pricingBasis,
-        ratePerQuantity: new Prisma.Decimal(data.ratePerQuantity),
-        expectedAmount: new Prisma.Decimal(expectedAmount),
-        vendorId: data.vendorId,
+        movementType: data.movementType,
+        isCommercialService: data.isCommercialService,
+        destinationDepartment: data.destinationDepartment || null,
+        responsibleCustodian: data.responsibleCustodian || null,
+        woNumber: data.woNumber || "N/A",
+        partNumber: data.partNumber ? data.partNumber.trim() : null,
+        rmQuantity: data.rmQuantity ? new Prisma.Decimal(data.rmQuantity) : null,
+        returnFgQuantity: data.returnFgQuantity ? new Prisma.Decimal(data.returnFgQuantity) : null,
+        heatNumber: data.heatNumber ? data.heatNumber.trim() : null,
+        pricingBasis: data.pricingBasis || null,
+        ratePerQuantity: data.ratePerQuantity ? new Prisma.Decimal(data.ratePerQuantity) : null,
+        expectedAmount: expectedAmount > 0 ? new Prisma.Decimal(expectedAmount) : null,
+        vendorId: data.vendorId || null,
+        supplierNameSnapshot: vendor ? vendor.vendorName : null,
+        supplierAddressSnapshot: vendor ? (vendor.address || `${vendor.city || ""}, ${vendor.state || ""}`) : null,
+        supplierGstSnapshot: vendor ? (vendor.gstNumber || null) : null,
         purpose: data.purpose,
-        processId: data.processId,
+        processId: data.processId || null,
         expectedReturnDate: data.expectedReturnDate ? new Date(data.expectedReturnDate) : null,
         ewayBillNumber: data.ewayBillNumber || null,
         eSugamNumber: data.eSugamNumber || null,
@@ -122,12 +180,29 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
       },
     });
 
+    if (data.items && data.items.length > 0) {
+      for (const item of data.items) {
+        await tx.deliveryChallanItem.create({
+          data: {
+            dcId: dc.id,
+            itemCode: item.itemCode || null,
+            itemDescription: item.itemDescription.trim(),
+            quantity: new Prisma.Decimal(item.quantity),
+            uom: item.uom || "NOS",
+            conditionIn: item.conditionIn || null,
+            toolInstanceId: item.toolInstanceId || null,
+            assetMasterId: item.assetMasterId || null,
+          },
+        });
+      }
+    }
+
     await tx.statusHistory.create({
       data: {
         dcId: dc.id,
         toStatus: "DRAFT",
         changedBy: user!.id,
-        reason: "DC Created",
+        reason: `DC Created (${data.movementType})`,
       },
     });
 
@@ -140,7 +215,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: result.id,
-    reason: `DC ${result.dcNumber} created with basis ${data.pricingBasis}`,
+    reason: `DC ${result.dcNumber} created (${data.movementType})`,
   });
 
   revalidatePath("/dcs");
@@ -157,6 +232,10 @@ export async function submitForApproval(dcId: string): Promise<{ ok: boolean; er
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
   if (dc.status !== "DRAFT") return { ok: false, error: `Only DRAFT DCs can be submitted. Current status: ${dc.status}` };
+
+  if (dc.movementType !== "MATERIAL") {
+    return { ok: false, error: "Other DCs (Tool / Company Property) do not require Manager approval and can be dispatched directly from DRAFT." };
+  }
 
   await prisma.$transaction([
     prisma.deliveryChallan.update({
@@ -271,7 +350,6 @@ export async function approveDc(dcId: string, approvedByName: string): Promise<{
   if (!dc) return { ok: false, error: "DC not found." };
   if (dc.status !== "PENDING_APPROVAL") return { ok: false, error: `Only PENDING_APPROVAL DCs can be approved. Current status: ${dc.status}` };
 
-  // Self-approval control rule: creator cannot approve own DC unless ADMIN
   if (dc.createdBy === user!.id && !user!.roleKeys.includes("ADMIN")) {
     return { ok: false, error: "You cannot approve a Delivery Challan that you created." };
   }
@@ -325,7 +403,7 @@ export async function approveDc(dcId: string, approvedByName: string): Promise<{
   return { ok: true };
 }
 
-// ================= 5. SECURITY DISPATCH (APPROVED -> DISPATCHED) =================
+// ================= 5. SECURITY DISPATCH (APPROVED/DRAFT -> DISPATCHED) =================
 
 export async function submitSecurityDispatch(
   dcId: string,
@@ -346,7 +424,12 @@ export async function submitSecurityDispatch(
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
-  if (dc.status !== "APPROVED") return { ok: false, error: `DC must be in APPROVED status for dispatch. Current: ${dc.status}` };
+
+  if (dc.movementType === "MATERIAL") {
+    if (dc.status !== "APPROVED") return { ok: false, error: `Material DC must be in APPROVED status for dispatch. Current: ${dc.status}` };
+  } else {
+    if (dc.status !== "DRAFT" && dc.status !== "APPROVED") return { ok: false, error: `Other DC must be in DRAFT or APPROVED status for dispatch. Current: ${dc.status}` };
+  }
 
   const now = new Date();
   await prisma.$transaction([
@@ -371,7 +454,7 @@ export async function submitSecurityDispatch(
     prisma.statusHistory.create({
       data: {
         dcId,
-        fromStatus: "APPROVED",
+        fromStatus: dc.status,
         toStatus: "DISPATCHED",
         changedBy: user!.id,
         reason: `Security Dispatch recorded (${input.dispatchQuantity})`,
@@ -446,7 +529,6 @@ export async function submitSecurityReturn(
     vehicleNumber?: string;
     transporter?: string;
     remarks?: string;
-    // Disallowed payload properties for security testing
     storeGatingWeight?: any;
     storeBoringWeight?: any;
     goodQty?: any;
@@ -459,7 +541,6 @@ export async function submitSecurityReturn(
   const permCheck = await checkPermission(user, PERMISSIONS.SECURITY_RETURN);
   if (!permCheck.ok) return permCheck;
 
-  // Server-side Payload Rejection for unauthorized fields
   if (
     input.storeGatingWeight !== undefined ||
     input.storeBoringWeight !== undefined ||
@@ -523,19 +604,6 @@ export async function submitSecurityReturn(
     reason: `Security Inward recorded (Actual Inward Qty: ${input.actualInwardQty})`,
   });
 
-  await notifyUsersWithPermission(
-    prisma,
-    PERMISSIONS.STORE_VERIFY,
-    {
-      type: "DC_STATUS",
-      title: `Security Return Completed - DC ${dc.dcNumber}`,
-      body: `Material returned at gate for DC ${dc.dcNumber}. Store verification required.`,
-      entityType: "DeliveryChallan",
-      entityId: dcId,
-      targetUrl: `/dcs/${dcId}`,
-    },
-  );
-
   revalidatePath(`/dcs/${dcId}`);
   revalidatePath("/dcs");
   return { ok: true };
@@ -551,7 +619,6 @@ export async function submitStoreVerification(
     storeGatingWeight?: number;
     storeBoringWeight?: number;
     storeRemarks?: string;
-    // Disallowed payload properties for security testing
     goodQty?: any;
     rejectionQty?: any;
     scrapQty?: any;
@@ -562,7 +629,6 @@ export async function submitStoreVerification(
   const permCheck = await checkPermission(user, PERMISSIONS.STORE_VERIFY);
   if (!permCheck.ok) return permCheck;
 
-  // Server-side Payload Rejection for Quality fields
   if (
     input.goodQty !== undefined ||
     input.rejectionQty !== undefined ||
@@ -580,6 +646,9 @@ export async function submitStoreVerification(
   if (!dc) return { ok: false, error: "DC not found." };
   if (dc.status !== "SECURITY_RETURNED") {
     return { ok: false, error: `DC must be in SECURITY_RETURNED status for Store Verification. Current: ${dc.status}` };
+  }
+  if (dc.movementType && dc.movementType !== "MATERIAL") {
+    return { ok: false, error: "Store verification is strictly for Material DCs. Use Custodian Verification for Other DCs." };
   }
 
   const now = new Date();
@@ -620,18 +689,83 @@ export async function submitStoreVerification(
     reason: `Store confirmed quantity ${input.storeReceivedQty}`,
   });
 
-  await notifyUsersWithPermission(
-    prisma,
-    PERMISSIONS.MANAGER_FINAL_APPROVE,
-    {
-      type: "DC_STATUS",
-      title: `Store Verified - DC ${dc.dcNumber}`,
-      body: `Store verification complete for DC ${dc.dcNumber}. Quality inspection pending.`,
-      entityType: "DeliveryChallan",
-      entityId: dcId,
-      targetUrl: `/dcs/${dcId}`,
-    },
-  );
+  revalidatePath(`/dcs/${dcId}`);
+  revalidatePath("/dcs");
+  return { ok: true };
+}
+
+// ================= 8B. CUSTODIAN VERIFICATION (OTHER DCS: SECURITY_RETURNED -> CUSTODIAN_VERIFIED / APPROVED_FOR_PAYMENT) =================
+
+export async function submitCustodianVerification(
+  dcId: string,
+  input: {
+    items?: Array<{
+      id: string;
+      returnedQuantity: number;
+      conditionIn?: string;
+    }>;
+    remarks?: string;
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_VIEW);
+  if (!permCheck.ok) return permCheck;
+
+  const dc = await prisma.deliveryChallan.findUnique({
+    where: { id: dcId },
+    include: { items: true },
+  });
+  if (!dc) return { ok: false, error: "DC not found." };
+  if (dc.status !== "SECURITY_RETURNED") {
+    return { ok: false, error: `DC must be in SECURITY_RETURNED status for Custodian Verification. Current: ${dc.status}` };
+  }
+  if (dc.movementType === "MATERIAL") {
+    return { ok: false, error: "Material DCs must be verified by Store. Use Store Verification." };
+  }
+
+  const now = new Date();
+  const nextStatus = dc.isCommercialService ? "APPROVED_FOR_PAYMENT" : "CUSTODIAN_VERIFIED";
+
+  await prisma.$transaction(async (tx) => {
+    if (input.items && input.items.length > 0) {
+      for (const item of input.items) {
+        await tx.deliveryChallanItem.update({
+          where: { id: item.id },
+          data: {
+            returnedQuantity: new Prisma.Decimal(item.returnedQuantity),
+            conditionIn: item.conditionIn || null,
+          },
+        });
+      }
+    }
+
+    await tx.deliveryChallan.update({
+      where: { id: dcId },
+      data: {
+        status: nextStatus,
+        storeRemarks: input.remarks || dc.storeRemarks,
+      },
+    });
+
+    await tx.statusHistory.create({
+      data: {
+        dcId,
+        fromStatus: "SECURITY_RETURNED",
+        toStatus: nextStatus,
+        changedBy: user!.id,
+        reason: `Custodian Verification completed by ${user!.email}`,
+      },
+    });
+  });
+
+  await writeAudit(prisma, {
+    userId: user!.id,
+    action: "CUSTODIAN_VERIFICATION_SUBMITTED",
+    module: "DeliveryChallan",
+    entityType: "DeliveryChallan",
+    entityId: dcId,
+    reason: `Custodian verification recorded for ${dc.dcNumber}`,
+  });
 
   revalidatePath(`/dcs/${dcId}`);
   revalidatePath("/dcs");
@@ -643,7 +777,6 @@ export async function submitStoreVerification(
 export async function submitPaymentApproval(
   dcId: string,
   input?: {
-    // Disallowed payload properties to prevent manager from editing Quality quantities
     goodQty?: any;
     rejectionQty?: any;
     scrapQty?: any;
@@ -653,7 +786,6 @@ export async function submitPaymentApproval(
   const permCheck = await checkPermission(user, PERMISSIONS.PAYMENT_APPROVE);
   if (!permCheck.ok) return permCheck;
 
-  // Server-side Payload Rejection if Manager attempts to modify Quality quantities
   if (
     input?.goodQty !== undefined ||
     input?.rejectionQty !== undefined ||
@@ -665,7 +797,7 @@ export async function submitPaymentApproval(
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
 
-  if (dc.status !== "QUALITY_COMPLETED" && dc.status !== "FINAL_APPROVED") {
+  if (dc.status !== "QUALITY_COMPLETED" && dc.status !== "FINAL_APPROVED" && !(dc.isCommercialService && dc.status === "CUSTODIAN_VERIFIED")) {
     return { ok: false, error: `DC must be in QUALITY_COMPLETED status for Payment Approval. Current: ${dc.status}` };
   }
 
@@ -676,7 +808,6 @@ export async function submitPaymentApproval(
     const rmQty = Number(dc.rmQuantity ?? dc.outwardQtyRw ?? 0);
     finalPayable = Number((rmQty * rate).toFixed(2));
   } else {
-    // FG Pricing Basis require valid Quality-approved Good Qty
     if (dc.goodQty === null || dc.goodQty === undefined) {
       return { ok: false, error: "Quality inspection (Good Qty) is required before payment approval." };
     }
@@ -715,25 +846,11 @@ export async function submitPaymentApproval(
     reason: `Approved for payment (Final Payable: ₹${finalPayable})`,
   });
 
-  await notifyUsersWithPermission(
-    prisma,
-    PERMISSIONS.ACCOUNTS_PAYMENT_ENTRY,
-    {
-      type: "DC_STATUS",
-      title: `Approved for Payment - DC ${dc.dcNumber}`,
-      body: `DC ${dc.dcNumber} approved for payment. Accounts entry required.`,
-      entityType: "DeliveryChallan",
-      entityId: dcId,
-      targetUrl: `/dcs/${dcId}`,
-    },
-  );
-
   revalidatePath(`/dcs/${dcId}`);
   revalidatePath("/dcs");
   return { ok: true };
 }
 
-// Legacy alias for backwards compatibility with existing UI calls
 export async function submitManagerFinalApproval(
   dcId: string,
   _input: any,
@@ -753,7 +870,7 @@ export async function submitAccountsPaymentEntry(
     paymentDate: string;
     paymentRemarks?: string;
   },
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; closeEligibility?: { eligible: boolean; missingFields: string[] } }> {
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.ACCOUNTS_PAYMENT_ENTRY);
   if (!permCheck.ok) return permCheck;
@@ -789,6 +906,8 @@ export async function submitAccountsPaymentEntry(
     },
   });
 
+  const closeEligibility = await canCloseDc(dcId, user!.id);
+
   await writeAudit(prisma, {
     userId: user!.id,
     action: "PAYMENT_ENTRY_COMPLETED",
@@ -800,7 +919,7 @@ export async function submitAccountsPaymentEntry(
 
   revalidatePath(`/dcs/${dcId}`);
   revalidatePath("/dcs");
-  return { ok: true };
+  return { ok: true, closeEligibility };
 }
 
 // ================= 11. SINGLE AUTHORITATIVE CAN_CLOSE_DC VALIDATION =================
@@ -809,7 +928,10 @@ export async function canCloseDc(
   dcId: string,
   userId?: string,
 ): Promise<{ eligible: boolean; missingFields: string[] }> {
-  const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
+  const dc = await prisma.deliveryChallan.findUnique({
+    where: { id: dcId },
+    include: { items: true },
+  });
   if (!dc) return { eligible: false, missingFields: ["DC not found"] };
 
   const missing: string[] = [];
@@ -819,24 +941,36 @@ export async function canCloseDc(
     if (!userCanClose) missing.push("Missing DC_CLOSE permission");
   }
 
-  if (dc.status !== "APPROVED_FOR_PAYMENT") missing.push("Status must be APPROVED_FOR_PAYMENT");
-  if (!dc.invoiceNumber || !dc.invoiceNumber.trim()) missing.push("Missing invoice number");
-  if (!dc.invoiceDate) missing.push("Missing invoice date");
-  if (!dc.invoiceAmount || Number(dc.invoiceAmount) <= 0) missing.push("Invoice amount must be greater than zero");
-  if (!dc.paymentReferenceNumber || !dc.paymentReferenceNumber.trim()) missing.push("Missing payment reference number");
-  if (!dc.paymentDate) missing.push("Missing payment date");
+  const isMaterialOrCommercial = !dc.movementType || dc.movementType === "MATERIAL" || dc.isCommercialService;
+
+  if (isMaterialOrCommercial) {
+    if (dc.status !== "APPROVED_FOR_PAYMENT") missing.push("Status must be APPROVED_FOR_PAYMENT");
+    if (!dc.invoiceNumber || !dc.invoiceNumber.trim()) missing.push("Missing invoice number");
+    if (!dc.invoiceDate) missing.push("Missing invoice date");
+    if (!dc.invoiceAmount || Number(dc.invoiceAmount) <= 0) missing.push("Invoice amount must be greater than zero");
+    if (!dc.paymentReferenceNumber || !dc.paymentReferenceNumber.trim()) missing.push("Missing payment reference number");
+    if (!dc.paymentDate) missing.push("Missing payment date");
+  } else {
+    // Non-commercial Other DC (Tool / Company Property)
+    if (dc.status !== "CUSTODIAN_VERIFIED" && dc.status !== "CLOSED") {
+      missing.push("Status must be CUSTODIAN_VERIFIED for non-commercial DC closure");
+    }
+    if (!dc.actualInwardQty && !dc.securityReturnDate) {
+      missing.push("Security inward return record is missing");
+    }
+  }
 
   return { eligible: missing.length === 0, missingFields: missing };
 }
 
-// ================= 12. CLOSE DC (APPROVED_FOR_PAYMENT -> CLOSED) =================
+// ================= 12. CLOSE DC =================
 
 export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.DC_CLOSE);
   if (!permCheck.ok) return permCheck;
 
-  const check = await canCloseDc(dcId);
+  const check = await canCloseDc(dcId, user!.id);
   if (!check.eligible) {
     return {
       ok: false,
@@ -845,6 +979,7 @@ export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: stri
   }
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
+  if (!dc) return { ok: false, error: "DC not found." };
   const now = new Date();
 
   await prisma.$transaction([
@@ -859,10 +994,12 @@ export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: stri
     prisma.statusHistory.create({
       data: {
         dcId,
-        fromStatus: "APPROVED_FOR_PAYMENT",
+        fromStatus: dc.status,
         toStatus: "CLOSED",
         changedBy: user!.id,
-        reason: "DC Closed after mandatory payment verification",
+        reason: dc.movementType === "MATERIAL" || dc.isCommercialService
+          ? "DC Closed after mandatory payment verification"
+          : "DC Closed after custodian return verification",
       },
     }),
   ]);
@@ -873,7 +1010,7 @@ export async function closeDc(dcId: string): Promise<{ ok: boolean; error?: stri
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: dcId,
-    reason: `DC ${dc?.dcNumber} closed with complete payment details`,
+    reason: `DC ${dc.dcNumber} closed (${dc.movementType})`,
   });
 
   revalidatePath(`/dcs/${dcId}`);

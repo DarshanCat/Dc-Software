@@ -64,14 +64,14 @@ export default async function AgeingReportPage({
       if (!dc.dispatch) continue;
       const days = Math.floor((now.getTime() - dc.dispatch.dispatchedAt.getTime()) / (1000 * 60 * 60 * 24));
       rows.push({
-        dcId: dc.id, dcNumber: dc.dcNumber, vendorName: dc.vendor.vendorName, status: dc.status,
+        dcId: dc.id, dcNumber: dc.dcNumber, vendorName: dc.supplierNameSnapshot || dc.vendor?.vendorName || "INTERNAL", status: dc.status,
         referenceDate: dc.dispatch.dispatchedAt, days, bucket: ageingBucket(days),
       });
     } else {
       if (!dc.expectedReturnDate || dc.expectedReturnDate >= now) continue;
       const days = Math.floor((now.getTime() - dc.expectedReturnDate.getTime()) / (1000 * 60 * 60 * 24));
       rows.push({
-        dcId: dc.id, dcNumber: dc.dcNumber, vendorName: dc.vendor.vendorName, status: dc.status,
+        dcId: dc.id, dcNumber: dc.dcNumber, vendorName: dc.supplierNameSnapshot || dc.vendor?.vendorName || "INTERNAL", status: dc.status,
         referenceDate: dc.expectedReturnDate, days, bucket: ageingBucket(days),
       });
     }
