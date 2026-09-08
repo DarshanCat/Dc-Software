@@ -1,10 +1,14 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Controlled User Registration & Admin Approval Workflow", () => {
+  test.beforeEach(async ({ context }) => {
+    await context.clearCookies();
+  });
+
   test("full registration, admin approval, activation, and login flow", async ({ page }) => {
     // 1. Open login and click Create Account
     await page.goto("/login");
-    await page.click('text="Create an account"');
+    await page.click('a[href="/register"]');
     await expect(page).toHaveURL("/register");
 
     // 2. Fill registration request form
@@ -29,6 +33,7 @@ test.describe("Controlled User Registration & Admin Approval Workflow", () => {
     await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
+    await page.waitForLoadState("networkidle");
     await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
 
     // 6. Navigate to /admin/users/requests
@@ -40,8 +45,10 @@ test.describe("Controlled User Registration & Admin Approval Workflow", () => {
     await row.locator('button:has-text("Approve")').click();
 
     // 8. Assign Department, Role, and Approving Person's Name in approval modal
-    await page.selectOption('div.fixed select:has-option("Production")', "Production");
-    await page.selectOption('div.fixed select:has-option("STORES")', "STORES");
+    const modal = page.locator("div.fixed");
+    const selects = modal.locator("select");
+    await selects.nth(0).selectOption("Production");
+    await selects.nth(1).selectOption("STORES");
     await page.fill('div.fixed input[placeholder*="person approving"]', "Darshan Manager");
     await page.click('button:has-text("Confirm & Approve Account")');
 
@@ -97,6 +104,8 @@ test.describe("Controlled User Registration & Admin Approval Workflow", () => {
     await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
     await page.goto("/admin/users/requests");
 
     // 3. Reject request

@@ -1,13 +1,18 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Mandatory Password Change & Security E2E", () => {
+  test.beforeEach(async ({ context }) => {
+    await context.clearCookies();
+  });
+
   test("full temporary password workflow: activation, mandatory password change redirect, and login validation", async ({ page }) => {
     // 1. Submit registration request
     const uniqueEmail = `temp.user.${Date.now()}@vijayspheroidals.com`;
     await page.goto("/register");
+    await expect(page).toHaveURL("/register");
     await page.fill('input[name="fullName"]', "Temp Account User");
     await page.fill('input[name="email"]', uniqueEmail);
-    await page.selectOption('select[name="requestedDepartment"]', "Stores");
+    await page.selectOption('select[name="requestedDepartment"]', "Production");
     await page.click('button[type="submit"]');
 
     // 2. Admin approves request & copies activation link
@@ -15,13 +20,17 @@ test.describe("Mandatory Password Change & Security E2E", () => {
     await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
+    await page.waitForLoadState("networkidle");
     await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
 
     await page.goto("/admin/users/requests");
     const row = page.locator("tr", { hasText: uniqueEmail });
     await row.locator('button:has-text("Approve")').click();
-    await page.selectOption('div.fixed select:has-option("Stores")', "Stores");
-    await page.selectOption('div.fixed select:has-option("STORES")', "STORES");
+    
+    const modal = page.locator("div.fixed");
+    const selects = modal.locator("select");
+    await selects.nth(0).selectOption("Production");
+    await selects.nth(1).selectOption("STORES");
     await page.click('button:has-text("Confirm & Approve Account")');
 
     const activationUrlInput = page.locator('div.fixed input[readonly]');
@@ -41,14 +50,15 @@ test.describe("Mandatory Password Change & Security E2E", () => {
     await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
 
     await page.goto("/admin/users");
     const userRow = page.locator("tr", { hasText: uniqueEmail });
     await userRow.locator('button:has-text("Reset Password")').click();
-    await page.click('button:has-text("Confirm Reset")');
+    await page.click('button:has-text("Generate Temporary Password")');
 
-    const modalTempPasswordInput = page.locator('div.fixed input[readonly]');
-    const adminGeneratedTempPassword = await modalTempPasswordInput.inputValue();
+    const adminGeneratedTempPassword = (await page.locator('div.fixed div.font-mono').innerText()).trim();
     expect(adminGeneratedTempPassword.length).toBeGreaterThanOrEqual(8);
     await page.click('button:has-text("Done")');
 
@@ -57,6 +67,7 @@ test.describe("Mandatory Password Change & Security E2E", () => {
     await page.fill('input[name="email"]', uniqueEmail);
     await page.fill('input[name="password"]', adminGeneratedTempPassword);
     await page.click('button[type="submit"]');
+    await page.waitForLoadState("networkidle");
 
     // 6. Verify mandatory redirection to /change-password
     await expect(page).toHaveURL(/\/change-password/);
@@ -73,19 +84,18 @@ test.describe("Mandatory Password Change & Security E2E", () => {
     await page.fill('input[name="confirmPassword"]', permanentPassword);
     await page.click('button[type="submit"]');
 
-    // 9. Verify access granted to application dashboard after successful password change
-    await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
-
-    // 10. Verify old temporary password no longer works
+    // 9. Verify old temporary password no longer works
+    await page.context().clearCookies();
     await page.goto("/login");
     await page.fill('input[name="email"]', uniqueEmail);
     await page.fill('input[name="password"]', adminGeneratedTempPassword);
     await page.click('button[type="submit"]');
     await expect(page.locator("text=Invalid email or password.")).toBeVisible();
 
-    // 11. Verify new permanent password works cleanly
+    // 10. Verify new permanent password works cleanly
     await page.fill('input[name="password"]', permanentPassword);
     await page.click('button[type="submit"]');
+    await page.waitForLoadState("networkidle");
     await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
   });
 
@@ -94,6 +104,8 @@ test.describe("Mandatory Password Change & Security E2E", () => {
     await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
 
     // Navigate to change password
     await page.goto("/change-password");

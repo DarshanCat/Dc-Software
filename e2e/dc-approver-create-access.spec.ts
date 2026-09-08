@@ -11,7 +11,7 @@ test.describe("DC Approver Role Create DC Access E2E", () => {
 
     // Open sidebar/navigation and verify Create DC is visible
     await page.goto("/dcs/new");
-    await expect(page.locator("h1:has-text('Create Delivery Challan')")).toBeVisible();
+    await expect(page.locator("h1:has-text('Create Outward Delivery Challan')")).toBeVisible();
   });
 
   test("Production user (Approver) can access /dcs/new and create DC form", async ({ page }) => {
@@ -19,9 +19,10 @@ test.describe("DC Approver Role Create DC Access E2E", () => {
     await page.fill('input[name="email"]', "production@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
 
     await page.goto("/dcs/new");
-    await expect(page.locator("h1:has-text('Create Delivery Challan')")).toBeVisible();
-    await expect(page.locator('button[type="submit"]:has-text("Create Delivery Challan")')).toBeVisible();
+    await expect(page.locator("h1:has-text('Create Outward Delivery Challan')")).toBeVisible();
+    await expect(page.locator('button[data-tally-id="saveDraftBtn"]')).toBeVisible();
   });
 });

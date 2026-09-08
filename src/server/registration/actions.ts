@@ -179,6 +179,10 @@ export async function approveRegistrationRequest(
 
   const data = parsed.data;
 
+  if (data.roleKey === "ADMIN" && !adminUser?.roleKeys?.includes("ADMIN")) {
+    return { ok: false, error: "Only existing Administrators can assign the ADMIN role." };
+  }
+
   const role = await prisma.role.findUnique({ where: { key: data.roleKey } });
   if (!role) {
     return { ok: false, error: "The selected role does not exist." };

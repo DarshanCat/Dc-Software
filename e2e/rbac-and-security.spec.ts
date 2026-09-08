@@ -6,14 +6,15 @@ test.describe("RBAC, Vendor Isolation & Security E2E Pass", () => {
     await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
 
     // Search by DC Number
     await page.goto("/search?q=DC-2026-000001");
-    await expect(page.locator("h1:has-text('Search Results')")).toBeVisible();
+    await expect(page.locator("h1:has-text('Search results for')")).toBeVisible();
 
     // Search by WO ID
     await page.goto("/search?q=WO-2026-00100");
-    await expect(page.locator("h1:has-text('Search Results')")).toBeVisible();
+    await expect(page.locator("h1:has-text('Search results for')")).toBeVisible();
   });
 
   test("Document endpoint rejects unauthorized access to missing/forbidden documents", async ({ page }) => {
@@ -21,6 +22,7 @@ test.describe("RBAC, Vendor Isolation & Security E2E Pass", () => {
     await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
 
     const res = await page.request.get("/api/documents/non-existent-doc-id");
     expect(res.status()).toBe(404);
@@ -31,12 +33,13 @@ test.describe("RBAC, Vendor Isolation & Security E2E Pass", () => {
     await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
 
     await page.goto("/dcs");
-    const firstDcLink = page.locator('a[href^="/dcs/"]').first();
+    const firstDcLink = page.locator('table tbody tr a[href^="/dcs/"]').first();
     if (await firstDcLink.isVisible()) {
       await firstDcLink.click();
-      await expect(page.locator("text=Basic Information")).toBeVisible();
+      await expect(page.locator("text=Print / Download PDF")).toBeVisible();
     }
   });
 });

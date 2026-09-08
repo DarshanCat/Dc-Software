@@ -12,22 +12,22 @@ test.describe("Full DC Lifecycle & Business Calculations E2E Pass", () => {
   test("full DC lifecycle: create -> submit -> approve -> dispatch -> receive -> classify -> reconcile -> close", async ({ page }) => {
     // 1. Navigation to DC creation page
     await page.goto("/dcs/new");
-    await expect(page.locator("h1:has-text('Create Delivery Challan')")).toBeVisible();
+    await expect(page.locator("h1:has-text('Create Outward Delivery Challan')")).toBeVisible();
 
     // 2. Inspection of demo DC detail page & calculations
     await page.goto("/dcs");
     await expect(page.locator("h1:has-text('Delivery Challans')")).toBeVisible();
 
-    const firstDcLink = page.locator('a[href^="/dcs/"]').first();
+    const firstDcLink = page.locator('table tbody tr a[href^="/dcs/"]').first();
     if (await firstDcLink.isVisible()) {
       await firstDcLink.click();
-      await expect(page.locator("text=Basic Information")).toBeVisible();
+      await expect(page.locator("text=Print / Download PDF")).toBeVisible();
     }
 
     // 3. Public QR code scan verification
     await page.goto("/qr/demo-qr-token-000001");
-    await expect(page.locator("text=DELIVERY CHALLAN")).toBeVisible();
-    await expect(page.locator("text=DC-2026-000001")).toBeVisible();
+    await expect(page.locator("text=DELIVERY CHALLAN").first()).toBeVisible();
+    await expect(page.getByText("DC-2026-000001").first()).toBeVisible();
   });
 
   test("business calculation formulas: Good (47) + Scrap (3) = Received (50), Boring pending & recovery", async () => {

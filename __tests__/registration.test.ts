@@ -8,8 +8,8 @@ import {
 } from "../src/lib/validation/registration";
 import { createHash } from "crypto";
 
-describe("Registration Request Schema Validation", () => {
-  it("accepts valid self-registration input", () => {
+describe("Registration Request Schema & Company Email Domain Validation", () => {
+  it("1. accepts @vijayspheroidals.com email domain", () => {
     const result = createRegistrationSchema.safeParse({
       fullName: "Rahul Sharma",
       email: "rahul@vijayspheroidals.com",
@@ -21,7 +21,59 @@ describe("Registration Request Schema Validation", () => {
     expect(result.success).toBe(true);
   });
 
-  it("trims and lowercases email address", () => {
+  it("2. accepts @vijayspheroidals.onmicrosoft.com email domain", () => {
+    const result = createRegistrationSchema.safeParse({
+      fullName: "Loyed User",
+      email: "loyd@vijayspheroidals.onmicrosoft.com",
+      requestedDepartment: "Management",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("3. rejects @gmail.com email domain", () => {
+    const result = createRegistrationSchema.safeParse({
+      fullName: "External User",
+      email: "user@gmail.com",
+      requestedDepartment: "Production",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("4. rejects @yahoo.com email domain", () => {
+    const result = createRegistrationSchema.safeParse({
+      fullName: "External User",
+      email: "user@yahoo.com",
+      requestedDepartment: "Production",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("5. rejects other unapproved corporate domains", () => {
+    const result = createRegistrationSchema.safeParse({
+      fullName: "External User",
+      email: "user@othercompany.com",
+      requestedDepartment: "Production",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("6. rejects malicious lookalike domain suffixes (e.g. vijayspheroidals.com.evil.com)", () => {
+    const result1 = createRegistrationSchema.safeParse({
+      fullName: "Attacker",
+      email: "user@vijayspheroidals.com.evil.com",
+      requestedDepartment: "Production",
+    });
+    expect(result1.success).toBe(false);
+
+    const result2 = createRegistrationSchema.safeParse({
+      fullName: "Attacker",
+      email: "user@evilvijayspheroidals.com",
+      requestedDepartment: "Production",
+    });
+    expect(result2.success).toBe(false);
+  });
+
+  it("7. trims and lowercases uppercase company email address", () => {
     const result = createRegistrationSchema.safeParse({
       fullName: "Anita Kumar",
       email: "  ANITA@VIJAYSPHEROIDALS.COM  ",
@@ -30,6 +82,21 @@ describe("Registration Request Schema Validation", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.email).toBe("anita@vijayspheroidals.com");
+    }
+  });
+
+  it("8. strips extra role/permission properties from registration payload", () => {
+    const result = createRegistrationSchema.safeParse({
+      fullName: "Test User",
+      email: "test@vijayspheroidals.com",
+      requestedDepartment: "Production",
+      role: "ADMIN",
+      permissions: ["USER_MANAGE"],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect((result.data as any).role).toBeUndefined();
+      expect((result.data as any).permissions).toBeUndefined();
     }
   });
 

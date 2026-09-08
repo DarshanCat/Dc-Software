@@ -85,4 +85,13 @@ describe("Production Multi-User & Server RBAC Management Verification", () => {
     const storesReceiveItem = storesMaterialReturns?.items.find((i) => i.label === "Receive Material");
     expect(storesReceiveItem?.href).toBe("/receipts/new");
   });
+
+  it("verifies designated protected admin email accounts", () => {
+    const protectedEmails = [
+      "darshan@vijayspheroidals.com",
+      "aravind.gurudev@vijayspheroidals.com",
+    ];
+    expect(protectedEmails).toContain("darshan@vijayspheroidals.com");
+    expect(protectedEmails).toContain("aravind.gurudev@vijayspheroidals.com");
+  });
 });

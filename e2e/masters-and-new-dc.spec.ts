@@ -11,24 +11,23 @@ test.describe("Master Management & New DC Creation E2E", () => {
 
   test("New DC creation requires Part Number, RM Qty, Return FG Qty, Heat Number, and Process", async ({ page }) => {
     await page.goto("/dcs/new");
-    await expect(page.locator("h1:has-text('Create Delivery Challan')")).toBeVisible();
+    await expect(page.locator("h1:has-text('Create Outward Delivery Challan')")).toBeVisible();
 
     // Fill new DC form
-    await page.fill('input[placeholder="e.g. WO-2026-00452"]', `WO-${Date.now()}`);
-    await page.fill('input[placeholder="Enter Part Number"]', "PART-8899");
-    await page.selectOption('select:has-option("Select vendor")', { index: 1 });
-    await page.selectOption('select:has-option("Select process")', { index: 1 });
-    await page.fill('input[placeholder="Enter Raw Material Quantity"]', "100.5");
-    await page.fill('input[placeholder="Enter Expected Return FG Quantity"]', "98.0");
-    await page.fill('input[placeholder="Enter Heat Number"]', "HEAT-7711");
-    await page.fill('input[placeholder="Enter name to appear on DC"]', "Ramesh Kumar");
+    await page.fill('input[data-tally-id="woNumber"]', `WO-${Date.now()}`);
+    await page.selectOption('select[data-tally-id="supplier"]', { index: 1 });
+    await page.selectOption('select[data-tally-id="partNumber"]', { index: 1 });
+    await page.fill('input[placeholder="Raw material quantity sent"]', "100.5");
+    await page.fill('input[placeholder="Finished goods expected back"]', "98.0");
+    await page.fill('input[placeholder="e.g. HT-2026-X"]', "HEAT-7711");
+    await page.fill('input[placeholder="Employee / User name"]', "Ramesh Kumar");
+    await page.fill('input[placeholder="Rate per unit"]', "45.50");
 
-    await page.click('button:has-text("Create DC (as Draft)")');
+    await page.click('button[data-tally-id="saveDraftBtn"]');
 
     // Verify redirection to detail page
     await expect(page).toHaveURL(/\/dcs\/[a-z0-9-]+$/);
-    await expect(page.locator("text=Basic Information")).toBeVisible();
-    await expect(page.locator("text=PART-8899")).toBeVisible();
+    await expect(page.locator("text=Print / Download PDF")).toBeVisible();
     await expect(page.locator("text=100.500")).toBeVisible();
     await expect(page.locator("text=98.000")).toBeVisible();
     await expect(page.locator("text=HEAT-7711")).toBeVisible();

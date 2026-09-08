@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { companyEmailSchema } from "./registration";
 
 export const passwordPolicy = z
   .string()
@@ -9,7 +10,7 @@ export const passwordPolicy = z
   .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character");
 
 export const createUserSchema = z.object({
-  email: z.string().email("Enter a valid email address"),
+  email: companyEmailSchema,
   name: z.string().min(1, "Name is required").max(120),
   password: passwordPolicy,
   roleKeys: z.array(z.string()).min(1, "Select at least one role"),

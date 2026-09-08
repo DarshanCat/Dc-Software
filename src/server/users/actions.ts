@@ -51,6 +51,11 @@ function generateSecureTempPassword(): string {
   return chars.join("");
 }
 
+const PROTECTED_ADMIN_EMAILS = [
+  "darshan@vijayspheroidals.com",
+  "aravind.gurudev@vijayspheroidals.com",
+] as const;
+
 export async function createUser(input: CreateUserInput): Promise<ActionResult> {
   const user = await getSessionUser();
   try {
@@ -70,6 +75,11 @@ export async function createUser(input: CreateUserInput): Promise<ActionResult> 
     return { ok: false, error: "Please fix the highlighted fields.", fieldErrors };
   }
   const data = parsed.data;
+
+  if (data.roleKeys.includes("ADMIN") && !user?.roleKeys?.includes("ADMIN")) {
+    return { ok: false, error: "Only existing Administrators can create ADMIN accounts." };
+  }
+
   const normalizedEmail = data.email.toLowerCase().trim();
 
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
@@ -126,6 +136,18 @@ export async function setUserActive(userId: string, active: boolean): Promise<Ac
     return { ok: false, error: "You cannot deactivate your own account." };
   }
 
+  const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+  if (!targetUser) return { ok: false, error: "User not found." };
+
+  if (
+    !active &&
+    PROTECTED_ADMIN_EMAILS.includes(
+      targetUser.email.toLowerCase() as (typeof PROTECTED_ADMIN_EMAILS)[number]
+    )
+  ) {
+    return { ok: false, error: "Protected administrator accounts cannot be deactivated." };
+  }
+
   const action = active ? "USER_ENABLED" : "USER_DISABLED";
 
   await prisma.$transaction(async (tx) => {
@@ -155,6 +177,10 @@ export async function updateUserRoles(userId: string, roleKeys: string[]): Promi
     throw e;
   }
 
+  if (userId === user!.id) {
+    return { ok: false, error: "You cannot modify your own user roles." };
+  }
+
   if (!roleKeys || roleKeys.length === 0) {
     return { ok: false, error: "Select at least one role for the user." };
   }
@@ -171,6 +197,18 @@ export async function updateUserRoles(userId: string, roleKeys: string[]): Promi
   if (!existingUser) return { ok: false, error: "User not found." };
 
   const oldRoles = existingUser.roles.map((r) => r.role.key);
+
+  const isProtectedAdmin = PROTECTED_ADMIN_EMAILS.includes(
+    existingUser.email.toLowerCase() as (typeof PROTECTED_ADMIN_EMAILS)[number]
+  );
+  if (isProtectedAdmin && !roleKeys.includes("ADMIN")) {
+    return { ok: false, error: "Protected administrator account roles cannot be downgraded." };
+  }
+
+  const involvesAdminRole = roleKeys.includes("ADMIN") || oldRoles.includes("ADMIN");
+  if (involvesAdminRole && !user?.roleKeys?.includes("ADMIN")) {
+    return { ok: false, error: "Only existing Administrators can assign or modify the ADMIN role." };
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.userRole.deleteMany({ where: { userId } });

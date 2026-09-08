@@ -13,14 +13,10 @@ test.describe("DC Workflow & Document Access E2E", () => {
     await page.goto("/dcs");
     await expect(page.locator("h1:has-text('Delivery Challans')")).toBeVisible();
   });
+});
 
-  test("public QR code scan route resolves without authentication", async ({ browser }) => {
-    const context = await browser.newContext(); // unauthenticated context
-    const page = await context.newPage();
-    await page.goto("/qr/demo-qr-token-000001");
-
-    await expect(page.locator("text=DELIVERY CHALLAN")).toBeVisible();
-    await expect(page.locator("text=DC-2026-000001")).toBeVisible();
-    await context.close();
-  });
+test("public QR code scan route resolves without authentication", async ({ page }) => {
+  await page.goto("/qr/demo-qr-token-000001");
+  await expect(page.locator("text=DELIVERY CHALLAN").first()).toBeVisible();
+  await expect(page.getByText("DC-2026-000001").first()).toBeVisible();
 });

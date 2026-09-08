@@ -82,9 +82,6 @@ const createDcSchema = z.object({
     if (!val.heatNumber || !val.heatNumber.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Heat Number is required for Material DCs.", path: ["heatNumber"] });
     }
-    if (!val.processId || !val.processId.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Process is required for Material DCs.", path: ["processId"] });
-    }
     if (!val.pricingBasis) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a pricing basis: RM Quantity or FG Quantity.", path: ["pricingBasis"] });
     }

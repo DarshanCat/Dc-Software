@@ -76,7 +76,7 @@ async function main() {
 
     const grants =
       DEFAULT_ROLE_PERMISSIONS[
-        roleKey as keyof typeof DEFAULT_ROLE_PERMISSIONS
+      roleKey as keyof typeof DEFAULT_ROLE_PERMISSIONS
       ] ?? [];
 
     for (const permKey of grants) {
@@ -302,33 +302,84 @@ async function main() {
   }
 
   // ==========================================================
-  // VENDORS
+  // VENDORS — OFFICIAL APPROVED MASTER LIST
   // ==========================================================
+
+  const officialVendors: [string, string][] = [
+    ["VEND-001", "AADHYA Engineering"],
+    ["VEND-002", "Altech Precision"],
+    ["VEND-003", "Anugraha Enterprises"],
+    ["VEND-004", "Excellence Technologies-Sub Contracting"],
+    ["VEND-005", "HARSHITHA CNC TECH"],
+    ["VEND-006", "Himalya Heat Treatment Solutions"],
+    ["VEND-007", "JNR Enterprises"],
+    ["VEND-008", "Loukik Industries"],
+    ["VEND-009", "MRS Industries"],
+    ["VEND-010", "M/S HARSHA ENTERPRISES"],
+    ["VEND-011", "N S Technologies"],
+    ["VEND-012", "Paramount Engineering Industrial Products, Bangalor"],
+    ["VEND-013", "Rakesh Engineering Works"],
+    ["VEND-014", "Rashinkar Associates"],
+    ["VEND-015", "RP Engineering"],
+    ["VEND-016", "SAMRUDHI INDUSTRIES"],
+    ["VEND-017", "Shine Engineering Technology"],
+    ["VEND-018", "Shree Nanjundeshwara Industries"],
+    ["VEND-019", "Shri Sai Engineering"],
+    ["VEND-020", "SKT Engineering"],
+    ["VEND-021", "S P Engineering Enterprises"],
+    ["VEND-022", "S.P.PRECISION ENGINEERING COMPONENTS"],
+    ["VEND-023", "Sri Lakshmi Narasimha Industries-Chinnodu 2ZO"],
+    ["VEND-024", "Sri Lakshmi Narasimha Industries-SLN NEW"],
+    ["VEND-025", "Srinivasa Heat Tech"],
+    ["VEND-026", "Sri Srinivasa Enterprises, Bangalore"],
+    ["VEND-027", "Sri Vengamamba Enterprises"],
+    ["VEND-028", "Steel Profiles India"],
+    ["VEND-029", "YAJAMANA AUTOMATION TECHNOLOGIES"],
+    ["VEND-030", "SRI GANGA INDUSTRIES"],
+    ["VEND-031", "Sri Venkateshwara Industries"],
+    ["VEND-032", "S S INDUSTRIES"],
+    ["VEND-033", "Shree Nanjundeshwara Grinding"],
+  ];
 
   const vendorDefs: [string, string][] = [
     ["V-ABC", "ABC Machining"],
     ["V-XYZ", "XYZ CNC"],
     ["V-PQR", "PQR Engineering"],
     ["V-LMN", "LMN Industries"],
+    ...officialVendors,
   ];
 
   const vendors: Record<string, string> = {};
 
   for (const [vendorCode, vendorName] of vendorDefs) {
+    const existingByName = await prisma.vendor.findFirst({
+      where: {
+        vendorName: {
+          equals: vendorName,
+          mode: "insensitive",
+        },
+      },
+    });
+
+    if (existingByName) {
+      vendors[vendorCode] = existingByName.id;
+      continue;
+    }
+
     const vendor = await prisma.vendor.upsert({
       where: {
         vendorCode,
       },
-
       create: {
         vendorCode,
         vendorName,
+        active: true,
         defaultReturnDays: 15,
         country: "India",
       },
-
       update: {
         vendorName,
+        active: true,
       },
     });
 

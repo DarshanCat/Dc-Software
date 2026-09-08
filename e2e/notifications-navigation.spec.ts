@@ -30,6 +30,7 @@ test.describe("Clickable Notifications & Direct Navigation E2E", () => {
     await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
 
     await page.goto("/notifications");
     const notificationsList = page.locator(".divide-y");
@@ -52,6 +53,7 @@ test.describe("Clickable Notifications & Direct Navigation E2E", () => {
     await page.fill('input[name="email"]', "darshan@vijayspheroidals.com");
     await page.fill('input[name="password"]', "Password@123");
     await page.click('button[type="submit"]');
+    await expect(page).toHaveURL(/\/(app|dcs|dashboard)?$/);
 
     // Access non-existent DC
     await page.goto("/dcs/00000000-0000-0000-0000-000000000000");

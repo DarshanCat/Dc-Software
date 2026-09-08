@@ -11,17 +11,40 @@ export const ALLOWED_DEPARTMENTS = [
 
 export type DepartmentOption = (typeof ALLOWED_DEPARTMENTS)[number];
 
+export const ALLOWED_EMAIL_DOMAINS = [
+  "vijayspheroidals.com",
+  "vijayspheroidals.onmicrosoft.com",
+] as const;
+
+export function isAllowedCompanyEmail(email: string): boolean {
+  if (!email || typeof email !== "string") return false;
+  const normalized = email.trim().toLowerCase();
+  const parts = normalized.split("@");
+  if (parts.length !== 2) return false;
+  const domain = parts[1];
+  return (ALLOWED_EMAIL_DOMAINS as readonly string[]).includes(domain);
+}
+
+export const companyEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("Please enter a valid email address.")
+  .refine(
+    (val) => isAllowedCompanyEmail(val),
+    {
+      message:
+        "Registration is restricted to official Vijay Spheroidals email accounts (@vijayspheroidals.com or @vijayspheroidals.onmicrosoft.com).",
+    }
+  );
+
 export const createRegistrationSchema = z.object({
   fullName: z
     .string()
     .trim()
     .min(2, "Full name must be at least 2 characters.")
     .max(100, "Full name cannot exceed 100 characters."),
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .email("Please enter a valid email address."),
+  email: companyEmailSchema,
   employeeId: z
     .string()
     .trim()

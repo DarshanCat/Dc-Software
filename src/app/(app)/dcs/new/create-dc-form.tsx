@@ -293,7 +293,8 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
     setLoading(false);
 
     if (!res.ok) {
-      setError(res.error || "An error occurred while creating Delivery Challan.");
+      const fieldErrMsg = res.fieldErrors ? Object.entries(res.fieldErrors).map(([k, v]) => `${k}: ${v}`).join("; ") : "";
+      setError(res.error ? (fieldErrMsg ? `${res.error} (${fieldErrMsg})` : res.error) : "An error occurred while creating Delivery Challan.");
     } else {
       setSuccess(`DC ${res.dcNumber} created as DRAFT (${movementType}) successfully.`);
       setTimeout(() => router.push(`/dcs/${res.dcId}`), 1000);
