@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, AlertTriangle, Loader2 } from "lucide-react";
@@ -23,6 +24,7 @@ export function DeleteUserDialog({
   isProtected,
   isAdmin,
 }: DeleteUserDialogProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,6 +48,7 @@ export function DeleteUserDialog({
       } else {
         setOpen(false);
         setConfirmEmail("");
+        router.refresh();
       }
     } catch {
       setError("An unexpected error occurred while deleting user.");
