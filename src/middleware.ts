@@ -10,6 +10,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
     pathname.startsWith("/activate") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/public") ||
     pathname.startsWith("/qr") ||

@@ -7,6 +7,7 @@ import { CreateUserForm } from "./create-user-form";
 import { ToggleActiveButton } from "./toggle-active-button";
 import { EditUserRolesDialog } from "./edit-user-roles-dialog";
 import { AdminResetPasswordDialog } from "@/components/users/admin-reset-password-dialog";
+import { DeleteUserDialog } from "./delete-user-dialog";
 import { UserCheck, UserPlus, Search, Filter } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -206,6 +207,14 @@ export default async function UsersAdminPage({
                         />
                         <ToggleActiveButton userId={u.id} active={u.active} isSelf={u.id === sessionUser!.id} />
                         <AdminResetPasswordDialog userId={u.id} userName={u.name} userEmail={u.email} />
+                        <DeleteUserDialog
+                          userId={u.id}
+                          userName={u.name}
+                          userEmail={u.email}
+                          isSelf={u.id === sessionUser!.id}
+                          isProtected={["darshan@vijayspheroidals.com", "aravind.gurudev@vijayspheroidals.com"].includes(u.email.toLowerCase())}
+                          isAdmin={roleKeys.includes("ADMIN")}
+                        />
                       </div>
                     </td>
                   </tr>

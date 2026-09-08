@@ -34,4 +34,23 @@ export const changePasswordSchema = z
     path: ["newPassword"],
   });
 
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+export const requestPasswordResetSchema = z.object({
+  email: companyEmailSchema,
+});
+
+export type RequestPasswordResetInput = z.infer<typeof requestPasswordResetSchema>;
+
+export const resetPasswordCompletionSchema = z
+  .object({
+    token: z.string().min(1, "Reset token is required"),
+    newPassword: passwordPolicy,
+    confirmPassword: z.string().min(1, "Please confirm your new password"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "New passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+export type ResetPasswordCompletionInput = z.infer<typeof resetPasswordCompletionSchema>;

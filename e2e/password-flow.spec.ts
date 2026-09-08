@@ -83,6 +83,7 @@ test.describe("Mandatory Password Change & Security E2E", () => {
     await page.fill('input[name="newPassword"]', permanentPassword);
     await page.fill('input[name="confirmPassword"]', permanentPassword);
     await page.click('button[type="submit"]');
+    await page.waitForLoadState("networkidle");
 
     // 9. Verify old temporary password no longer works
     await page.context().clearCookies();

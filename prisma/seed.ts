@@ -192,6 +192,8 @@ async function main() {
 
       update: {
         name,
+        passwordHash: devPasswordHash,
+        active: true,
         mustChangePassword: false,
       },
     });

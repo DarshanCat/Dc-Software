@@ -113,6 +113,7 @@ test.describe("Controlled User Registration & Admin Approval Workflow", () => {
     await row.locator('button:has-text("Reject")').click();
     await page.fill('textarea', "Unverified employee details");
     await page.click('button:has-text("Reject Request")');
+    await page.waitForLoadState("networkidle");
 
     // 4. Attempt login with rejected email
     await page.goto("/login");

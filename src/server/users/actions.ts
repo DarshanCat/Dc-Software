@@ -320,3 +320,127 @@ export async function adminResetPassword(targetUserId: string): Promise<AdminRes
   revalidatePath("/admin/users");
   return { ok: true, temporaryPassword: tempPassword };
 }
+
+export async function deleteUser(targetUserId: string, confirmEmail: string): Promise<ActionResult> {
+  const adminUser = await getSessionUser();
+  try {
+    await requirePermission(adminUser, PERMISSIONS.USER_MANAGE);
+  } catch (e) {
+    if (e instanceof UnauthenticatedError) return { ok: false, error: "Not signed in." };
+    if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to delete users." };
+    throw e;
+  }
+
+  if (!adminUser?.roleKeys?.includes("ADMIN")) {
+    return { ok: false, error: "Only System Administrators can delete user accounts." };
+  }
+
+  if (!targetUserId || !confirmEmail) {
+    return { ok: false, error: "Target user ID and email confirmation are required." };
+  }
+
+  if (targetUserId === adminUser.id) {
+    return { ok: false, error: "You cannot delete your own user account." };
+  }
+
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    include: {
+      roles: { include: { role: true } },
+      _count: { select: { auditLogs: true } },
+    },
+  });
+
+  if (!targetUser) {
+    return { ok: false, error: "User not found." };
+  }
+
+  const isProtectedAdmin = PROTECTED_ADMIN_EMAILS.includes(
+    targetUser.email.toLowerCase() as (typeof PROTECTED_ADMIN_EMAILS)[number]
+  );
+  if (isProtectedAdmin) {
+    return { ok: false, error: "Protected administrator accounts cannot be deleted." };
+  }
+
+  if (confirmEmail.trim().toLowerCase() !== targetUser.email.toLowerCase()) {
+    return { ok: false, error: "The entered email address does not match the user's email." };
+  }
+
+  const isTargetAdmin = targetUser.roles.some((r) => r.role.key === "ADMIN");
+  if (isTargetAdmin && targetUser.active) {
+    const activeAdminCount = await prisma.user.count({
+      where: {
+        active: true,
+        roles: {
+          some: {
+            role: {
+              key: "ADMIN",
+            },
+          },
+        },
+      },
+    });
+
+    if (activeAdminCount <= 1) {
+      return { ok: false, error: "Cannot delete the last active Administrator account." };
+    }
+  }
+
+  // Check historical business references (DeliveryChallans created/approved/dispatched/closed)
+  const dcReferenceCount = await prisma.deliveryChallan.count({
+    where: {
+      OR: [
+        { createdBy: targetUserId },
+        { approvedBy: targetUserId },
+        { dispatchedBy: targetUserId },
+        { closedBy: targetUserId },
+        { cancelledBy: targetUserId },
+      ],
+    },
+  });
+
+  const hasHistoricalReferences = targetUser._count.auditLogs > 0 || dcReferenceCount > 0;
+
+  await prisma.$transaction(async (tx) => {
+    if (hasHistoricalReferences) {
+      // Safe Deactivation / Soft Delete to preserve audit & business accountability
+      await tx.user.update({
+        where: { id: targetUserId },
+        data: { active: false },
+      });
+
+      await writeAudit(tx, {
+        userId: adminUser.id,
+        action: "USER_DELETED",
+        module: "Users",
+        entityType: "User",
+        entityId: targetUserId,
+        oldValue: { email: targetUser.email, active: targetUser.active },
+        newValue: { active: false, deletionMode: "deactivated_for_audit" },
+        reason: `User ${targetUser.email} deactivated by Admin (historical DC/audit records preserved)`,
+      });
+    } else {
+      // True Hard Delete when zero historical dependencies exist
+      await tx.userRole.deleteMany({ where: { userId: targetUserId } });
+      await tx.passwordResetToken.deleteMany({ where: { userId: targetUserId } });
+
+      await writeAudit(tx, {
+        userId: adminUser.id,
+        action: "USER_DELETED",
+        module: "Users",
+        entityType: "User",
+        entityId: targetUserId,
+        oldValue: { email: targetUser.email, name: targetUser.name },
+        newValue: { deletionMode: "hard_deleted" },
+        reason: `User ${targetUser.email} permanently deleted by Admin`,
+      });
+
+      await tx.user.delete({ where: { id: targetUserId } });
+    }
+  });
+
+  try {
+    revalidatePath("/admin/users");
+  } catch {}
+  return { ok: true, id: targetUserId };
+}
