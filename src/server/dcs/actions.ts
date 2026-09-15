@@ -11,6 +11,15 @@ import { generateQrToken } from "@/services/dispatch.service";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { notifyUsersWithPermission, createNotification } from "@/server/notifications/service";
+import {
+  securityDispatchSchema,
+  securityReturnSchema,
+  storeVerificationSchema,
+  custodianVerificationSchema,
+  accountsPaymentEntrySchema,
+  transportDetailsSchema,
+  firstIssueMessage,
+} from "@/lib/validation/dc";
 
 // Helper to safely verify permissions without throwing unhandled exceptions into Next.js action boundary
 async function checkPermission(
@@ -417,6 +426,9 @@ export async function submitSecurityDispatch(
   const permCheck = await checkPermission(user, PERMISSIONS.SECURITY_DISPATCH);
   if (!permCheck.ok) return permCheck;
 
+  const dispatchError = firstIssueMessage(securityDispatchSchema, input);
+  if (dispatchError) return { ok: false, error: dispatchError };
+
   if (input.dispatchQuantity <= 0) return { ok: false, error: "Dispatch quantity must be greater than zero." };
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
@@ -549,6 +561,9 @@ export async function submitSecurityReturn(
     return { ok: false, error: "Security action cannot accept weights or Quality classification fields." };
   }
 
+  const returnError = firstIssueMessage(securityReturnSchema, input);
+  if (returnError) return { ok: false, error: returnError };
+
   if (input.actualInwardQty <= 0) {
     return { ok: false, error: "Actual Inward Quantity must be greater than zero." };
   }
@@ -635,6 +650,9 @@ export async function submitStoreVerification(
     return { ok: false, error: "Store action cannot accept Quality classification fields." };
   }
 
+  const storeError = firstIssueMessage(storeVerificationSchema, input);
+  if (storeError) return { ok: false, error: storeError };
+
   if (input.storeReceivedQty <= 0) {
     return { ok: false, error: "Store Received Quantity must be greater than zero." };
   }
@@ -707,6 +725,9 @@ export async function submitCustodianVerification(
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.DC_VIEW);
   if (!permCheck.ok) return permCheck;
+
+  const custodianError = firstIssueMessage(custodianVerificationSchema, input);
+  if (custodianError) return { ok: false, error: custodianError };
 
   const dc = await prisma.deliveryChallan.findUnique({
     where: { id: dcId },
@@ -872,6 +893,9 @@ export async function submitAccountsPaymentEntry(
   const permCheck = await checkPermission(user, PERMISSIONS.ACCOUNTS_PAYMENT_ENTRY);
   if (!permCheck.ok) return permCheck;
 
+  const paymentShapeError = firstIssueMessage(accountsPaymentEntrySchema, input);
+  if (paymentShapeError) return { ok: false, error: paymentShapeError };
+
   const missing: string[] = [];
   const invNum = (input.invoiceNumber || "").trim();
   if (!invNum) missing.push("Invoice Number");
@@ -1027,6 +1051,9 @@ export async function updateDcTransportDetails(
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.DC_CREATE);
   if (!permCheck.ok) return permCheck;
+
+  const transportError = firstIssueMessage(transportDetailsSchema, input);
+  if (transportError) return { ok: false, error: transportError };
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };

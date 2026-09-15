@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 const ROLE_CLOSURE_STATUSES: Record<string, DcStatus[]> = {
   SECURITY: ["DISPATCHED", "AT_VENDOR"],
   STORES: ["SECURITY_RETURNED", "STORE_VERIFIED", "CUSTODIAN_VERIFIED"],
-  MANAGEMENT: ["STORE_VERIFIED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT", "CUSTODIAN_VERIFIED"],
+  QUALITY: ["STORE_VERIFIED", "QUALITY_COMPLETED"],
+  MANAGEMENT: ["QUALITY_COMPLETED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT", "CUSTODIAN_VERIFIED"],
   ACCOUNTS: ["APPROVED_FOR_PAYMENT", "CUSTODIAN_VERIFIED", "CLOSED"],
 };
 
@@ -38,7 +39,8 @@ export default async function CloseDcPage({
 
   if (stage === "security") statusFilter = ["DISPATCHED", "AT_VENDOR"];
   else if (stage === "store") statusFilter = ["SECURITY_RETURNED", "CUSTODIAN_VERIFIED"];
-  else if (stage === "manager") statusFilter = ["STORE_VERIFIED", "FINAL_APPROVED"];
+  else if (stage === "quality") statusFilter = ["STORE_VERIFIED", "QUALITY_COMPLETED"];
+  else if (stage === "manager") statusFilter = ["QUALITY_COMPLETED", "FINAL_APPROVED"];
   else if (stage === "accounts") statusFilter = ["APPROVED_FOR_PAYMENT", "CUSTODIAN_VERIFIED"];
   else if (stage === "closed") statusFilter = ["CLOSED"];
   else statusFilter = ["DISPATCHED", "AT_VENDOR", "SECURITY_RETURNED", "STORE_VERIFIED", "CUSTODIAN_VERIFIED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT"];

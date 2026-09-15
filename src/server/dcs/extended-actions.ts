@@ -9,9 +9,17 @@ import { writeAudit } from "@/server/audit";
 import { nextNumber, fiscalYearOf } from "@/services/number-sequence.service";
 import { generateQrToken } from "@/services/dispatch.service";
 import { Prisma, DcPurpose, DcStatus } from "@prisma/client";
+import { z } from "zod";
 import { stageResultBalance } from "@/analytics/math-engine";
 import { notifyUsersWithPermission } from "@/server/notifications/service";
 import { closeDc } from "./actions";
+import {
+  outwardDcSchema,
+  inwardReceiptSchema,
+  storeReceiptConfirmSchema,
+  qualityInspectionSchema,
+  firstIssueMessage,
+} from "@/lib/validation/dc";
 
 async function checkPermission(user: any, permission: string): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!user) return { ok: false, error: "Not signed in." };
@@ -32,6 +40,8 @@ function safeRevalidatePath(path: string) {
     // Ignore revalidation errors during dynamic dev manifest invalidation
   }
 }
+
+const reviewActionSchema = z.enum(["APPROVE", "REJECT", "SEND_BACK", "HOLD"]);
 
 // ---------------- 1. OUTWARD DC CREATION ----------------
 
@@ -67,6 +77,9 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.DC_CREATE);
   if (!permCheck.ok) return permCheck;
+
+  const outwardError = firstIssueMessage(outwardDcSchema, input);
+  if (outwardError) return { ok: false, error: outwardError };
 
   if (!input.vendorId) return { ok: false, error: "Supplier (Vendor) is mandatory." };
 
@@ -205,6 +218,9 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.DC_CREATE);
   if (!permCheck.ok) return permCheck;
+
+  const outwardError = firstIssueMessage(outwardDcSchema, input);
+  if (outwardError) return { ok: false, error: outwardError };
 
   if (!input.dcId) return { ok: false, error: "DC ID is required for update." };
   if (!input.vendorId) return { ok: false, error: "Supplier (Vendor) is mandatory." };
@@ -436,6 +452,9 @@ export async function recordInwardReceipt(input: RecordInwardReceiptInput) {
   const permCheck = await checkPermission(user, PERMISSIONS.SECURITY_RETURN);
   if (!permCheck.ok) return permCheck;
 
+  const inwardError = firstIssueMessage(inwardReceiptSchema, input);
+  if (inwardError) return { ok: false, error: inwardError };
+
   if (input.actualInwardQty <= 0) {
     return { ok: false, error: "Actual Inward Quantity must be greater than zero." };
   }
@@ -516,6 +535,9 @@ export async function confirmStoreReceipt(input: ConfirmStoreReceiptInput) {
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.STORE_VERIFY);
   if (!permCheck.ok) return permCheck;
+
+  const storeError = firstIssueMessage(storeReceiptConfirmSchema, input);
+  if (storeError) return { ok: false, error: storeError };
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
@@ -612,6 +634,9 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
     };
   }
 
+  const qualityError = firstIssueMessage(qualityInspectionSchema, input);
+  if (qualityError) return { ok: false, error: qualityError };
+
   if (input.goodQty < 0 || input.rejectionQty < 0 || input.scrapQty < 0) {
     return { ok: false, error: "Quality quantities (Good, Rejection, Scrap) cannot be negative." };
   }
@@ -707,6 +732,11 @@ export async function reviewPreOutwardManagerApproval(input: ReviewPreOutwardMan
   const permCheck = await checkPermission(user, PERMISSIONS.DC_APPROVE);
   if (!permCheck.ok) return permCheck;
 
+  const action = z.enum(["APPROVE", "REJECT", "SEND_BACK", "HOLD"]).safeParse(input.action);
+  if (!action.success) {
+    return { ok: false, error: "Invalid approval action." };
+  }
+
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
 
@@ -719,11 +749,13 @@ export async function reviewPreOutwardManagerApproval(input: ReviewPreOutwardMan
     return { ok: false, error: `Reason is mandatory when selecting ${input.action.replace(/_/g, " ")}.` };
   }
 
-  let nextStatus: DcStatus = "APPROVED";
-  if (input.action === "APPROVE") nextStatus = "APPROVED";
-  else if (input.action === "REJECT") nextStatus = "REJECTED";
-  else if (input.action === "SEND_BACK") nextStatus = "SENT_BACK";
-  else if (input.action === "HOLD") nextStatus = "HOLD";
+  const statusByAction: Record<z.infer<typeof reviewActionSchema>, DcStatus> = {
+    APPROVE: "APPROVED",
+    REJECT: "REJECTED",
+    SEND_BACK: "SENT_BACK",
+    HOLD: "HOLD",
+  };
+  const nextStatus = statusByAction[action.data];
 
   const now = new Date();
 
@@ -777,14 +809,21 @@ export async function reviewManagerApproval(input: ReviewManagerApprovalInput) {
   const permCheck = await checkPermission(user, PERMISSIONS.MANAGER_FINAL_APPROVE);
   if (!permCheck.ok) return permCheck;
 
+  const action = z.enum(["APPROVE", "REJECT", "SEND_BACK", "HOLD"]).safeParse(input.action);
+  if (!action.success) {
+    return { ok: false, error: "Invalid approval action." };
+  }
+
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
 
-  let nextStatus: DcStatus = "APPROVED_FOR_PAYMENT";
-  if (input.action === "APPROVE") nextStatus = "APPROVED_FOR_PAYMENT";
-  else if (input.action === "REJECT") nextStatus = "REJECTED";
-  else if (input.action === "SEND_BACK") nextStatus = "SENT_BACK";
-  else if (input.action === "HOLD") nextStatus = "HOLD";
+  const statusByAction: Record<z.infer<typeof reviewActionSchema>, DcStatus> = {
+    APPROVE: "APPROVED_FOR_PAYMENT",
+    REJECT: "REJECTED",
+    SEND_BACK: "SENT_BACK",
+    HOLD: "HOLD",
+  };
+  const nextStatus = statusByAction[action.data];
 
   const now = new Date();
 

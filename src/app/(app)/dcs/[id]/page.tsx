@@ -174,8 +174,9 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
         responsibleRoleText = "Store Department";
         break;
       case "STORE_CONFIRMED":
+      case "STORE_VERIFIED":
       case "QUALITY_PENDING":
-        nextActionPrompt = "Store receipt confirmed. Complete Quality Inspection (Good Qty + Rejection Qty + Scrap Qty = Actual Inward Qty).";
+        nextActionPrompt = "Store receipt confirmed. Complete Quality Inspection (Good Qty + Rejection Qty + Scrap Qty = Store Received Qty).";
         responsibleRoleText = "Quality Department";
         break;
       case "QUALITY_COMPLETED":

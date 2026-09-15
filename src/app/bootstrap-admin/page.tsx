@@ -8,6 +8,7 @@ export default function BootstrapAdminPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [setupToken, setSetupToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export default function BootstrapAdminPage() {
       const res = await fetch("/api/bootstrap-admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, setupToken }),
       });
 
       const data = await res.json();
@@ -103,6 +104,18 @@ export default function BootstrapAdminPage() {
                 placeholder="At least 8 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded border border-slate-300 p-2.5 text-xs font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Setup Token *</label>
+              <input
+                type="password"
+                required
+                placeholder="BOOTSTRAP_ADMIN_TOKEN from server environment"
+                value={setupToken}
+                onChange={(e) => setSetupToken(e.target.value)}
                 className="w-full rounded border border-slate-300 p-2.5 text-xs font-mono"
               />
             </div>

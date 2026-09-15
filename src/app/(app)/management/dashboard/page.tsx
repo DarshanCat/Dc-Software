@@ -11,7 +11,7 @@ export default async function ManagementDashboardPage() {
       orderBy: { updatedAt: "desc" },
     }),
     prisma.deliveryChallan.findMany({
-      where: { status: "STORE_VERIFIED" },
+      where: { status: "QUALITY_COMPLETED" },
       include: { vendor: true, process: true },
       orderBy: { updatedAt: "desc" },
     }),
@@ -42,7 +42,7 @@ export default async function ManagementDashboardPage() {
         <div className="rounded-lg border border-teal-200 bg-teal-50/50 p-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-teal-800">2. Final Approvals Required</p>
           <p className="mt-2 text-3xl font-extrabold text-teal-950">{finalApprovalQueue.length}</p>
-          <p className="mt-1 text-[11px] text-teal-700">Status: STORE_VERIFIED</p>
+          <p className="mt-1 text-[11px] text-teal-700">Status: QUALITY_COMPLETED</p>
         </div>
 
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4">

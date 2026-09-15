@@ -2,10 +2,11 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
+import { resolveNextAuthSecret } from "./nextauth-secret";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
-  secret: process.env.NEXTAUTH_SECRET || "dev-secret-key-1234567890",
+  secret: resolveNextAuthSecret(),
   pages: { signIn: "/login" },
   providers: [
     CredentialsProvider({

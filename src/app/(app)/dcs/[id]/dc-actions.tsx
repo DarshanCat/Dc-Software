@@ -248,8 +248,15 @@ export function DcActions({
           </Button>
         )}
 
-        {/* 7 & 8. QUALITY_COMPLETED / FINAL_APPROVED -> APPROVED_FOR_PAYMENT */}
-        {(status === "QUALITY_COMPLETED" || status === "FINAL_APPROVED" || (status === "STORE_VERIFIED" && dcData.movementType === "MATERIAL")) && permissions.canPaymentApprove && (
+        {/* 7. STORE_VERIFIED -> QUALITY_COMPLETED (Quality Inspection Required) */}
+        {status === "STORE_VERIFIED" && dcData.movementType === "MATERIAL" && (
+          <Button disabled={busy} onClick={() => router.push("/dcs/quality")} className="bg-teal-700 hover:bg-teal-800 text-white font-semibold">
+            Quality Inspection Entry
+          </Button>
+        )}
+
+        {/* 8. QUALITY_COMPLETED / FINAL_APPROVED -> APPROVED_FOR_PAYMENT */}
+        {(status === "QUALITY_COMPLETED" || status === "FINAL_APPROVED") && permissions.canPaymentApprove && (
           <Button disabled={busy} onClick={() => setModal("FINAL_APPROVE")} className="bg-emerald-700 hover:bg-emerald-800 text-white">
             Manager Payment Approval
           </Button>
