@@ -38,7 +38,7 @@ export async function getDepartments(includeInactive = true) {
 
 export async function createDepartment(input: CreateDepartmentInput) {
   const user = await getSessionUser();
-  const permCheck = await checkPermission(user, PERMISSIONS.SYSTEM_SETTINGS);
+  const permCheck = await checkPermission(user, PERMISSIONS.DEPARTMENT_CREATE);
   if (!permCheck.ok) return permCheck;
 
   const code = (input.code || "").trim().toUpperCase();
@@ -76,7 +76,7 @@ export async function createDepartment(input: CreateDepartmentInput) {
 
 export async function updateDepartment(input: UpdateDepartmentInput) {
   const user = await getSessionUser();
-  const permCheck = await checkPermission(user, PERMISSIONS.SYSTEM_SETTINGS);
+  const permCheck = await checkPermission(user, PERMISSIONS.DEPARTMENT_EDIT);
   if (!permCheck.ok) return permCheck;
 
   const code = (input.code || "").trim().toUpperCase();
@@ -121,7 +121,7 @@ export async function updateDepartment(input: UpdateDepartmentInput) {
 
 export async function toggleDepartmentStatus(id: string) {
   const user = await getSessionUser();
-  const permCheck = await checkPermission(user, PERMISSIONS.SYSTEM_SETTINGS);
+  const permCheck = await checkPermission(user, PERMISSIONS.DEPARTMENT_EDIT);
   if (!permCheck.ok) return permCheck;
 
   const existing = await prisma.department.findUnique({ where: { id } });
@@ -144,4 +144,49 @@ export async function toggleDepartmentStatus(id: string) {
   revalidatePath("/masters/departments");
   revalidatePath("/dcs/new");
   return { ok: true, active: dept.active };
+}
+
+export async function deleteDepartment(id: string) {
+  const user = await getSessionUser();
+  const permCheck = await checkPermission(user, PERMISSIONS.DEPARTMENT_EDIT);
+  if (!permCheck.ok) return permCheck;
+
+  const existing = await prisma.department.findUnique({ where: { id } });
+  if (!existing) return { ok: false, error: "Department record not found." };
+
+  const [dcCount, reqCount] = await Promise.all([
+    prisma.deliveryChallan.count({
+      where: {
+        OR: [
+          { department: existing.name },
+          { destinationDepartment: existing.name },
+        ],
+      },
+    }),
+    prisma.registrationRequest.count({ where: { requestedDepartment: existing.name } }),
+  ]);
+
+  if (dcCount + reqCount > 0) {
+    return {
+      ok: false,
+      error: "This department cannot be deleted because it is already used in existing DC or registration records. Deactivate it instead.",
+    };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.department.delete({ where: { id } });
+    await writeAudit(tx, {
+      userId: user!.id,
+      action: "DEPARTMENT_DELETED",
+      module: "MasterData",
+      entityType: "Department",
+      entityId: id,
+      oldValue: { code: existing.code, name: existing.name },
+      reason: "Unused department deleted",
+    });
+  });
+
+  revalidatePath("/masters/departments");
+  revalidatePath("/dcs/new");
+  return { ok: true };
 }

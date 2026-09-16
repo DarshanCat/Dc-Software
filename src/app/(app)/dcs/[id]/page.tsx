@@ -225,7 +225,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
             </p>
           ) : (
             <p className="mt-1 text-xs text-slate-500 font-sans">
-              Supplier: <span className="font-semibold text-slate-900">{dc.supplierNameSnapshot || dc.vendor?.vendorName || "N/A"}</span>
+              Supplier: <span className="font-semibold text-slate-900">{dc.vendor?.vendorName || dc.supplierNameSnapshot || "N/A"}</span>
               {" · "}
               WO ID: <span className="font-mono font-semibold text-slate-800">{dc.woNumber}</span>
               {" · "}
@@ -361,15 +361,15 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Supplier Name</span>
-              <span className="font-bold text-slate-900">{dc.supplierNameSnapshot || dc.vendor?.vendorName || "N/A"}</span>
+              <span className="font-bold text-slate-900">{dc.vendor?.vendorName || dc.supplierNameSnapshot || "N/A"}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">GST Number</span>
-              <span className="font-mono font-semibold text-slate-900">{dc.supplierGstSnapshot || dc.vendor?.gstNumber || "N/A"}</span>
+              <span className="font-mono font-semibold text-slate-900">{dc.vendor?.gstNumber || dc.supplierGstSnapshot || "N/A"}</span>
             </div>
             <div className="col-span-2">
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Supplier Address</span>
-              <span className="text-slate-800">{dc.supplierAddressSnapshot || dc.vendor?.address || "N/A"}</span>
+              <span className="text-slate-800">{dc.vendor?.address || dc.supplierAddressSnapshot || "N/A"}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Department</span>

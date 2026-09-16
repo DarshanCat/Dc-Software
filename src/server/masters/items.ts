@@ -186,3 +186,43 @@ export async function toggleItemMasterStatus(id: string) {
   revalidatePath("/dcs/new");
   return { ok: true, active: item.active };
 }
+
+export async function deleteItemMaster(id: string) {
+  const user = await getSessionUser();
+  const permCheck = await checkPermission(user, PERMISSIONS.ITEM_EDIT);
+  if (!permCheck.ok) return permCheck;
+
+  const existing = await prisma.itemMaster.findUnique({ where: { id } });
+  if (!existing) return { ok: false, error: "Item Master record not found." };
+
+  // Check dependencies before deletion
+  const [dcCount, stdCount] = await Promise.all([
+    prisma.deliveryChallan.count({ where: { partNumber: existing.partNumber } }),
+    prisma.jobWorkStandard.count({ where: { partNumber: existing.partNumber } }),
+  ]);
+
+  if (dcCount + stdCount > 0) {
+    return {
+      ok: false,
+      error: "This item cannot be deleted because it is already used in existing DC or Job Work Standard records. Deactivate it instead.",
+    };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.itemMaster.delete({ where: { id } });
+    await writeAudit(tx, {
+      userId: user!.id,
+      action: "ITEM_MASTER_DELETED",
+      module: "MasterData",
+      entityType: "ItemMaster",
+      entityId: id,
+      oldValue: { partNumber: existing.partNumber, partDescription: existing.partDescription },
+      reason: "Unused item master deleted",
+    });
+  });
+
+  revalidatePath("/masters/items");
+  revalidatePath("/masters/pricing");
+  revalidatePath("/dcs/new");
+  return { ok: true };
+}

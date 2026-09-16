@@ -1,35 +1,34 @@
 import { prisma } from "@/lib/db";
+import { getSessionUser } from "@/server/session";
+import { hasPermission } from "@/server/authorize";
+import { PERMISSIONS } from "@/config/permissions";
+import { ScrapTypeMasterClient } from "./scrap-type-master-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function ScrapTypesPage() {
+  const user = await getSessionUser();
+  const canCreate = user ? await hasPermission(user.id, PERMISSIONS.SCRAP_CREATE) : false;
+  const canEdit = user ? await hasPermission(user.id, PERMISSIONS.SCRAP_EDIT) : false;
+
   const scrapTypes = await prisma.scrapType.findMany({ orderBy: { name: "asc" } });
+
+  const formattedScrapTypes = scrapTypes.map((s) => ({
+    id: s.id,
+    code: s.code,
+    name: s.name,
+    description: s.description,
+    unit: s.unit,
+    active: s.active,
+  }));
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-slate-900">Scrap Types</h1>
-        <p className="text-sm text-slate-500">{scrapTypes.length} type(s)</p>
+        <h1 className="text-lg font-semibold text-slate-900">Scrap Types Master</h1>
+        <p className="text-sm text-slate-500">{scrapTypes.length} scrap type(s) configured</p>
       </div>
-      <div className="overflow-hidden rounded-lg border border-slate-200">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-2 font-medium">Code</th>
-              <th className="px-4 py-2 font-medium">Name</th>
-              <th className="px-4 py-2 font-medium">Unit</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {scrapTypes.map((s) => (
-              <tr key={s.id} className="hover:bg-slate-50">
-                <td className="px-4 py-2 font-mono text-slate-700">{s.code}</td>
-                <td className="px-4 py-2 text-slate-900">{s.name}</td>
-                <td className="px-4 py-2 text-slate-600">{s.unit}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ScrapTypeMasterClient scrapTypes={formattedScrapTypes} canCreate={canCreate} canEdit={canEdit} />
     </div>
   );
 }

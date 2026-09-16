@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createJobWorkStandard, updateJobWorkStandard, toggleJobWorkStandardStatus } from "@/server/masters/job-work-standards";
+import { createJobWorkStandard, updateJobWorkStandard, toggleJobWorkStandardStatus, deleteJobWorkStandard } from "@/server/masters/job-work-standards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Edit2, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Edit2, CheckCircle, XCircle, Trash2 } from "lucide-react";
 
 interface ProcessOption {
   id: string;
@@ -106,9 +106,27 @@ export function JobWorkStandardsClient({ standards, processes, canCreate }: Prop
 
   async function handleToggle(id: string) {
     setBusy(true);
-    await toggleJobWorkStandardStatus(id);
+    setError(null);
+    const res = await toggleJobWorkStandardStatus(id);
     setBusy(false);
-    router.refresh();
+    if (res && !res.ok) {
+      setError(res.error || "Failed to update standard status.");
+    } else {
+      router.refresh();
+    }
+  }
+
+  async function handleDelete(std: StandardData) {
+    if (!confirm(`Are you sure you want to delete Job Work Standard for Part "${std.partNumber}"?`)) return;
+    setBusy(true);
+    setError(null);
+    const res = await deleteJobWorkStandard(std.id);
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error || "Failed to delete standard.");
+    } else {
+      router.refresh();
+    }
   }
 
   const filtered = standards.filter(
@@ -119,6 +137,12 @@ export function JobWorkStandardsClient({ standards, processes, canCreate }: Prop
 
   return (
     <div className="space-y-4">
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700 font-medium">
+          {error}
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <Input
           placeholder="Search Part Number or Process..."
@@ -191,6 +215,15 @@ export function JobWorkStandardsClient({ standards, processes, canCreate }: Prop
                           className={s.active ? "text-amber-700 h-7 text-[11px]" : "text-emerald-700 h-7 text-[11px]"}
                         >
                           {s.active ? "Deactivate" : "Activate"}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => handleDelete(s)}
+                          className="text-red-600 hover:text-red-700 text-[11px] h-7 px-2"
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" /> Delete
                         </Button>
                       </>
                     )}

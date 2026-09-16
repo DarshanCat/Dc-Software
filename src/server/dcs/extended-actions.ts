@@ -434,6 +434,113 @@ export async function deleteDraftDc(dcId: string) {
   return { ok: true, dcId: dc.id, dcNumber: dc.dcNumber };
 }
 
+// ---------------- 1C. SAFE ADMIN TEST/SAMPLE DC DELETION ----------------
+
+export async function deleteTestDc(dcId: string) {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  // Security Requirement 1 & 2: ADMIN Role Only
+  if (!user.roleKeys?.includes("ADMIN")) {
+    return { ok: false, error: "403 Forbidden: Only Administrators are authorized to delete test/sample DCs." };
+  }
+
+  if (!dcId) return { ok: false, error: "DC ID is required." };
+
+  const dc = await prisma.deliveryChallan.findUnique({
+    where: { id: dcId },
+    include: {
+      dispatch: true,
+      receipts: true,
+      scrapReceipts: true,
+      reconciliation: true,
+      exceptions: true,
+      recoveryRequirements: true,
+      recoveryReceipts: true,
+      classifications: true,
+      statusHistory: true,
+    },
+  });
+
+  if (!dc) return { ok: false, error: "Delivery Challan not found." };
+
+  // Security Requirement 3: Explicit Test/Sample Marker Check
+  const isExplicitTestMarker =
+    dc.purpose === "SAMPLE" ||
+    dc.purpose === "TRIAL" ||
+    (dc.remarks && /test|demo|sample/i.test(dc.remarks)) ||
+    /test|demo|sample/i.test(dc.dcNumber);
+
+  if (!isExplicitTestMarker) {
+    return {
+      ok: false,
+      error: "Deletion rejected: This DC is not explicitly marked as a TEST or SAMPLE record (e.g. Purpose: SAMPLE/TRIAL or Remarks/DC Number containing 'TEST').",
+    };
+  }
+
+  // Security Requirement 4: Eligible early/non-operational status check
+  const operationalStatuses = [
+    "DISPATCHED",
+    "AT_VENDOR",
+    "SECURITY_RETURNED",
+    "INWARD_RECEIVED",
+    "STORE_VERIFIED",
+    "STORE_CONFIRMED",
+    "CUSTODIAN_VERIFIED",
+    "QUALITY_COMPLETED",
+    "FINAL_APPROVED",
+    "APPROVED_FOR_PAYMENT",
+    "CLOSED",
+    "PAYMENT_APPROVED",
+    "MATERIAL_OUT",
+    "MATERIAL_RETURNED",
+    "PARTIALLY_RETURNED",
+  ];
+
+  if (operationalStatuses.includes(dc.status)) {
+    return {
+      ok: false,
+      error: `Deletion rejected: Operational or completed DCs cannot be deleted (Current status: ${dc.status}). Only test/sample DCs in early states (DRAFT, PENDING_APPROVAL, REJECTED, CANCELLED) can be removed.`,
+    };
+  }
+
+  // Security Requirement 5: Verify no operational child records exist
+  const hasOperationalRecords =
+    dc.dispatch !== null ||
+    dc.receipts.length > 0 ||
+    dc.scrapReceipts.length > 0 ||
+    dc.reconciliation !== null ||
+    dc.exceptions.length > 0 ||
+    dc.recoveryRequirements.length > 0 ||
+    dc.recoveryReceipts.length > 0 ||
+    dc.classifications.length > 0;
+
+  if (hasOperationalRecords) {
+    return { ok: false, error: "Deletion rejected: Cannot delete DC with existing operational receipt or dispatch history." };
+  }
+
+  // Transaction: Clean up child items, status history, documents, and the DC row
+  await prisma.$transaction(async (tx) => {
+    await tx.deliveryChallanItem.deleteMany({ where: { dcId: dc.id } });
+    await tx.statusHistory.deleteMany({ where: { dcId: dc.id } });
+    await tx.document.deleteMany({ where: { entityType: "DeliveryChallan", entityId: dc.id } });
+    await tx.deliveryChallan.delete({ where: { id: dc.id } });
+  });
+
+  await writeAudit(prisma, {
+    userId: user.id,
+    action: "TEST_DC_DELETED",
+    module: "DeliveryChallan",
+    entityType: "DeliveryChallan",
+    entityId: dc.id,
+    reason: `Test/Sample DC ${dc.dcNumber} deleted by Admin ${user.email || user.id}`,
+  });
+
+  safeRevalidatePath("/dcs");
+  safeRevalidatePath(`/dcs/${dc.id}`);
+  return { ok: true, dcId: dc.id, dcNumber: dc.dcNumber };
+}
+
 // ---------------- 2. INWARD RECEIPT (SECURITY ROLE) ----------------
 
 export interface RecordInwardReceiptInput {

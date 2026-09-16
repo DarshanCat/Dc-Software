@@ -103,12 +103,12 @@ export const ADMIN_NAVIGATION: NavSection[] = [
     items: [
       { label: "Supplier Master", href: "/masters/suppliers", permission: P.VENDOR_VIEW },
       { label: "Part / Item Master", href: "/masters/items", permission: P.ITEM_VIEW },
-      { label: "Department Master", href: "/masters/departments", permission: P.SYSTEM_SETTINGS },
+      { label: "Department Master", href: "/masters/departments", permission: P.DEPARTMENT_VIEW },
       { label: "Pricing Master", href: "/masters/pricing", permission: P.ITEM_VIEW },
       { label: "Processes", href: "/masters/processes", permission: P.PROCESS_VIEW },
       { label: "Job Work Standards", href: "/masters/job-work-standards", permission: P.JOB_WORK_STANDARD_VIEW },
-      { label: "Scrap Types", href: "/masters/scrap-types", permission: P.PROCESS_VIEW },
-      { label: "UOM", href: "/masters/uom", permission: P.PROCESS_VIEW },
+      { label: "Scrap Types", href: "/masters/scrap-types", permission: P.SCRAP_VIEW },
+      { label: "UOM", href: "/masters/uom", permission: P.UOM_VIEW },
     ],
   },
   {
@@ -172,6 +172,15 @@ export const STORES_NAVIGATION: NavSection[] = [
       { label: "Pending Verification", href: "/receipts?pending=1" },
     ],
   },
+  {
+    label: "MASTERS",
+    items: [
+      { label: "Supplier Master", href: "/masters/suppliers" },
+      { label: "Part / Item Master", href: "/masters/items" },
+      { label: "UOM", href: "/masters/uom" },
+      { label: "Scrap Types", href: "/masters/scrap-types" },
+    ],
+  },
 ];
 
 export const MANAGEMENT_NAVIGATION: NavSection[] = [
@@ -194,6 +203,17 @@ export const MANAGEMENT_NAVIGATION: NavSection[] = [
       { label: "All DCs", href: "/dcs" },
       { label: "Pending Approval", href: "/dcs?status=PENDING_APPROVAL" },
       { label: "Close DC", href: "/dcs/close" },
+    ],
+  },
+  {
+    label: "MASTERS",
+    items: [
+      { label: "Supplier Master", href: "/masters/suppliers" },
+      { label: "Part / Item Master", href: "/masters/items" },
+      { label: "Department Master", href: "/masters/departments" },
+      { label: "Pricing Master", href: "/masters/pricing" },
+      { label: "Processes", href: "/masters/processes" },
+      { label: "Job Work Standards", href: "/masters/job-work-standards" },
     ],
   },
 ];

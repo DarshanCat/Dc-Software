@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createDepartment, updateDepartment, toggleDepartmentStatus } from "@/server/masters/departments";
+import { createDepartment, updateDepartment, toggleDepartmentStatus, deleteDepartment } from "@/server/masters/departments";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Edit2, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Edit2, CheckCircle, XCircle, Trash2 } from "lucide-react";
 
 interface DeptData {
   id: string;
@@ -70,9 +70,27 @@ export function DepartmentMasterClient({ departments, canCreate, canEdit }: Prop
 
   async function handleToggle(id: string) {
     setBusy(true);
-    await toggleDepartmentStatus(id);
+    setError(null);
+    const res = await toggleDepartmentStatus(id);
     setBusy(false);
-    router.refresh();
+    if (res && !res.ok) {
+      setError(res.error || "Failed to update department status.");
+    } else {
+      router.refresh();
+    }
+  }
+
+  async function handleDelete(dept: DeptData) {
+    if (!confirm(`Are you sure you want to delete department "${dept.name}"?`)) return;
+    setBusy(true);
+    setError(null);
+    const res = await deleteDepartment(dept.id);
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error || "Failed to delete department.");
+    } else {
+      router.refresh();
+    }
   }
 
   const filtered = departments.filter(
@@ -83,6 +101,12 @@ export function DepartmentMasterClient({ departments, canCreate, canEdit }: Prop
 
   return (
     <div className="space-y-4">
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700 font-medium">
+          {error}
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <Input
           placeholder="Search Department Code or Name..."
@@ -145,6 +169,15 @@ export function DepartmentMasterClient({ departments, canCreate, canEdit }: Prop
                           className={d.active ? "text-amber-700 h-7 text-[11px]" : "text-emerald-700 h-7 text-[11px]"}
                         >
                           {d.active ? "Deactivate" : "Activate"}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => handleDelete(d)}
+                          className="text-red-600 hover:text-red-700 text-[11px] h-7 px-2"
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" /> Delete
                         </Button>
                       </>
                     )}

@@ -66,6 +66,64 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): 
   return lines;
 }
 
+function wrapCellText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+  if (!text) return [];
+
+  function splitLongToken(token: string): string[] {
+    if (font.widthOfTextAtSize(token, size) <= maxWidth) return [token];
+    const chunks: string[] = [];
+    let currentChunk = "";
+    for (const char of token) {
+      const candidate = currentChunk + char;
+      if (font.widthOfTextAtSize(candidate, size) > maxWidth && currentChunk) {
+        chunks.push(currentChunk);
+        currentChunk = char;
+      } else {
+        currentChunk = candidate;
+      }
+    }
+    if (currentChunk) chunks.push(currentChunk);
+    return chunks;
+  }
+
+  const rawWords = text.split(/\s+/);
+  const words: string[] = [];
+
+  for (const rawWord of rawWords) {
+    if (font.widthOfTextAtSize(rawWord, size) > maxWidth) {
+      const subTokens = rawWord.split(/(?<=[,-])/);
+      for (const st of subTokens) {
+        if (st) {
+          words.push(...splitLongToken(st));
+        }
+      }
+    } else {
+      words.push(rawWord);
+    }
+  }
+
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const candidate = current ? current + " " + word : word;
+    if (font.widthOfTextAtSize(candidate, size) > maxWidth) {
+      if (current) {
+        lines.push(current);
+        current = word;
+      } else {
+        const sub = splitLongToken(word);
+        lines.push(...sub.slice(0, -1));
+        current = sub[sub.length - 1] || "";
+      }
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 function rightAlignedX(text: string, font: PDFFont, size: number, rightEdge: number): number {
   return rightEdge - font.widthOfTextAtSize(text, size);
 }
@@ -277,7 +335,15 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
 
   // Table Data Row
   const dataRowY = tableHeaderY - tableHeaderHeight;
-  const dataRowHeight = 28;
+
+  const partLines = wrapCellText(data.partNumber || "—", bold, 9, col1W - 16);
+  const rmLines = wrapCellText(data.rmQuantity || "—", bold, 9, col2W - 16);
+  const fgLines = wrapCellText(data.returnFgQuantity || "—", bold, 9, col3W - 16);
+  const heatLines = wrapCellText(data.heatNumber || "—", bold, 9, col4W - 16);
+
+  const maxLines = Math.max(1, partLines.length, rmLines.length, fgLines.length, heatLines.length);
+  const lineHeight = 11;
+  const dataRowHeight = Math.max(28, 14 + maxLines * lineHeight);
 
   page.drawRectangle({
     x: MARGIN,
@@ -288,10 +354,20 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
     borderWidth: 0.75,
   });
 
-  page.drawText(data.partNumber || "—", { x: c1X + 8, y: dataRowY - 18, size: 9.5, font: bold, color: DARK });
-  page.drawText(data.rmQuantity || "—", { x: c2X + 8, y: dataRowY - 18, size: 9.5, font: bold, color: DARK });
-  page.drawText(data.returnFgQuantity || "—", { x: c3X + 8, y: dataRowY - 18, size: 9.5, font: bold, color: DARK });
-  page.drawText(data.heatNumber || "—", { x: c4X + 8, y: dataRowY - 18, size: 9.5, font: bold, color: DARK });
+  const startTextY = dataRowY - 14;
+
+  partLines.forEach((line, idx) => {
+    page.drawText(line, { x: c1X + 8, y: startTextY - idx * lineHeight, size: 9, font: bold, color: DARK });
+  });
+  rmLines.forEach((line, idx) => {
+    page.drawText(line, { x: c2X + 8, y: startTextY - idx * lineHeight, size: 9, font: bold, color: DARK });
+  });
+  fgLines.forEach((line, idx) => {
+    page.drawText(line, { x: c3X + 8, y: startTextY - idx * lineHeight, size: 9, font: bold, color: DARK });
+  });
+  heatLines.forEach((line, idx) => {
+    page.drawText(line, { x: c4X + 8, y: startTextY - idx * lineHeight, size: 9, font: bold, color: DARK });
+  });
 
   // Column Separators for Data Row
   [c2X, c3X, c4X].forEach((colX) => {

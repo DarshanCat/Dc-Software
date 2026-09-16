@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 
 export default async function DepartmentsPage() {
   const user = await getSessionUser();
-  const canCreate = user ? await hasPermission(user.id, PERMISSIONS.SYSTEM_SETTINGS) : false;
-  const canEdit = user ? await hasPermission(user.id, PERMISSIONS.SYSTEM_SETTINGS) : false;
+  const canCreate = user ? await hasPermission(user.id, PERMISSIONS.DEPARTMENT_CREATE) : false;
+  const canEdit = user ? await hasPermission(user.id, PERMISSIONS.DEPARTMENT_EDIT) : false;
 
   let depts = await prisma.department.findMany({
     orderBy: { name: "asc" },

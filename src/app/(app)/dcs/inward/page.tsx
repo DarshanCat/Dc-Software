@@ -19,7 +19,7 @@ export default async function InwardDcPage() {
   const dcsFormatted = dcs.map((dc) => ({
     id: dc.id,
     dcNumber: dc.dcNumber,
-    vendorName: dc.supplierNameSnapshot || dc.vendor?.vendorName || "INTERNAL",
+    vendorName: dc.vendor?.vendorName || dc.supplierNameSnapshot || "INTERNAL",
     woNumber: dc.woNumber,
     partNumber: dc.partNumber || "N/A",
     department: dc.department || "PRODUCTION",

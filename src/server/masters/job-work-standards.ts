@@ -166,3 +166,28 @@ export async function toggleJobWorkStandardStatus(id: string) {
   revalidatePath("/masters/job-work-standards");
   return { ok: true, active: std.active };
 }
+
+export async function deleteJobWorkStandard(id: string) {
+  const user = await getSessionUser();
+  const permCheck = await checkPermission(user, PERMISSIONS.JOB_WORK_STANDARD_CREATE);
+  if (!permCheck.ok) return permCheck;
+
+  const existing = await prisma.jobWorkStandard.findUnique({ where: { id } });
+  if (!existing) return { ok: false, error: "Job Work Standard record not found." };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.jobWorkStandard.delete({ where: { id } });
+    await writeAudit(tx, {
+      userId: user!.id,
+      action: "JOB_WORK_STANDARD_DELETED",
+      module: "MasterData",
+      entityType: "JobWorkStandard",
+      entityId: id,
+      oldValue: { partNumber: existing.partNumber, processId: existing.processId },
+      reason: "Job Work Standard deleted",
+    });
+  });
+
+  revalidatePath("/masters/job-work-standards");
+  return { ok: true };
+}

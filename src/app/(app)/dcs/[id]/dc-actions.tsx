@@ -16,7 +16,7 @@ import {
   submitAccountsPaymentEntry,
   closeDc,
 } from "@/server/dcs/actions";
-import { deleteDraftDc } from "@/server/dcs/extended-actions";
+import { deleteDraftDc, deleteTestDc } from "@/server/dcs/extended-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -83,6 +83,7 @@ export function DcActions({
     | "FINAL_APPROVE"
     | "ACCOUNTS_ENTRY"
     | "DELETE_DRAFT"
+    | "DELETE_TEST_DC"
     | null
   >(null);
 
@@ -322,6 +323,17 @@ export function DcActions({
             <span>🔒 DC is CLOSED. All operational, commercial, and financial entries are locked and read-only.</span>
             <span className="text-[10px] text-slate-500 font-mono uppercase">Completed &amp; Archival Mode</span>
           </div>
+        )}
+
+        {userRole === "ADMIN" && ["DRAFT", "PENDING_APPROVAL", "OUTWARD_CREATED", "CANCELLED", "REJECTED"].includes(status) && (
+          <Button
+            disabled={busy}
+            variant="danger"
+            onClick={() => setModal("DELETE_TEST_DC")}
+            className="bg-red-700 hover:bg-red-800 text-white font-bold"
+          >
+            Delete Test/Sample DC
+          </Button>
         )}
       </div>
 
@@ -862,6 +874,48 @@ export function DcActions({
                 className="bg-red-600 hover:bg-red-700 text-white font-bold"
               >
                 {busy ? "Deleting Draft..." : "Delete Draft"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE TEST/SAMPLE DC CONFIRMATION MODAL (ADMIN ONLY) */}
+      {modal === "DELETE_TEST_DC" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl space-y-4">
+            <h3 className="text-lg font-bold text-red-700 border-b pb-2">Delete Test / Sample DC</h3>
+            <div className="space-y-2 text-sm text-slate-700">
+              <p className="font-semibold text-slate-900">
+                DC Number: <span className="font-mono">{dcData.dcNumber || dcId}</span>
+              </p>
+              <p className="text-red-700 bg-red-50 border border-red-200 p-3 rounded-md text-xs font-medium">
+                WARNING: You are logged in as Administrator. This action will permanently remove this test/sample DC record and its associated data. Only explicit test/sample records in non-operational states can be removed.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" disabled={busy} onClick={() => setModal(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError(null);
+                  const res = await deleteTestDc(dcId);
+                  setBusy(false);
+                  if (!res.ok) {
+                    setError(res.error || "Failed to delete Test/Sample DC.");
+                    setModal(null);
+                  } else {
+                    setModal(null);
+                    router.push("/dcs");
+                  }
+                }}
+                className="bg-red-700 hover:bg-red-800 text-white font-bold"
+              >
+                {busy ? "Deleting Test DC..." : "Confirm Delete Test DC"}
               </Button>
             </div>
           </div>

@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createItemMaster, updateItemMaster, toggleItemMasterStatus } from "@/server/masters/items";
+import { createItemMaster, updateItemMaster, toggleItemMasterStatus, deleteItemMaster } from "@/server/masters/items";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Edit2, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Edit2, CheckCircle, XCircle, Trash2 } from "lucide-react";
 
 interface ItemData {
   id: string;
@@ -101,6 +101,19 @@ export function ItemMasterClient({ items, canCreate, canEdit }: Props) {
     router.refresh();
   }
 
+  async function handleDelete(item: ItemData) {
+    if (!confirm(`Are you sure you want to delete Part Number "${item.partNumber}"?`)) return;
+    setBusy(true);
+    setError(null);
+    const res = await deleteItemMaster(item.id);
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error || "Failed to delete item.");
+    } else {
+      router.refresh();
+    }
+  }
+
   const filtered = items.filter(
     (i) =>
       i.partNumber.toLowerCase().includes(search.toLowerCase()) ||
@@ -183,6 +196,15 @@ export function ItemMasterClient({ items, canCreate, canEdit }: Props) {
                           className={i.active ? "text-amber-700 h-7 text-[11px]" : "text-emerald-700 h-7 text-[11px]"}
                         >
                           {i.active ? "Deactivate" : "Activate"}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => handleDelete(i)}
+                          className="text-red-600 hover:text-red-700 text-[11px] h-7 px-2"
+                        >
+                          <Trash2 className="h-3 w-3 mr-1" /> Delete
                         </Button>
                       </>
                     )}

@@ -135,7 +135,7 @@ export default async function DcsPage({
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{dc.dcDate.toLocaleDateString()}</td>
                     <td className="px-4 py-2.5 font-semibold text-slate-900">
-                      {dc.supplierNameSnapshot || dc.vendor?.vendorName || (dc.destinationDepartment ? `${dc.destinationDepartment} (${dc.responsibleCustodian || ''})` : "Internal Custody")}
+                      {dc.vendor?.vendorName || dc.supplierNameSnapshot || (dc.destinationDepartment ? `${dc.destinationDepartment} (${dc.responsibleCustodian || ''})` : "Internal Custody")}
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{dc.process?.name ?? "—"}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{inputWt.toFixed(3)} kg</td>
