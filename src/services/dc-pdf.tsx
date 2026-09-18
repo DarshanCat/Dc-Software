@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
 export interface DcPdfData {
   company: {
@@ -48,84 +48,116 @@ const LIGHT_GREY = rgb(0.45, 0.5, 0.58);
 const LINE = rgb(0.75, 0.8, 0.85);
 const TABLE_BG = rgb(0.93, 0.95, 0.97);
 
-function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  if (!text) return [];
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const candidate = current ? current + " " + word : word;
-    if (font.widthOfTextAtSize(candidate, size) > maxWidth && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = candidate;
-    }
+function getTextWidth(text: string, font: PDFFont, size: number): number {
+  try {
+    const safeText = text.replace(/[^\x00-\x7F]/g, "?");
+    return font.widthOfTextAtSize(safeText, size);
+  } catch {
+    return text.length * size * 0.5;
   }
-  if (current) lines.push(current);
-  return lines;
 }
 
-function wrapCellText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+/**
+ * Robust cell text wrapping algorithm.
+ * Handles normal text, spaces, commas, hyphens, slashes, numbers,
+ * and breaks unbroken long strings character-by-character if a token exceeds maxWidth.
+ */
+export function wrapCellText(
+  text: string | null | undefined,
+  font: PDFFont,
+  size: number,
+  maxWidth: number
+): string[] {
   if (!text) return [];
+  if (maxWidth <= 0) return [];
 
-  function splitLongToken(token: string): string[] {
-    if (font.widthOfTextAtSize(token, size) <= maxWidth) return [token];
-    const chunks: string[] = [];
-    let currentChunk = "";
-    for (const char of token) {
-      const candidate = currentChunk + char;
-      if (font.widthOfTextAtSize(candidate, size) > maxWidth && currentChunk) {
-        chunks.push(currentChunk);
-        currentChunk = char;
-      } else {
-        currentChunk = candidate;
+  const paragraphs = text.split(/\r?\n/);
+  const resultLines: string[] = [];
+
+  for (const para of paragraphs) {
+    const trimmedPara = para.trim();
+    if (!trimmedPara) {
+      continue;
+    }
+
+    const rawWords = trimmedPara.split(/\s+/);
+
+    interface Unit {
+      text: string;
+      hasLeadingSpace: boolean;
+    }
+    const units: Unit[] = [];
+
+    for (let i = 0; i < rawWords.length; i++) {
+      const rawWord = rawWords[i];
+      if (!rawWord) continue;
+      const isWordStart = i > 0;
+
+      // Split rawWord by common delimiters, keeping the delimiter attached to the preceding subtoken
+      const subTokens = rawWord.split(/(?<=[,-/_:.@])/);
+      let isFirstSub = true;
+
+      for (const st of subTokens) {
+        if (!st) continue;
+
+        if (getTextWidth(st, font, size) <= maxWidth) {
+          units.push({
+            text: st,
+            hasLeadingSpace: isFirstSub ? isWordStart : false,
+          });
+        } else {
+          // Break long subToken character-by-character
+          let currentChunk = "";
+          for (const char of st) {
+            const candidate = currentChunk + char;
+            if (getTextWidth(candidate, font, size) > maxWidth && currentChunk) {
+              units.push({
+                text: currentChunk,
+                hasLeadingSpace: isFirstSub ? isWordStart : false,
+              });
+              currentChunk = char;
+              isFirstSub = false;
+            } else {
+              currentChunk = candidate;
+            }
+          }
+          if (currentChunk) {
+            units.push({
+              text: currentChunk,
+              hasLeadingSpace: isFirstSub ? isWordStart : false,
+            });
+          }
+        }
+        isFirstSub = false;
       }
     }
-    if (currentChunk) chunks.push(currentChunk);
-    return chunks;
-  }
 
-  const rawWords = text.split(/\s+/);
-  const words: string[] = [];
+    let currentLine = "";
 
-  for (const rawWord of rawWords) {
-    if (font.widthOfTextAtSize(rawWord, size) > maxWidth) {
-      const subTokens = rawWord.split(/(?<=[,-])/);
-      for (const st of subTokens) {
-        if (st) {
-          words.push(...splitLongToken(st));
+    for (const unit of units) {
+      if (!currentLine) {
+        currentLine = unit.text;
+      } else {
+        const candidate = unit.hasLeadingSpace ? currentLine + " " + unit.text : currentLine + unit.text;
+        if (getTextWidth(candidate, font, size) <= maxWidth) {
+          currentLine = candidate;
+        } else {
+          resultLines.push(currentLine);
+          currentLine = unit.text;
         }
       }
-    } else {
-      words.push(rawWord);
+    }
+
+    if (currentLine) {
+      resultLines.push(currentLine);
     }
   }
 
-  const lines: string[] = [];
-  let current = "";
-
-  for (const word of words) {
-    const candidate = current ? current + " " + word : word;
-    if (font.widthOfTextAtSize(candidate, size) > maxWidth) {
-      if (current) {
-        lines.push(current);
-        current = word;
-      } else {
-        const sub = splitLongToken(word);
-        lines.push(...sub.slice(0, -1));
-        current = sub[sub.length - 1] || "";
-      }
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
+  return resultLines;
 }
 
-function rightAlignedX(text: string, font: PDFFont, size: number, rightEdge: number): number {
-  return rightEdge - font.widthOfTextAtSize(text, size);
+export function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+  return wrapCellText(text, font, size, maxWidth);
 }
 
 async function embedLogo(doc: PDFDocument, dataUrl: string) {
@@ -138,11 +170,19 @@ async function embedLogo(doc: PDFDocument, dataUrl: string) {
 
 export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  let currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   let y = PAGE_HEIGHT - MARGIN;
+
+  const ensureSpace = (neededHeight: number) => {
+    const MIN_Y = 110; // Reserve space for bottom signatures
+    if (y - neededHeight < MIN_Y) {
+      currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      y = PAGE_HEIGHT - MARGIN;
+    }
+  };
 
   // ================= 1. COMPANY HEADER =================
   let textX = MARGIN;
@@ -155,7 +195,7 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
         const scale = Math.min(maxW / img.width, maxH / img.height);
         const w = img.width * scale;
         const h = img.height * scale;
-        page.drawImage(img, { x: MARGIN, y: y - h + 5, width: w, height: h });
+        currentPage.drawImage(img, { x: MARGIN, y: y - h + 5, width: w, height: h });
         textX = MARGIN + w + 12;
       }
     } catch {
@@ -163,15 +203,20 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
     }
   }
 
+  const headerTextWidth = PAGE_WIDTH - textX - MARGIN;
+
   // Company Name
-  page.drawText(data.company.name.toUpperCase(), { x: textX, y, size: 14, font: bold, color: DARK });
-  y -= 14;
+  const companyNameLines = wrapCellText(data.company.name.toUpperCase(), bold, 13, headerTextWidth);
+  for (const line of companyNameLines) {
+    currentPage.drawText(line, { x: textX, y, size: 13, font: bold, color: DARK });
+    y -= 15;
+  }
 
   // Company Address
   if (data.company.address) {
-    const addrLines = wrapText(data.company.address, font, 8.5, PAGE_WIDTH - textX - MARGIN);
+    const addrLines = wrapCellText(data.company.address, font, 8.5, headerTextWidth);
     for (const line of addrLines) {
-      page.drawText(line, { x: textX, y, size: 8.5, font, color: GREY });
+      currentPage.drawText(line, { x: textX, y, size: 8.5, font, color: GREY });
       y -= 11;
     }
   }
@@ -184,29 +229,32 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
     .filter(Boolean)
     .join("  |  ");
   if (contactLine) {
-    page.drawText(contactLine, { x: textX, y, size: 8.5, font, color: GREY });
-    y -= 12;
+    const contactLines = wrapCellText(contactLine, font, 8.5, headerTextWidth);
+    for (const line of contactLines) {
+      currentPage.drawText(line, { x: textX, y, size: 8.5, font, color: GREY });
+      y -= 11;
+    }
   }
 
-  y = Math.min(y, PAGE_HEIGHT - MARGIN - 50);
+  y -= 4;
 
   // Top Rule
-  page.drawLine({
+  currentPage.drawLine({
     start: { x: MARGIN, y },
     end: { x: PAGE_WIDTH - MARGIN, y },
     thickness: 1,
     color: DARK,
   });
-  y -= 16;
+  y -= 15;
 
   // Document Title
   const title = "DELIVERY CHALLAN";
-  const titleWidth = bold.widthOfTextAtSize(title, 13);
-  page.drawText(title, { x: (PAGE_WIDTH - titleWidth) / 2, y, size: 13, font: bold, color: DARK });
-  y -= 12;
+  const titleWidth = getTextWidth(title, bold, 13);
+  currentPage.drawText(title, { x: (PAGE_WIDTH - titleWidth) / 2, y, size: 13, font: bold, color: DARK });
+  y -= 11;
 
   // Sub-rule under title
-  page.drawLine({
+  currentPage.drawLine({
     start: { x: MARGIN, y },
     end: { x: PAGE_WIDTH - MARGIN, y },
     thickness: 0.75,
@@ -215,96 +263,118 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   y -= 14;
 
   // ================= 2. DOCUMENT IDENTIFICATION & VENDOR / PROCESS GRID =================
-  const boxTopY = y;
-  const boxHeight = 110;
-
-  // Outer Border Box for Header Data
-  page.drawRectangle({
-    x: MARGIN,
-    y: boxTopY - boxHeight,
-    width: CONTENT_WIDTH,
-    height: boxHeight,
-    borderColor: LINE,
-    borderWidth: 0.75,
-  });
-
-  // Vertical Splitter Line: Left (Consignee) = 55%, Right (DC Info) = 45%
   const splitX = MARGIN + CONTENT_WIDTH * 0.55;
-  page.drawLine({
-    start: { x: splitX, y: boxTopY },
-    end: { x: splitX, y: boxTopY - boxHeight },
-    thickness: 0.75,
-    color: LINE,
-  });
+  const leftColW = splitX - MARGIN - 16;
+  const rightValX = splitX + 90;
+  const rightValW = (PAGE_WIDTH - MARGIN) - rightValX - 8;
 
-  // --- LEFT COLUMN: VENDOR / CONSIGNEE DETAILS ---
-  let leftY = boxTopY - 12;
-  page.drawText("CONSIGNEE / VENDOR DETAILS", { x: MARGIN + 8, y: leftY, size: 7.5, font: bold, color: LIGHT_GREY });
-  leftY -= 14;
-
-  page.drawText(data.vendorName, { x: MARGIN + 8, y: leftY, size: 10, font: bold, color: DARK });
-  leftY -= 13;
-
-  if (data.vendorAddress) {
-    const vAddrLines = wrapText(data.vendorAddress, font, 8.5, splitX - MARGIN - 16);
-    for (const line of vAddrLines.slice(0, 3)) {
-      page.drawText(line, { x: MARGIN + 8, y: leftY, size: 8.5, font, color: GREY });
-      leftY -= 11;
-    }
-  }
-
+  // Prepare Left Column Wrapped Content
+  const vendorNameLines = wrapCellText(data.vendorName || "—", bold, 9.5, leftColW);
+  const vendorAddrLines = wrapCellText(data.vendorAddress || "", font, 8, leftColW);
   const vendorTaxLine = [
     data.vendorGst ? "GST: " + data.vendorGst : "",
     data.vendorPan ? "PAN: " + data.vendorPan : "",
   ]
     .filter(Boolean)
     .join("  |  ");
-  if (vendorTaxLine) {
-    page.drawText(vendorTaxLine, { x: MARGIN + 8, y: leftY, size: 8, font, color: GREY });
-  }
+  const vendorTaxLines = wrapCellText(vendorTaxLine, font, 8, leftColW);
 
-  // --- RIGHT COLUMN: DC IDENTIFICATION & PROCESS ---
-  let rightY = boxTopY - 12;
-  const rightPad = splitX + 8;
+  const leftContentHeight =
+    12 +
+    vendorNameLines.length * 12 +
+    (vendorAddrLines.length > 0 ? vendorAddrLines.length * 10 : 0) +
+    (vendorTaxLines.length > 0 ? vendorTaxLines.length * 10 : 0) +
+    12;
 
-  const idPairs: [string, string][] = [
-    ["DC Number:", data.dcNumber],
-    ["DC Date:", data.dcDate],
-    ["Work Order No:", data.woNumber],
-    ["Process:", data.processName],
-    ["Purpose:", data.purpose],
-    ["Expected Return:", data.expectedReturnDate],
+  // Prepare Right Column Wrapped Content
+  const idPairs: { label: string; val: string; isBold: boolean }[] = [
+    { label: "DC Number:", val: data.dcNumber, isBold: true },
+    { label: "DC Date:", val: data.dcDate, isBold: false },
+    { label: "Work Order No:", val: data.woNumber, isBold: false },
+    { label: "Process:", val: data.processName, isBold: true },
+    { label: "Purpose:", val: data.purpose, isBold: false },
+    { label: "Expected Return:", val: data.expectedReturnDate, isBold: false },
   ];
 
-  for (const [label, val] of idPairs) {
-    page.drawText(label, { x: rightPad, y: rightY, size: 8, font, color: GREY });
-    const isBoldVal = label.includes("DC Number") || label.includes("Process");
-    page.drawText(val || "—", {
-      x: rightPad + 85,
-      y: rightY,
-      size: isBoldVal ? 9 : 8.5,
-      font: isBoldVal ? bold : font,
-      color: DARK,
-    });
-    rightY -= 15;
-  }
+  const preparedRightPairs = idPairs.map((p) => {
+    const wrapped = wrapCellText(p.val || "—", p.isBold ? bold : font, p.isBold ? 8.5 : 8, rightValW);
+    return { ...p, wrapped };
+  });
 
-  y = boxTopY - boxHeight - 14;
+  const rightContentHeight =
+    12 +
+    preparedRightPairs.reduce((acc, p) => acc + Math.max(14, p.wrapped.length * 11), 0) +
+    8;
 
-  // ================= 3. MATERIAL DETAILS SECTION =================
-  const tableHeaderY = y;
-  const tableHeaderHeight = 20;
+  const headerBoxHeight = Math.max(105, leftContentHeight, rightContentHeight);
 
-  // Table Header Background
-  page.drawRectangle({
+  ensureSpace(headerBoxHeight + 14);
+
+  const boxTopY = y;
+
+  // Outer Border Box for Header Data
+  currentPage.drawRectangle({
     x: MARGIN,
-    y: tableHeaderY - tableHeaderHeight,
+    y: boxTopY - headerBoxHeight,
     width: CONTENT_WIDTH,
-    height: tableHeaderHeight,
-    color: TABLE_BG,
+    height: headerBoxHeight,
     borderColor: LINE,
     borderWidth: 0.75,
   });
+
+  // Vertical Splitter Line
+  currentPage.drawLine({
+    start: { x: splitX, y: boxTopY },
+    end: { x: splitX, y: boxTopY - headerBoxHeight },
+    thickness: 0.75,
+    color: LINE,
+  });
+
+  // Render Left Column
+  let leftY = boxTopY - 12;
+  currentPage.drawText("CONSIGNEE / VENDOR DETAILS", { x: MARGIN + 8, y: leftY, size: 7.5, font: bold, color: LIGHT_GREY });
+  leftY -= 13;
+
+  for (const line of vendorNameLines) {
+    currentPage.drawText(line, { x: MARGIN + 8, y: leftY, size: 9.5, font: bold, color: DARK });
+    leftY -= 12;
+  }
+
+  for (const line of vendorAddrLines) {
+    currentPage.drawText(line, { x: MARGIN + 8, y: leftY, size: 8, font, color: GREY });
+    leftY -= 10;
+  }
+
+  for (const line of vendorTaxLines) {
+    currentPage.drawText(line, { x: MARGIN + 8, y: leftY, size: 8, font, color: GREY });
+    leftY -= 10;
+  }
+
+  // Render Right Column
+  let rightY = boxTopY - 12;
+  const rightPad = splitX + 8;
+
+  for (const pair of preparedRightPairs) {
+    currentPage.drawText(pair.label, { x: rightPad, y: rightY, size: 8, font, color: GREY });
+    const f = pair.isBold ? bold : font;
+    const s = pair.isBold ? 8.5 : 8;
+    const lh = 11;
+    pair.wrapped.forEach((wLine, idx) => {
+      currentPage.drawText(wLine, {
+        x: rightValX,
+        y: rightY - idx * lh,
+        size: s,
+        font: f,
+        color: DARK,
+      });
+    });
+    rightY -= Math.max(14, pair.wrapped.length * lh);
+  }
+
+  y = boxTopY - headerBoxHeight - 14;
+
+  // ================= 3. MATERIAL DETAILS SECTION =================
+  const tableHeaderHeight = 20;
 
   // Table Columns Width
   const col1W = CONTENT_WIDTH * 0.34;
@@ -317,15 +387,39 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   const c3X = c2X + col2W;
   const c4X = c3X + col3W;
 
+  const partLines = wrapCellText(data.partNumber || "—", bold, 8.5, col1W - 16);
+  const rmLines = wrapCellText(data.rmQuantity || "—", bold, 8.5, col2W - 16);
+  const fgLines = wrapCellText(data.returnFgQuantity || "—", bold, 8.5, col3W - 16);
+  const heatLines = wrapCellText(data.heatNumber || "—", bold, 8.5, col4W - 16);
+
+  const maxLines = Math.max(1, partLines.length, rmLines.length, fgLines.length, heatLines.length);
+  const lineHeight = 11;
+  const dataRowHeight = Math.max(28, 14 + maxLines * lineHeight);
+
+  ensureSpace(tableHeaderHeight + dataRowHeight + 12);
+
+  const tableHeaderY = y;
+
+  // Table Header Background
+  currentPage.drawRectangle({
+    x: MARGIN,
+    y: tableHeaderY - tableHeaderHeight,
+    width: CONTENT_WIDTH,
+    height: tableHeaderHeight,
+    color: TABLE_BG,
+    borderColor: LINE,
+    borderWidth: 0.75,
+  });
+
   // Table Header Labels
-  page.drawText("PART NUMBER", { x: c1X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
-  page.drawText("RM QTY (RAW MAT.)", { x: c2X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
-  page.drawText("RETURN FG QTY", { x: c3X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
-  page.drawText("HEAT NUMBER", { x: c4X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
+  currentPage.drawText("PART NUMBER", { x: c1X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
+  currentPage.drawText("RM QTY (RAW MAT.)", { x: c2X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
+  currentPage.drawText("RETURN FG QTY", { x: c3X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
+  currentPage.drawText("HEAT NUMBER", { x: c4X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
 
   // Column Separators for Header
   [c2X, c3X, c4X].forEach((colX) => {
-    page.drawLine({
+    currentPage.drawLine({
       start: { x: colX, y: tableHeaderY },
       end: { x: colX, y: tableHeaderY - tableHeaderHeight },
       thickness: 0.75,
@@ -336,16 +430,7 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   // Table Data Row
   const dataRowY = tableHeaderY - tableHeaderHeight;
 
-  const partLines = wrapCellText(data.partNumber || "—", bold, 9, col1W - 16);
-  const rmLines = wrapCellText(data.rmQuantity || "—", bold, 9, col2W - 16);
-  const fgLines = wrapCellText(data.returnFgQuantity || "—", bold, 9, col3W - 16);
-  const heatLines = wrapCellText(data.heatNumber || "—", bold, 9, col4W - 16);
-
-  const maxLines = Math.max(1, partLines.length, rmLines.length, fgLines.length, heatLines.length);
-  const lineHeight = 11;
-  const dataRowHeight = Math.max(28, 14 + maxLines * lineHeight);
-
-  page.drawRectangle({
+  currentPage.drawRectangle({
     x: MARGIN,
     y: dataRowY - dataRowHeight,
     width: CONTENT_WIDTH,
@@ -354,24 +439,24 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
     borderWidth: 0.75,
   });
 
-  const startTextY = dataRowY - 14;
+  const startTextY = dataRowY - 13;
 
   partLines.forEach((line, idx) => {
-    page.drawText(line, { x: c1X + 8, y: startTextY - idx * lineHeight, size: 9, font: bold, color: DARK });
+    currentPage.drawText(line, { x: c1X + 8, y: startTextY - idx * lineHeight, size: 8.5, font: bold, color: DARK });
   });
   rmLines.forEach((line, idx) => {
-    page.drawText(line, { x: c2X + 8, y: startTextY - idx * lineHeight, size: 9, font: bold, color: DARK });
+    currentPage.drawText(line, { x: c2X + 8, y: startTextY - idx * lineHeight, size: 8.5, font: bold, color: DARK });
   });
   fgLines.forEach((line, idx) => {
-    page.drawText(line, { x: c3X + 8, y: startTextY - idx * lineHeight, size: 9, font: bold, color: DARK });
+    currentPage.drawText(line, { x: c3X + 8, y: startTextY - idx * lineHeight, size: 8.5, font: bold, color: DARK });
   });
   heatLines.forEach((line, idx) => {
-    page.drawText(line, { x: c4X + 8, y: startTextY - idx * lineHeight, size: 9, font: bold, color: DARK });
+    currentPage.drawText(line, { x: c4X + 8, y: startTextY - idx * lineHeight, size: 8.5, font: bold, color: DARK });
   });
 
   // Column Separators for Data Row
   [c2X, c3X, c4X].forEach((colX) => {
-    page.drawLine({
+    currentPage.drawLine({
       start: { x: colX, y: dataRowY },
       end: { x: colX, y: dataRowY - dataRowHeight },
       thickness: 0.75,
@@ -382,10 +467,28 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   y = dataRowY - dataRowHeight - 12;
 
   // ================= 4. PRICING & COMMERCIAL TERMS BLOCK =================
-  const priceBoxTop = y;
-  const priceBoxHeight = 32;
+  const pColW = CONTENT_WIDTH / 3;
+  const pAvailW = pColW - 12;
 
-  page.drawRectangle({
+  const pricingRaw: [string, string][] = [
+    ["PRICING BASIS", data.pricingBasis || "—"],
+    ["RATE PER QUANTITY", data.ratePerQuantity && data.ratePerQuantity !== "—" ? `INR ${data.ratePerQuantity}` : "—"],
+    ["EXPECTED TOTAL AMOUNT", data.expectedAmount && data.expectedAmount !== "—" ? `INR ${data.expectedAmount}` : "—"],
+  ];
+
+  const pricingPrepared = pricingRaw.map(([label, val]) => {
+    const lines = wrapCellText(val || "—", bold, 8, pAvailW);
+    return { label, val, lines };
+  });
+
+  const maxPriceLines = Math.max(1, ...pricingPrepared.map((p) => p.lines.length));
+  const priceBoxHeight = Math.max(32, 16 + maxPriceLines * 10);
+
+  ensureSpace(priceBoxHeight + 12);
+
+  const priceBoxTop = y;
+
+  currentPage.drawRectangle({
     x: MARGIN,
     y: priceBoxTop - priceBoxHeight,
     width: CONTENT_WIDTH,
@@ -395,20 +498,15 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
     borderWidth: 0.75,
   });
 
-  const pColW = CONTENT_WIDTH / 3;
-  const pricingFields: [string, string][] = [
-    ["PRICING BASIS", data.pricingBasis || "—"],
-    ["RATE PER QUANTITY", data.ratePerQuantity && data.ratePerQuantity !== "—" ? `INR ${data.ratePerQuantity}` : "—"],
-    ["EXPECTED TOTAL AMOUNT", data.expectedAmount && data.expectedAmount !== "—" ? `INR ${data.expectedAmount}` : "—"],
-  ];
-
-  pricingFields.forEach(([label, val], idx) => {
+  pricingPrepared.forEach(({ label, lines }, idx) => {
     const px = MARGIN + idx * pColW;
-    page.drawText(label, { x: px + 6, y: priceBoxTop - 11, size: 6.5, font: bold, color: LIGHT_GREY });
-    page.drawText(val || "—", { x: px + 6, y: priceBoxTop - 24, size: 8.5, font: bold, color: DARK });
+    currentPage.drawText(label, { x: px + 6, y: priceBoxTop - 11, size: 6.5, font: bold, color: LIGHT_GREY });
+    lines.forEach((line, lIdx) => {
+      currentPage.drawText(line, { x: px + 6, y: priceBoxTop - 22 - lIdx * 10, size: 8, font: bold, color: DARK });
+    });
 
     if (idx > 0) {
-      page.drawLine({
+      currentPage.drawLine({
         start: { x: px, y: priceBoxTop },
         end: { x: px, y: priceBoxTop - priceBoxHeight },
         thickness: 0.75,
@@ -420,10 +518,29 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   y = priceBoxTop - priceBoxHeight - 12;
 
   // ================= 5. TRANSPORT & COMPLIANCE DETAILS =================
-  const transportBoxTop = y;
-  const transportBoxHeight = 36;
+  const tColW = CONTENT_WIDTH / 4;
+  const tAvailW = tColW - 12;
 
-  page.drawRectangle({
+  const transportRaw: [string, string][] = [
+    ["VEHICLE NO.", data.vehicleNumber],
+    ["TRANSPORTER", data.transporter],
+    ["E-WAY BILL NO.", data.ewayBillNumber],
+    ["E-SUGAM / REF NO.", [data.eSugamNumber, data.referenceNumber].filter((v) => v && v !== "—").join(" / ") || "—"],
+  ];
+
+  const transportPrepared = transportRaw.map(([label, val]) => {
+    const lines = wrapCellText(val || "—", font, 8, tAvailW);
+    return { label, val, lines };
+  });
+
+  const maxTransLines = Math.max(1, ...transportPrepared.map((t) => t.lines.length));
+  const transportBoxHeight = Math.max(34, 16 + maxTransLines * 10);
+
+  ensureSpace(transportBoxHeight + 14);
+
+  const transportBoxTop = y;
+
+  currentPage.drawRectangle({
     x: MARGIN,
     y: transportBoxTop - transportBoxHeight,
     width: CONTENT_WIDTH,
@@ -432,21 +549,15 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
     borderWidth: 0.75,
   });
 
-  const tColW = CONTENT_WIDTH / 4;
-  const transportFields: [string, string][] = [
-    ["VEHICLE NO.", data.vehicleNumber],
-    ["TRANSPORTER", data.transporter],
-    ["E-WAY BILL NO.", data.ewayBillNumber],
-    ["E-SUGAM / REF NO.", [data.eSugamNumber, data.referenceNumber].filter((v) => v && v !== "—").join(" / ") || "—"],
-  ];
-
-  transportFields.forEach(([label, val], idx) => {
+  transportPrepared.forEach(({ label, lines }, idx) => {
     const tx = MARGIN + idx * tColW;
-    page.drawText(label, { x: tx + 6, y: transportBoxTop - 12, size: 6.5, font: bold, color: LIGHT_GREY });
-    page.drawText(val || "—", { x: tx + 6, y: transportBoxTop - 25, size: 8.5, font, color: DARK });
+    currentPage.drawText(label, { x: tx + 6, y: transportBoxTop - 11, size: 6.5, font: bold, color: LIGHT_GREY });
+    lines.forEach((line, lIdx) => {
+      currentPage.drawText(line, { x: tx + 6, y: transportBoxTop - 22 - lIdx * 10, size: 8, font, color: DARK });
+    });
 
     if (idx > 0) {
-      page.drawLine({
+      currentPage.drawLine({
         start: { x: tx, y: transportBoxTop },
         end: { x: tx, y: transportBoxTop - transportBoxHeight },
         thickness: 0.75,
@@ -457,13 +568,16 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
 
   y = transportBoxTop - transportBoxHeight - 14;
 
-  // ================= 5. REMARKS SECTION =================
-  const remarksBoxTop = y;
+  // ================= 6. REMARKS SECTION =================
   const remarksText = data.remarks?.trim() || "";
-  const remarksLines = wrapText(remarksText, font, 8.5, CONTENT_WIDTH - 16);
-  const remarksBoxHeight = Math.max(38, 20 + remarksLines.length * 11);
+  const remarksLines = wrapCellText(remarksText, font, 8.5, CONTENT_WIDTH - 16);
+  const remarksBoxHeight = Math.max(36, 18 + (remarksLines.length > 0 ? remarksLines.length * 10 : 10));
 
-  page.drawRectangle({
+  ensureSpace(remarksBoxHeight + 14);
+
+  const remarksBoxTop = y;
+
+  currentPage.drawRectangle({
     x: MARGIN,
     y: remarksBoxTop - remarksBoxHeight,
     width: CONTENT_WIDTH,
@@ -472,35 +586,39 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
     borderWidth: 0.75,
   });
 
-  page.drawText("REMARKS / INSTRUCTIONS", { x: MARGIN + 8, y: remarksBoxTop - 12, size: 7, font: bold, color: LIGHT_GREY });
+  currentPage.drawText("REMARKS / INSTRUCTIONS", { x: MARGIN + 8, y: remarksBoxTop - 11, size: 7, font: bold, color: LIGHT_GREY });
 
   if (remarksLines.length > 0) {
-    let ry = remarksBoxTop - 24;
+    let ry = remarksBoxTop - 22;
     for (const line of remarksLines) {
-      page.drawText(line, { x: MARGIN + 8, y: ry, size: 8.5, font, color: DARK });
-      ry -= 11;
+      currentPage.drawText(line, { x: MARGIN + 8, y: ry, size: 8.5, font, color: DARK });
+      ry -= 10;
     }
   } else {
-    page.drawText("NIL", { x: MARGIN + 8, y: remarksBoxTop - 25, size: 8.5, font, color: GREY });
+    currentPage.drawText("NIL", { x: MARGIN + 8, y: remarksBoxTop - 22, size: 8.5, font, color: GREY });
   }
 
   y = remarksBoxTop - remarksBoxHeight - 14;
 
-  // ================= 6. TERMS & CONDITIONS =================
+  // ================= 7. TERMS & CONDITIONS =================
   const termsText =
     "TERMS & CONDITIONS: Material listed above is dispatched for job work processing only and remains the sole property of " +
     data.company.name +
     ". The consignee/receiving party is responsible for safe custody and return of the processed material along with any finished goods / scrap generated as per agreed terms.";
 
-  const termsLines = wrapText(termsText, font, 7, CONTENT_WIDTH);
+  const termsLines = wrapCellText(termsText, font, 7, CONTENT_WIDTH);
+  const termsTotalHeight = termsLines.length * 9;
+
+  ensureSpace(termsTotalHeight + 10);
+
   for (const line of termsLines) {
-    page.drawText(line, { x: MARGIN, y, size: 7, font, color: LIGHT_GREY });
+    currentPage.drawText(line, { x: MARGIN, y, size: 7, font, color: LIGHT_GREY });
     y -= 9;
   }
 
-  // ================= 7. SIGNATURE SECTION & QR CODE =================
+  // ================= 8. SIGNATURE SECTION & QR CODE =================
   const footerY = 55;
-  const signBoxWidth = (CONTENT_WIDTH - 70) / 4; // Reserve 70pt on right for QR Code
+  const signBoxWidth = (CONTENT_WIDTH - 70) / 4;
 
   const signBlocks: { label: string; name: string | null }[] = [
     { label: "Prepared By", name: data.preparedByName || null },
@@ -512,21 +630,21 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   signBlocks.forEach((block, idx) => {
     const sx = MARGIN + idx * signBoxWidth;
 
-    // Printed Name above line
     if (block.name) {
-      page.drawText(block.name, { x: sx, y: footerY + 22, size: 8.5, font: bold, color: DARK });
+      const nameLines = wrapCellText(block.name, bold, 8, signBoxWidth - 12);
+      if (nameLines[0]) {
+        currentPage.drawText(nameLines[0], { x: sx, y: footerY + 22, size: 8, font: bold, color: DARK });
+      }
     }
 
-    // Signature Line
-    page.drawLine({
+    currentPage.drawLine({
       start: { x: sx, y: footerY + 14 },
       end: { x: sx + signBoxWidth - 12, y: footerY + 14 },
       thickness: 0.75,
       color: LINE,
     });
 
-    // Signature Label
-    page.drawText(block.label, { x: sx, y: footerY, size: 7.5, font, color: GREY });
+    currentPage.drawText(block.label, { x: sx, y: footerY, size: 7.5, font, color: GREY });
   });
 
   // Embedded QR Code (Bottom Right)
@@ -537,10 +655,10 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
       const qrImage = await pdfDoc.embedPng(qrBytes);
       const qrSize = 54;
       const qrX = PAGE_WIDTH - MARGIN - qrSize;
-      page.drawImage(qrImage, { x: qrX, y: footerY + 2, width: qrSize, height: qrSize });
+      currentPage.drawImage(qrImage, { x: qrX, y: footerY + 2, width: qrSize, height: qrSize });
       const caption = "Scan to verify";
-      page.drawText(caption, {
-        x: qrX + (qrSize - font.widthOfTextAtSize(caption, 6)) / 2,
+      currentPage.drawText(caption, {
+        x: qrX + (qrSize - getTextWidth(caption, font, 6)) / 2,
         y: footerY - 6,
         size: 6,
         font,
