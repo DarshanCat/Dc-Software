@@ -1,4 +1,5 @@
 import { prisma } from "../lib/db";
+import { DEFAULT_ROLE_PERMISSIONS } from "../config/permissions";
 
 export class ForbiddenError extends Error {
   constructor(permission: string) {
@@ -34,7 +35,16 @@ export async function hasPermission(userId: string, permission: string): Promise
     where: { userId },
     select: { role: { select: { key: true } } },
   });
-  if (userRoles.some((ur) => ur.role.key === "ADMIN")) return true;
+  const roleKeys = userRoles.map((ur) => ur.role.key);
+  if (roleKeys.includes("ADMIN")) return true;
+
+  // Check code-level default role permissions for assigned role keys
+  for (const rKey of roleKeys) {
+    const defaults = DEFAULT_ROLE_PERMISSIONS[rKey as keyof typeof DEFAULT_ROLE_PERMISSIONS];
+    if (defaults && defaults.includes(permission)) {
+      return true;
+    }
+  }
 
   const perms = await getUserPermissions(userId);
   return perms.has(permission);
@@ -48,6 +58,15 @@ export async function requirePermission(
   if (user.mustChangePassword) throw new ForbiddenError("MUST_CHANGE_PASSWORD");
 
   if (user.roleKeys?.includes("ADMIN")) return user;
+
+  if (user.roleKeys) {
+    for (const rKey of user.roleKeys) {
+      const defaults = DEFAULT_ROLE_PERMISSIONS[rKey as keyof typeof DEFAULT_ROLE_PERMISSIONS];
+      if (defaults && defaults.includes(permission)) {
+        return user;
+      }
+    }
+  }
 
   const ok = await hasPermission(user.id, permission);
   if (!ok) throw new ForbiddenError(permission);
