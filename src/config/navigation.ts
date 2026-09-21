@@ -223,6 +223,7 @@ export const ACCOUNTS_NAVIGATION: NavSection[] = [
     label: "ACCOUNTS",
     items: [
       { label: "Accounts Dashboard", href: "/accounts/dashboard" },
+      { label: "Quality Completed", href: "/dcs?status=QUALITY_COMPLETED" },
       { label: "Approved for Payment", href: "/dcs?status=APPROVED_FOR_PAYMENT" },
       { label: "Payment Entry", href: "/dcs/close?stage=payment" },
       { label: "Ready to Close", href: "/dcs/close" },
