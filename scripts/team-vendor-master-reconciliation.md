@@ -20,9 +20,16 @@ against the real production `DATABASE_URL`.**
 
 - Excel vendor count: **29**
 - Existing vendor count (local dev DB, NOT production): **38**
-- Matched by exact GSTIN or exact vendor name -> would UPDATE: **10**
-- No match found -> would CREATE: **17** (includes the 2 EXCELLENCE TECHNOLOGIES rows, see below)
+- Matched by exact GSTIN, exact vendor name, or a human-confirmed alias -> would UPDATE: **22**
+- No match found -> would CREATE: **5** (CIMTRIX SYSTEMS PVT LTD, SREE VISHNU ENTERPRICES, SRI J.D. INDUSTRIES, VIJAY SPHEROIDALS PRIVATE LIMITED (TUMKUR), plus the 2 EXCELLENCE TECHNOLOGIES rows counted separately below) — **7 total CREATEs**
 - Ambiguous multiple-DB-match (skipped, no write): **0**
+
+**Update 2026-09-21:** all 12 "possible match" pairs below were reviewed and confirmed by the
+team to be the same vendor as the candidate listed. The sync script now carries an explicit,
+reviewed `CONFIRMED_ALIASES` table (keyed by source row S.No, listing every spelling of that
+vendor's name known to be in use) so each of these 12 rows UPDATEs the existing vendor instead of
+creating a duplicate — confirmed by re-running the dry run above. This is a fixed, human-reviewed
+list, not a fuzzy-matching algorithm, so no other row is affected.
 
 ## Matched rows (would UPDATE, no new vendor, no ID change)
 
@@ -42,38 +49,42 @@ against the real production `DATABASE_URL`.**
 These are exact case-insensitive name matches. No vendor ID, vendorCode, or existing populated
 field is ever overwritten with a blank — only fields the source actually supplies are filled in.
 
-## Rows with NO exact match -> sync would CREATE a new vendor
+## Confirmed alias pairs -> now UPDATE, not CREATE
 
-The sync script only auto-links an *exact* GSTIN or *exact* (case-insensitive) name match. It
-never guesses on close spelling. These 15 rows had no exact match and would each become a new
-`TEAM-<S.No>` vendor record — **several look like likely spelling/typo variants of an existing
-vendor and should be confirmed by a human before running with `--apply`**, so a real duplicate
-isn't created:
+These 12 rows had no *exact* name/GSTIN match, but were confirmed by the team to be the same
+vendor as the candidate below. The script now matches each one against a reviewed, explicit list
+of that vendor's known name spellings (`CONFIRMED_ALIASES` in the script, keyed by source row
+S.No) and UPDATEs the existing record — the Excel spelling becomes the new `vendorName`, and the
+existing `vendorCode`/`id` (and therefore every historical `DeliveryChallan.vendorId`) is
+untouched.
 
-| Row | Excel Supplier Name | Possible existing local-dev match (NOT auto-linked — needs your confirmation) |
+| Row | Excel Supplier Name | Confirmed same vendor as (local dev) |
 |---|---|---|
-| 3 | CIMTRIX SYSTEMS PVT LTD | none found — looks genuinely new |
-| 6 | HARSHA ENTERPRICES | **"M/S HARSHA ENTERPRISES" [VEND-010]** — likely the same vendor, different spelling/prefix |
-| 7 | HARSHITH CNC TECH | **"HARSHITHA CNC TECH" [VEND-005]** — likely the same vendor, missing trailing "A" |
-| 9 | LOUKIK INDUSTRIEAS (S) | **"Loukik Industries" [VEND-008]** — likely the same vendor, typo + "(S)" suffix |
-| 10 | NS TECHNOLOGIES | **"N S Technologies" [VEND-011]** — likely the same vendor, spacing only |
-| 12 | S P PRECISION ENGINERRING COMPONENTS | **"S.P.PRECISION ENGINEERING COMPONENTS" [VEND-022]** — likely the same vendor, typo |
-| 13 | S. P ENGINEERING ENTERPRISES | **"S P Engineering Enterprises" [VEND-021]** — likely the same vendor, punctuation only |
-| 14 | S.S Industries | **"S S INDUSTRIES" [VEND-032]** — likely the same vendor, punctuation/case only |
-| 17 | Shree Nanjundeshwara Industries(GK) | **"Shree Nanjundeshwara Industries" [VEND-018]** — likely the same vendor, "(GK)" suffix |
-| 20 | SREE VISHNU ENTERPRICES | none found — looks genuinely new |
-| 22 | SRI J.D. INDUSTRIES | none found — looks genuinely new |
-| 23 | Sri lakshmi narashima industries(SLN NEW) | **"Sri Lakshmi Narasimha Industries-SLN NEW" [VEND-024]** — likely the same vendor, "narashima"/"Narasimha" transliteration difference |
-| 24 | SRI LAKSHMI NARASIMHA INDUSTRIES(CHINNODU) | **"Sri Lakshmi Narasimha Industries-Chinnodu 2ZO" [VEND-023]** — likely the same vendor |
-| 25 | SRI SAMRUDHI INDUSTRIES | **"SAMRUDHI INDUSTRIES" [VEND-016]** — likely the same vendor, "SRI" prefix only |
-| 27 | SRI VENKATESHWARA INDUSTRIES (MEGHANA) | **"Sri Venkateshwara Industries" [VEND-031]** — likely the same vendor, "(MEGHANA)" suffix |
-| 29 | VIJAY SPHEROIDALS PRIVATE LIMITED (TUMKUR) | none found — your own Tumkur unit, per the source Remarks column; not previously in the local dev vendor list |
+| 6 | HARSHA ENTERPRICES | "M/S HARSHA ENTERPRISES" [VEND-010] |
+| 7 | HARSHITH CNC TECH | "HARSHITHA CNC TECH" [VEND-005] |
+| 9 | LOUKIK INDUSTRIEAS (S) | "Loukik Industries" [VEND-008] |
+| 10 | NS TECHNOLOGIES | "N S Technologies" [VEND-011] |
+| 12 | S P PRECISION ENGINERRING COMPONENTS | "S.P.PRECISION ENGINEERING COMPONENTS" [VEND-022] |
+| 13 | S. P ENGINEERING ENTERPRISES | "S P Engineering Enterprises" [VEND-021] |
+| 14 | S.S Industries | "S S INDUSTRIES" [VEND-032] |
+| 17 | Shree Nanjundeshwara Industries(GK) | "Shree Nanjundeshwara Industries" [VEND-018] |
+| 23 | Sri lakshmi narashima industries(SLN NEW) | "Sri Lakshmi Narasimha Industries-SLN NEW" [VEND-024] |
+| 24 | SRI LAKSHMI NARASIMHA INDUSTRIES(CHINNODU) | "Sri Lakshmi Narasimha Industries-Chinnodu 2ZO" [VEND-023] |
+| 25 | SRI SAMRUDHI INDUSTRIES | "SAMRUDHI INDUSTRIES" [VEND-016] |
+| 27 | SRI VENKATESHWARA INDUSTRIES (MEGHANA) | "Sri Venkateshwara Industries" [VEND-031] |
 
-**None of these 15 links were made automatically.** The script only ever creates or updates based
-on an exact match; the "possible match" column above is for a human to confirm. If any of these
-pairs are confirmed to be the same real vendor, the fix is to either (a) correct the *existing*
-vendor's name/spelling to the Excel spelling and let the script's exact-match update it next run,
-or (b) tell us to add an explicit alias mapping in the script — never silently merged.
+If the real production vendor happens to be spelled differently from every alias listed for that
+row, the match will simply fail and the row will fall through to CREATE — the dry-run output must
+be checked against production before running with `--apply`.
+
+## Rows with genuinely no match -> sync would CREATE a new vendor
+
+| Row | Excel Supplier Name | Notes |
+|---|---|---|
+| 3 | CIMTRIX SYSTEMS PVT LTD | none found — genuinely new |
+| 20 | SREE VISHNU ENTERPRICES | none found — genuinely new |
+| 22 | SRI J.D. INDUSTRIES | none found — genuinely new |
+| 29 | VIJAY SPHEROIDALS PRIVATE LIMITED (TUMKUR) | your own Tumkur unit, per the source Remarks column; not previously in the local dev vendor list |
 
 ## Missing GSTIN (per source Remarks — not invented)
 

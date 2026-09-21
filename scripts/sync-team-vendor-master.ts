@@ -24,6 +24,13 @@
  *      exact vendorName (case-insensitive, trimmed). Exactly one match ->
  *      UPDATE. Zero -> CREATE a new vendor. More than one -> flagged as
  *      ambiguous and skipped (no write), for a human to resolve.
+ *   4. Only for the source rows listed in CONFIRMED_ALIASES below (spelling
+ *      variants a human has explicitly confirmed refer to the same vendor,
+ *      e.g. "HARSHA ENTERPRICES" == "M/S HARSHA ENTERPRISES") - if rule 3
+ *      found no exact match, retry against the small set of known alternate
+ *      spellings listed for that row. This fallback is NEVER applied to any
+ *      other row, so a genuinely new vendor is never silently folded into an
+ *      unrelated existing one.
  *
  * UPDATE never blanks an existing non-null field with a null source value, and
  * never touches vendorCode/id, so DeliveryChallan.vendorId relationships and
@@ -62,6 +69,37 @@ function normName(v: string | null | undefined): string | null {
   const t = v.trim().toUpperCase();
   return t || null;
 }
+
+/** Uppercase, with any run of non-alphanumeric characters collapsed to one space. */
+function looseNormName(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const t = v.toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
+  return t || null;
+}
+
+// Source rows a human has explicitly confirmed are spelling/formatting variants
+// of an already-existing vendor (not a new, distinct business), keyed by S.No.
+// Each list is every spelling of that vendor's name known to be in use - the
+// Excel spelling plus the spelling(s) observed elsewhere - so the match works
+// regardless of which spelling the target database happens to have on file.
+// See scripts/team-vendor-master-reconciliation.md for why each pair was
+// reviewed. This is intentionally an explicit, reviewed list, not a fuzzy
+// algorithm - a typo/spelling difference (e.g. "ENTERPRICES" vs "ENTERPRISES")
+// is not something normalization alone can safely resolve.
+const CONFIRMED_ALIASES: Record<number, string[]> = {
+  6: ["HARSHA ENTERPRICES", "M/S HARSHA ENTERPRISES", "HARSHA ENTERPRISES"],
+  7: ["HARSHITH CNC TECH", "HARSHITHA CNC TECH"],
+  9: ["LOUKIK INDUSTRIEAS (S)", "LOUKIK INDUSTRIES", "LOUKIK INDUSTRIES (S)"],
+  10: ["NS TECHNOLOGIES", "N S TECHNOLOGIES"],
+  12: ["S P PRECISION ENGINERRING COMPONENTS", "S.P.PRECISION ENGINEERING COMPONENTS", "S P PRECISION ENGINEERING COMPONENTS"],
+  13: ["S. P ENGINEERING ENTERPRISES", "S P ENGINEERING ENTERPRISES"],
+  14: ["S.S INDUSTRIES", "S S INDUSTRIES"],
+  17: ["SHREE NANJUNDESHWARA INDUSTRIES(GK)", "SHREE NANJUNDESHWARA INDUSTRIES"],
+  23: ["SRI LAKSHMI NARASHIMA INDUSTRIES(SLN NEW)", "SRI LAKSHMI NARASIMHA INDUSTRIES-SLN NEW", "SRI LAKSHMI NARASIMHA INDUSTRIES SLN NEW"],
+  24: ["SRI LAKSHMI NARASIMHA INDUSTRIES(CHINNODU)", "SRI LAKSHMI NARASIMHA INDUSTRIES-CHINNODU 2ZO", "SRI LAKSHMI NARASIMHA INDUSTRIES CHINNODU"],
+  25: ["SRI SAMRUDHI INDUSTRIES", "SAMRUDHI INDUSTRIES"],
+  27: ["SRI VENKATESHWARA INDUSTRIES (MEGHANA)", "SRI VENKATESHWARA INDUSTRIES", "SRI VENKATESHWARA INDUSTRIES MEGHANA"],
+};
 
 function buildNotes(rec: SourceRecord): string | null {
   const parts: string[] = [];
@@ -135,9 +173,18 @@ async function main() {
 
     // Rule 2: match by GSTIN.
     let dbMatches = gst ? existingVendors.filter((v) => normGst(v.gstNumber) === gst) : [];
+    let matchedVia: "gstin" | "exact-name" | "confirmed-alias" = "gstin";
     if (dbMatches.length === 0) {
       // Rule 3: fall back to exact name match.
       dbMatches = existingVendors.filter((v) => normName(v.vendorName) === name);
+      matchedVia = "exact-name";
+    }
+    const aliasList = CONFIRMED_ALIASES[rec.sNo];
+    if (dbMatches.length === 0 && aliasList) {
+      // Rule 4: confirmed alias fallback, only for reviewed rows.
+      const aliasSet = new Set(aliasList.map((a) => looseNormName(a)));
+      dbMatches = existingVendors.filter((v) => aliasSet.has(looseNormName(v.vendorName)));
+      matchedVia = "confirmed-alias";
     }
 
     if (dbMatches.length > 1) {
@@ -147,7 +194,7 @@ async function main() {
     }
 
     if (dbMatches.length === 1) {
-      await updateVendor(dbMatches[0], rec, apply, summary);
+      await updateVendor(dbMatches[0], rec, apply, summary, matchedVia);
       continue;
     }
 
@@ -188,9 +235,17 @@ async function updateVendor(
   rec: SourceRecord,
   apply: boolean,
   summary: { updated: { sNo: number; name: string; vendorId: string; vendorCode: string }[]; unchanged: { sNo: number; name: string }[] },
+  matchedVia: "gstin" | "exact-name" | "confirmed-alias",
 ) {
+  const matchNote = matchedVia === "confirmed-alias"
+    ? ` [matched via human-confirmed alias: "${rec.supplierName}" == "${existing.vendorName}"]`
+    : "";
   // Never blank an existing populated field with a null/missing source value.
   const data: Prisma.VendorUpdateInput = {};
+  // Confirmed-alias matches use the Excel spelling as authoritative for the name
+  // itself; exact-name/GSTIN matches already have the same name, so this is a
+  // no-op for them.
+  if (rec.supplierName && rec.supplierName !== existing.vendorName) data.vendorName = rec.supplierName;
   if (rec.address && rec.address !== existing.address) data.address = rec.address;
   if (rec.gstin && rec.gstin !== existing.gstNumber) data.gstNumber = rec.gstin;
   if (rec.phone && rec.phone !== existing.phone) data.phone = rec.phone;
@@ -200,12 +255,12 @@ async function updateVendor(
   if (notes && notes !== existing.notes) data.notes = notes;
 
   if (Object.keys(data).length === 0) {
-    console.log(`Row ${rec.sNo}: MATCH "${existing.vendorName}" [${existing.vendorCode}] — already up to date, no fields to change.`);
+    console.log(`Row ${rec.sNo}: MATCH "${existing.vendorName}" [${existing.vendorCode}]${matchNote} — already up to date, no fields to change.`);
     summary.unchanged.push({ sNo: rec.sNo, name: rec.supplierName! });
     return;
   }
 
-  console.log(`Row ${rec.sNo}: UPDATE "${existing.vendorName}" [${existing.vendorCode}] — fields: ${Object.keys(data).join(", ")}`);
+  console.log(`Row ${rec.sNo}: UPDATE "${existing.vendorName}" [${existing.vendorCode}]${matchNote} — fields: ${Object.keys(data).join(", ")}`);
   summary.updated.push({ sNo: rec.sNo, name: rec.supplierName!, vendorId: existing.id, vendorCode: existing.vendorCode });
   if (!apply) return;
   await prisma.vendor.update({ where: { id: existing.id }, data });
