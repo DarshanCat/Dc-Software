@@ -48,6 +48,17 @@ describe("createDcSchema — Weight (KG) at DC creation (Stores creating a Mater
     expect(parsed.success).toBe(true);
   });
 
+  it("accepts a valid whole-number (integer) weight", () => {
+    const parsed = createDcSchema.safeParse({ ...baseMaterialPayload, outwardWeight: 100 });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.outwardWeight).toBe(100);
+  });
+
+  it("rejects NaN as a weight value", () => {
+    const parsed = createDcSchema.safeParse({ ...baseMaterialPayload, outwardWeight: NaN });
+    expect(parsed.success).toBe(false);
+  });
+
   it("rejects a Material DC with no weight supplied at all", () => {
     const parsed = createDcSchema.safeParse({ ...baseMaterialPayload });
     expect(parsed.success).toBe(false);
