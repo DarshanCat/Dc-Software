@@ -136,6 +136,10 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
     if (!pricingBasis) return setError("Please select a pricing basis: RW Quantity or Returning FG Quantity.");
     const rateVal = parseFloat(ratePerQuantity);
     if (isNaN(rateVal) || rateVal <= 0) return setError("Rate Per Quantity must be greater than zero.");
+    const weightVal = parseFloat(outwardWeight);
+    if (!outwardWeight || !Number.isFinite(weightVal) || weightVal <= 0) {
+      return setError("Weight (KG) is required and must be a positive number for Material DCs.");
+    }
 
     if (pricingBasis === "RW") {
       const rwVal = parseFloat(outwardQtyRw);
@@ -393,11 +397,11 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Outward Weight (KG) *</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Weight (KG) *</label>
               <input
                 type="number"
                 step="0.001"
-                min="0"
+                min="0.001"
                 data-tally-id="outwardWeight"
                 value={outwardWeight}
                 onChange={(e) => setOutwardWeight(e.target.value)}

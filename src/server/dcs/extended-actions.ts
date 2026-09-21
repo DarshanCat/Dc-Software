@@ -20,6 +20,7 @@ import {
   storeReceiptConfirmSchema,
   qualityInspectionSchema,
   firstIssueMessage,
+  validateMaterialWeightKg,
 } from "@/lib/validation/dc";
 
 async function checkPermission(user: any, permission: string): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -95,6 +96,8 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
     if (rate <= 0) {
       return { ok: false, error: "Rate Per Quantity must be greater than zero." };
     }
+    const weightError = validateMaterialWeightKg(movementType, input.outwardWeight);
+    if (weightError) return { ok: false, error: weightError };
   }
 
   const rate = input.ratePerQuantity ?? 0;
@@ -242,6 +245,8 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
   if (rate <= 0) {
     return { ok: false, error: "Rate Per Quantity must be greater than zero." };
   }
+  const weightError = validateMaterialWeightKg(input.movementType || "MATERIAL", input.outwardWeight);
+  if (weightError) return { ok: false, error: weightError };
 
   let pricingQty = 0;
   if (input.pricingBasis === "RW") {

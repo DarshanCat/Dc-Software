@@ -142,7 +142,6 @@ export const SECURITY_NAVIGATION: NavSection[] = [
     label: "SECURITY OPERATIONS",
     items: [
       { label: "Security Dashboard", href: "/security/dashboard" },
-      { label: "Outgoing DC", href: "/dcs/outward" },
       { label: "Inward DC", href: "/dcs/inward" },
       { label: "Waiting for Dispatch", href: "/security/dispatch" },
       { label: "Dispatched / At Vendor", href: "/security/dispatched" },

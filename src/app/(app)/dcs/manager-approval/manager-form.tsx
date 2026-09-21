@@ -241,7 +241,7 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
               <span className="font-mono font-bold text-blue-900 text-sm">{selectedDc.returningFgQuantity} NOS</span>
             </div>
             <div>
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Outward Gross Weight</span>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Weight (KG)</span>
               <span className="font-mono text-slate-800">{selectedDc.outwardWeight} KG</span>
             </div>
             <div>

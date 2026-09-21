@@ -4,7 +4,7 @@ import { z } from "zod";
 // The core goal is fail-closed: NaN, ±Infinity, or unparseable dates must
 // NEVER reach `new Prisma.Decimal(...)` / `new Date(...)` inside actions.
 
-const MAX_QUANTITY = 1_000_000_000;
+export const MAX_QUANTITY = 1_000_000_000;
 const MAX_TEXT = 500;
 
 export const positiveQuantity = (message: string) =>
@@ -160,6 +160,100 @@ export const outwardDcSchema = z.object({
   remarks: optionalText("Remarks are invalid."),
   purpose: optionalText("Purpose is invalid.", 40),
   submitForApproval: z.boolean().nullable().optional(),
+});
+
+/**
+ * Weight (KG) is mandatory for MATERIAL Delivery Challans, entered by STORES at DC
+ * creation time. It is NOT mandatory for TOOL/COMPANY_PROPERTY DCs, and it is a
+ * distinct concept from the later Store/Security inward/gating/boring weights
+ * (`storeGatingWeight`, `inwardGatingWeight`, etc.) - this only validates the
+ * DC-level `outwardWeight` snapshot captured at creation.
+ * Shared by both DC creation flows (createDc, createOutwardDc/updateOutwardDc) so
+ * the rule cannot drift between them.
+ */
+export function validateMaterialWeightKg(
+  movementType: string | null | undefined,
+  outwardWeight: number | null | undefined,
+): string | null {
+  if (movementType !== "MATERIAL") return null;
+  const message = "Weight (KG) is required and must be a positive number for Material DCs.";
+  if (outwardWeight === undefined || outwardWeight === null) return message;
+  if (!Number.isFinite(outwardWeight) || outwardWeight <= 0) return message;
+  return null;
+}
+
+export const createDcSchema = z.object({
+  movementType: z.enum(["MATERIAL", "TOOL", "COMPANY_PROPERTY"]).default("MATERIAL"),
+  isCommercialService: z.boolean().default(false),
+  destinationDepartment: z.string().optional(),
+  responsibleCustodian: z.string().optional(),
+  woNumber: z.string().max(60).optional(),
+  partNumber: z.string().trim().max(60).optional(),
+  rmQuantity: z.coerce.number().optional(),
+  returnFgQuantity: z.coerce.number().optional(),
+  outwardWeight: z.coerce
+    .number({ invalid_type_error: "Weight (KG) must be a valid number." })
+    .finite("Weight (KG) must be a valid, finite number.")
+    .max(MAX_QUANTITY, "Weight (KG) is unreasonably large.")
+    .optional(),
+  heatNumber: z.string().trim().max(60).optional(),
+  vendorId: z.string().optional(),
+  processId: z.string().optional(),
+  purpose: z.enum([
+    "JOB_WORK", "MACHINING", "HEAT_TREATMENT", "SURFACE_TREATMENT",
+    "REPAIR", "SAMPLE", "TRIAL", "SUBCONTRACTING", "OTHER",
+  ]),
+  pricingBasis: z.enum(["RM", "FG"]).optional(),
+  ratePerQuantity: z.coerce.number().optional(),
+  preparedByName: z.string().trim().min(1, "Prepared By Name is required.").max(100, "Prepared By Name cannot exceed 100 characters."),
+  expectedReturnDate: z.string().optional(),
+  ewayBillNumber: z.string().max(60).optional(),
+  eSugamNumber: z.string().max(60).optional(),
+  remarks: z.string().max(500).optional(),
+  items: z.array(z.object({
+    itemCode: z.string().optional(),
+    itemDescription: z.string().min(1, "Item description is required"),
+    quantity: z.coerce.number().positive("Quantity must be > 0"),
+    uom: z.string().default("NOS"),
+    conditionIn: z.string().optional(),
+    toolInstanceId: z.string().optional(),
+    assetMasterId: z.string().optional(),
+  })).optional(),
+}).superRefine((val, ctx) => {
+  if (val.movementType === "MATERIAL") {
+    if (!val.vendorId || !val.vendorId.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Supplier / Vendor is required for Material DCs.", path: ["vendorId"] });
+    }
+    if (!val.woNumber || !val.woNumber.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WO ID is required for Material DCs.", path: ["woNumber"] });
+    }
+    if (!val.partNumber || !val.partNumber.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Part Number is required for Material DCs.", path: ["partNumber"] });
+    }
+    if (!val.rmQuantity || val.rmQuantity <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "RM Qty must be > 0 for Material DCs.", path: ["rmQuantity"] });
+    }
+    if (!val.returnFgQuantity || val.returnFgQuantity <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Expected Return FG Qty must be > 0 for Material DCs.", path: ["returnFgQuantity"] });
+    }
+    if (!val.heatNumber || !val.heatNumber.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Heat Number is required for Material DCs.", path: ["heatNumber"] });
+    }
+    const weightError = validateMaterialWeightKg(val.movementType, val.outwardWeight);
+    if (weightError) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: weightError, path: ["outwardWeight"] });
+    }
+    if (!val.pricingBasis) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a pricing basis: RM Quantity or FG Quantity.", path: ["pricingBasis"] });
+    }
+    if (!val.ratePerQuantity || val.ratePerQuantity <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rate Per Quantity must be greater than zero.", path: ["ratePerQuantity"] });
+    }
+  } else if (val.isCommercialService) {
+    if (!val.vendorId || !val.vendorId.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Supplier / Vendor is required for Commercial Service DCs.", path: ["vendorId"] });
+    }
+  }
 });
 
 export function firstIssueMessage(schema: z.ZodTypeAny, data: unknown): string | null {

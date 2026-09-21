@@ -63,6 +63,7 @@ describe("Three Issues Fix — PDF Heat Number, Vendor Fallback & Safe Test DC D
     partNumber: "PART-001",
     rmQuantity: "10.000",
     returnFgQuantity: "10.000",
+    weightKg: "10.500 KG",
     heatNumber: "H-101",
     vehicleNumber: "KA-01-1234",
     transporter: "Self",

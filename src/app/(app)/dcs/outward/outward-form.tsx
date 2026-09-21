@@ -63,6 +63,10 @@ export function OutwardDcForm({ vendors, processes }: Props) {
 
     if (!selectedVendorId) return setError("Supplier (Vendor) is mandatory.");
     if (!woNumber.trim()) return setError("WO ID is mandatory.");
+    const weightVal = parseFloat(outwardWeight);
+    if (!outwardWeight || !Number.isFinite(weightVal) || weightVal <= 0) {
+      return setError("Weight (KG) is required and must be a positive number for Material DCs.");
+    }
 
     setLoading(true);
 
@@ -260,16 +264,17 @@ export function OutwardDcForm({ vendors, processes }: Props) {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Outward Weight (KG)</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Weight (KG) *</label>
             <input
               type="number"
               step="0.001"
-              min="0"
+              min="0.001"
               data-tally-id="outwardWeight"
               value={outwardWeight}
               onChange={(e) => setOutwardWeight(e.target.value)}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="0.000"
+              required
             />
           </div>
 

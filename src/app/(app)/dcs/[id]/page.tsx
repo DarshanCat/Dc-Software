@@ -456,7 +456,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
             </h2>
             <div className="grid grid-cols-3 gap-3 text-xs">
               <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Outward Weight</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Weight (KG)</span>
                 <span className="font-mono font-bold text-slate-900">{dc.outwardWeight != null ? `${Number(dc.outwardWeight)} KG` : "—"}</span>
               </div>
               <div>

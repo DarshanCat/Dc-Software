@@ -20,6 +20,7 @@ import {
   accountsPaymentEntrySchema,
   transportDetailsSchema,
   firstIssueMessage,
+  createDcSchema,
 } from "@/lib/validation/dc";
 
 // Helper to safely verify permissions without throwing unhandled exceptions into Next.js action boundary
@@ -37,73 +38,6 @@ async function checkPermission(
     return { ok: false, error: e instanceof Error ? e.message : "Permission denied." };
   }
 }
-
-// ================= SCHEMAS =================
-
-const createDcSchema = z.object({
-  movementType: z.enum(["MATERIAL", "TOOL", "COMPANY_PROPERTY"]).default("MATERIAL"),
-  isCommercialService: z.boolean().default(false),
-  destinationDepartment: z.string().optional(),
-  responsibleCustodian: z.string().optional(),
-  woNumber: z.string().max(60).optional(),
-  partNumber: z.string().trim().max(60).optional(),
-  rmQuantity: z.coerce.number().optional(),
-  returnFgQuantity: z.coerce.number().optional(),
-  heatNumber: z.string().trim().max(60).optional(),
-  vendorId: z.string().optional(),
-  processId: z.string().optional(),
-  purpose: z.enum([
-    "JOB_WORK", "MACHINING", "HEAT_TREATMENT", "SURFACE_TREATMENT",
-    "REPAIR", "SAMPLE", "TRIAL", "SUBCONTRACTING", "OTHER",
-  ]),
-  pricingBasis: z.enum(["RM", "FG"]).optional(),
-  ratePerQuantity: z.coerce.number().optional(),
-  preparedByName: z.string().trim().min(1, "Prepared By Name is required.").max(100, "Prepared By Name cannot exceed 100 characters."),
-  expectedReturnDate: z.string().optional(),
-  ewayBillNumber: z.string().max(60).optional(),
-  eSugamNumber: z.string().max(60).optional(),
-  remarks: z.string().max(500).optional(),
-  items: z.array(z.object({
-    itemCode: z.string().optional(),
-    itemDescription: z.string().min(1, "Item description is required"),
-    quantity: z.coerce.number().positive("Quantity must be > 0"),
-    uom: z.string().default("NOS"),
-    conditionIn: z.string().optional(),
-    toolInstanceId: z.string().optional(),
-    assetMasterId: z.string().optional(),
-  })).optional(),
-}).superRefine((val, ctx) => {
-  if (val.movementType === "MATERIAL") {
-    if (!val.vendorId || !val.vendorId.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Supplier / Vendor is required for Material DCs.", path: ["vendorId"] });
-    }
-    if (!val.woNumber || !val.woNumber.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WO ID is required for Material DCs.", path: ["woNumber"] });
-    }
-    if (!val.partNumber || !val.partNumber.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Part Number is required for Material DCs.", path: ["partNumber"] });
-    }
-    if (!val.rmQuantity || val.rmQuantity <= 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "RM Qty must be > 0 for Material DCs.", path: ["rmQuantity"] });
-    }
-    if (!val.returnFgQuantity || val.returnFgQuantity <= 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Expected Return FG Qty must be > 0 for Material DCs.", path: ["returnFgQuantity"] });
-    }
-    if (!val.heatNumber || !val.heatNumber.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Heat Number is required for Material DCs.", path: ["heatNumber"] });
-    }
-    if (!val.pricingBasis) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a pricing basis: RM Quantity or FG Quantity.", path: ["pricingBasis"] });
-    }
-    if (!val.ratePerQuantity || val.ratePerQuantity <= 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rate Per Quantity must be greater than zero.", path: ["ratePerQuantity"] });
-    }
-  } else if (val.isCommercialService) {
-    if (!val.vendorId || !val.vendorId.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Supplier / Vendor is required for Commercial Service DCs.", path: ["vendorId"] });
-    }
-  }
-});
 
 export type CreateDcInput = z.infer<typeof createDcSchema>;
 
@@ -166,6 +100,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         partNumber: data.partNumber ? data.partNumber.trim() : null,
         rmQuantity: data.rmQuantity ? new Prisma.Decimal(data.rmQuantity) : null,
         returnFgQuantity: data.returnFgQuantity ? new Prisma.Decimal(data.returnFgQuantity) : null,
+        outwardWeight: data.outwardWeight ? new Prisma.Decimal(data.outwardWeight) : null,
         heatNumber: data.heatNumber ? data.heatNumber.trim() : null,
         pricingBasis: data.pricingBasis || null,
         ratePerQuantity: data.ratePerQuantity ? new Prisma.Decimal(data.ratePerQuantity) : null,

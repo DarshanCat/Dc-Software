@@ -1,11 +1,21 @@
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/server/session";
+import { hasPermission } from "@/server/authorize";
+import { PERMISSIONS } from "@/config/permissions";
 import { CreateDcForm } from "./create-dc-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewDcPage() {
-  await requireUser();
+  const user = await requireUser();
+  const canCreate = await hasPermission(user.id, PERMISSIONS.DC_CREATE);
+  if (!canCreate) {
+    return (
+      <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        You do not have permission to create Delivery Challans.
+      </div>
+    );
+  }
 
   const [vendors, items, departments, assets, tools] = await Promise.all([
     prisma.vendor.findMany({
