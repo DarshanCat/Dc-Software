@@ -100,7 +100,7 @@ describe("Three Issues Fix — PDF Heat Number, Vendor Fallback & Safe Test DC D
   });
 
   describe("Issue 2: Supplier Master Synchronization & Vendor Priority", () => {
-    it("prefers current vendor relation name over supplierNameSnapshot when vendor exists", async () => {
+    it("prefers current vendor relation name/GST over snapshot, but keeps the address snapshot immutable (DC Snapshot Rule)", async () => {
       const mockDc = {
         id: "dc-vendor-sync-01",
         dcNumber: "DC-2026-00099",
@@ -144,7 +144,10 @@ describe("Three Issues Fix — PDF Heat Number, Vendor Fallback & Safe Test DC D
       expect(pdfData).not.toBeNull();
       if (pdfData) {
         expect(pdfData.vendorName).toBe("NEW UPDATED VENDOR NAME");
-        expect(pdfData.vendorAddress).toBe("New Address");
+        // Address must stay pinned to the historical snapshot even though the vendor
+        // relation now has a different address - editing Vendor Master must never
+        // rewrite a DC that was already created (DC Snapshot Rule).
+        expect(pdfData.vendorAddress).toBe("Old Address");
         expect(pdfData.vendorGst).toBe("29NEWGST");
       }
     });

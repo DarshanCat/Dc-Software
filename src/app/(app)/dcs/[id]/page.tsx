@@ -369,7 +369,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
             </div>
             <div className="col-span-2">
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Supplier Address</span>
-              <span className="text-slate-800">{dc.vendor?.address || dc.supplierAddressSnapshot || "N/A"}</span>
+              <span className="text-slate-800">{dc.supplierAddressSnapshot || dc.vendor?.address || "N/A"}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Department</span>

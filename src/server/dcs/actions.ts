@@ -11,6 +11,7 @@ import { generateQrToken } from "@/services/dispatch.service";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { notifyUsersWithPermission, createNotification } from "@/server/notifications/service";
+import { formatVendorFullAddress } from "@/lib/vendor-address";
 import {
   securityDispatchSchema,
   securityReturnSchema,
@@ -171,7 +172,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         expectedAmount: expectedAmount > 0 ? new Prisma.Decimal(expectedAmount) : null,
         vendorId: data.vendorId || null,
         supplierNameSnapshot: vendor ? vendor.vendorName : null,
-        supplierAddressSnapshot: vendor ? (vendor.address || `${vendor.city || ""}, ${vendor.state || ""}`) : null,
+        supplierAddressSnapshot: vendor ? (formatVendorFullAddress(vendor) || null) : null,
         supplierGstSnapshot: vendor ? (vendor.gstNumber || null) : null,
         purpose: data.purpose,
         processId: data.processId || null,

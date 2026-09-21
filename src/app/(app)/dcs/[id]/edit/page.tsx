@@ -47,9 +47,13 @@ export default async function EditDcPage({
       vendorCode: true,
       vendorName: true,
       address: true,
+      addressLine2: true,
+      area: true,
       gstNumber: true,
       city: true,
       state: true,
+      pincode: true,
+      country: true,
     },
     orderBy: { vendorName: "asc" },
   });

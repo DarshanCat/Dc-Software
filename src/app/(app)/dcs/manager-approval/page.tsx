@@ -27,7 +27,7 @@ export default async function ManagerApprovalPage() {
     dcNumber: dc.dcNumber,
     dcDate: dc.dcDate.toLocaleDateString(),
     vendorName: dc.vendor?.vendorName || dc.supplierNameSnapshot || "INTERNAL",
-    vendorAddress: dc.vendor?.address || dc.supplierAddressSnapshot || "N/A",
+    vendorAddress: dc.supplierAddressSnapshot || dc.vendor?.address || "N/A",
     vendorGst: dc.vendor?.gstNumber || dc.supplierGstSnapshot || "N/A",
     woNumber: dc.woNumber,
     partNumber: dc.partNumberSnapshot || dc.partNumber || "N/A",

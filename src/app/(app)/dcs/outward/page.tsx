@@ -9,7 +9,19 @@ export default async function OutwardDcPage() {
 
   const vendors = await prisma.vendor.findMany({
     where: { active: true },
-    select: { id: true, vendorCode: true, vendorName: true, address: true, gstNumber: true, city: true, state: true },
+    select: {
+      id: true,
+      vendorCode: true,
+      vendorName: true,
+      address: true,
+      addressLine2: true,
+      area: true,
+      gstNumber: true,
+      city: true,
+      state: true,
+      pincode: true,
+      country: true,
+    },
     orderBy: { vendorName: "asc" },
   });
 

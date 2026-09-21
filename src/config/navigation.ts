@@ -190,6 +190,7 @@ export const MANAGEMENT_NAVIGATION: NavSection[] = [
       { label: "Overview", href: "/management/dashboard" },
       { label: "Manager Approval", href: "/dcs/manager-approval" },
       { label: "Pending DC Approval", href: "/dcs?status=PENDING_APPROVAL" },
+      { label: "Approved DCs", href: "/dcs?status=APPROVED" },
       { label: "DCs Requiring Correction", href: "/dcs?status=DRAFT" },
       { label: "Store Verified / Final Approval", href: "/dcs?status=QUALITY_COMPLETED" },
       { label: "Discrepancies", href: "/dcs/close?stage=manager" },

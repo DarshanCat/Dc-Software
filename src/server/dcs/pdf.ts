@@ -106,7 +106,10 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
     woNumber: dc.woNumber,
     status: dc.status.replace(/_/g, " "),
     vendorName: dc.vendor?.vendorName || dc.supplierNameSnapshot || "INTERNAL",
-    vendorAddress: dc.vendor?.address || dc.supplierAddressSnapshot || "",
+    // Snapshot takes precedence: historical DCs must retain their original vendor address
+    // even if Vendor Master is edited later. Live vendor address is only a fallback for
+    // legacy DCs created before the snapshot was captured.
+    vendorAddress: dc.supplierAddressSnapshot || dc.vendor?.address || "",
     vendorGst: dc.vendor?.gstNumber || dc.supplierGstSnapshot || "",
     vendorPan: dc.vendor?.panNumber || "",
     purpose: dc.purpose.replace(/_/g, " "),

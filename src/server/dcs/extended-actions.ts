@@ -12,6 +12,7 @@ import { Prisma, DcPurpose, DcStatus } from "@prisma/client";
 import { z } from "zod";
 import { stageResultBalance } from "@/analytics/math-engine";
 import { notifyUsersWithPermission } from "@/server/notifications/service";
+import { formatVendorFullAddress } from "@/lib/vendor-address";
 import { closeDc } from "./actions";
 import {
   outwardDcSchema,
@@ -152,7 +153,7 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
 
         // Master Snapshot (Authoritative)
         supplierNameSnapshot: vendor.vendorName,
-        supplierAddressSnapshot: vendor.address || `${vendor.city || ""}, ${vendor.state || ""}`,
+        supplierAddressSnapshot: formatVendorFullAddress(vendor) || null,
         supplierGstSnapshot: vendor.gstNumber || null,
         partNumberSnapshot: partNum || null,
         partDescriptionSnapshot: partDescriptionSnapshot,
@@ -294,7 +295,7 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
 
         // Master Snapshots
         supplierNameSnapshot: vendor.vendorName,
-        supplierAddressSnapshot: vendor.address || `${vendor.city || ""}, ${vendor.state || ""}`,
+        supplierAddressSnapshot: formatVendorFullAddress(vendor) || null,
         supplierGstSnapshot: vendor.gstNumber || null,
         partNumberSnapshot: partNum || null,
         partDescriptionSnapshot: partDescriptionSnapshot,

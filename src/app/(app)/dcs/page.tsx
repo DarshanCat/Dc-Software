@@ -5,6 +5,7 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { filterDcDataForRole } from "@/server/dcs/sanitizer";
 import { getVendorScope } from "@/server/dcs/vendor-scope";
+import { ROLE_ALLOWED_STATUSES } from "@/config/dc-visibility";
 import { Button } from "@/components/ui/button";
 import { DcListRowActions } from "./dc-list-actions";
 
@@ -24,15 +25,6 @@ const STATUS_COLORS: Record<string, string> = {
   APPROVED_FOR_PAYMENT: "bg-emerald-100 text-emerald-900 border-emerald-400",
   CLOSED: "bg-slate-200 text-slate-800 border-slate-400",
   CANCELLED: "bg-red-100 text-red-700 border-red-300",
-};
-
-const ROLE_ALLOWED_STATUSES: Record<string, string[]> = {
-  SECURITY: ["DRAFT", "APPROVED", "DISPATCHED", "AT_VENDOR", "SECURITY_RETURNED"],
-  STORES: ["DRAFT", "PENDING_APPROVAL", "SECURITY_RETURNED", "STORE_VERIFIED", "CUSTODIAN_VERIFIED"],
-  MANAGEMENT: ["PENDING_APPROVAL", "STORE_VERIFIED", "QUALITY_COMPLETED", "FINAL_APPROVED", "APPROVED_FOR_PAYMENT", "CUSTODIAN_VERIFIED", "CLOSED"],
-  ACCOUNTS: ["APPROVED_FOR_PAYMENT", "CUSTODIAN_VERIFIED", "CLOSED"],
-  PRODUCTION: ["DRAFT", "PENDING_APPROVAL", "APPROVED"],
-  QUALITY: ["STORE_VERIFIED", "QUALITY_COMPLETED"],
 };
 
 export default async function DcsPage({

@@ -6,15 +6,20 @@ import { createOutwardDc, CreateOutwardDcInput } from "@/server/dcs/extended-act
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useTallyNavigation } from "@/hooks/use-tally-navigation";
+import { formatVendorFullAddress } from "@/lib/vendor-address";
 
 interface VendorOption {
   id: string;
   vendorCode: string;
   vendorName: string;
   address: string | null;
+  addressLine2: string | null;
+  area: string | null;
   gstNumber: string | null;
   city: string | null;
   state: string | null;
+  pincode: string | null;
+  country: string | null;
 }
 
 interface Props {
@@ -140,7 +145,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
               type="text"
               readOnly
               data-tally-skip="true"
-              value={selectedVendor ? selectedVendor.address || `${selectedVendor.city || ""}, ${selectedVendor.state || ""}` : ""}
+              value={selectedVendor ? formatVendorFullAddress(selectedVendor) : ""}
               className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 focus:outline-none"
               placeholder="Auto-populated snapshot"
             />
