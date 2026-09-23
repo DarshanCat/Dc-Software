@@ -87,6 +87,9 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
   if (movementType === "MATERIAL") {
     if (!input.woNumber) return { ok: false, error: "Work Order (WO ID) is mandatory for Material DCs." };
     if (!input.department) return { ok: false, error: "Department is mandatory." };
+    if (!input.outwardWeight || isNaN(input.outwardWeight) || !isFinite(input.outwardWeight) || input.outwardWeight <= 0) {
+      return { ok: false, error: "Material Weight (KG) is mandatory and must be greater than 0 for Material DCs." };
+    }
     if (!input.pricingBasis) {
       return { ok: false, error: "Please select a pricing basis: RW Quantity or Returning FG Quantity." };
     }
@@ -232,6 +235,12 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
 
   if (existingDc.status !== "DRAFT" && existingDc.status !== "SENT_BACK") {
     return { ok: false, error: `Delivery Challan cannot be edited in current status (${existingDc.status}).` };
+  }
+
+  if (existingDc.movementType === "MATERIAL") {
+    if (!input.outwardWeight || isNaN(input.outwardWeight) || !isFinite(input.outwardWeight) || input.outwardWeight <= 0) {
+      return { ok: false, error: "Material Weight (KG) is mandatory and must be greater than 0 for Material DCs." };
+    }
   }
 
   if (!input.pricingBasis) {

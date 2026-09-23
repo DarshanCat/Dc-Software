@@ -16,6 +16,7 @@ interface DcRowLike {
   partNumber: string | null;
   rmQuantity: unknown;
   returnFgQuantity: unknown;
+  outwardWeight?: unknown;
   heatNumber: string | null;
   remarks: string | null;
   vehicleNumber: string | null;
@@ -60,6 +61,7 @@ export interface DcPdfData {
   partNumber: string;
   rmQuantity: string;
   returnFgQuantity: string;
+  outwardWeight?: string | null;
   heatNumber: string;
   pricingBasis: string | null;
   ratePerQuantity: string | null;
@@ -114,6 +116,7 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
     partNumber: dc.partNumber || "—",
     rmQuantity: dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—",
     returnFgQuantity: dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—",
+    outwardWeight: dc.outwardWeight != null ? Number(dc.outwardWeight).toFixed(3) : null,
     heatNumber: dc.heatNumber || "—",
     pricingBasis: dc.pricingBasis ? (dc.pricingBasis === "RM" ? "Price Based On: RM Quantity" : "Price Based On: FG Quantity") : "—",
     ratePerQuantity: dc.ratePerQuantity != null ? Number(dc.ratePerQuantity).toFixed(2) : "—",

@@ -104,6 +104,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
   const [heatNumber, setHeatNumber] = useState("");
   const [outwardQtyRw, setOutwardQtyRw] = useState("");
   const [returningFgQuantity, setReturningFgQuantity] = useState("");
+  const [outwardWeight, setOutwardWeight] = useState("");
 
   // Pricing fields
   const [pricingBasis, setPricingBasis] = useState<"RM" | "FG">("RM");
@@ -238,8 +239,9 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       if (!woNumber.trim()) return setError("WO ID (Work Order) is mandatory for Material DCs.");
       if (!partNum) return setError("Part Number is mandatory for Material DCs.");
       if (!heatNumber.trim()) return setError("Heat Number is mandatory for Material DCs.");
-      if (!outwardQtyRw || Number(outwardQtyRw) <= 0) return setError("Outward Qty RM must be > 0 for Material DCs.");
-      if (!returningFgQuantity || Number(returningFgQuantity) <= 0) return setError("Returning FG Qty must be > 0 for Material DCs.");
+      if (!outwardQtyRw || Number(outwardQtyRw) <= 0 || isNaN(Number(outwardQtyRw))) return setError("Outward Qty RM must be > 0 for Material DCs.");
+      if (!returningFgQuantity || Number(returningFgQuantity) <= 0 || isNaN(Number(returningFgQuantity))) return setError("Returning FG Qty must be > 0 for Material DCs.");
+      if (!outwardWeight || Number(outwardWeight) <= 0 || isNaN(Number(outwardWeight)) || !isFinite(Number(outwardWeight))) return setError("Weight (KG) is mandatory and must be greater than 0 for Material DCs.");
       if (!pricingBasis) return setError("Please select a pricing basis for Material DCs.");
       const rateVal = parseFloat(ratePerQuantity);
       if (isNaN(rateVal) || rateVal <= 0) return setError("Rate Per Quantity must be greater than zero for Material DCs.");
@@ -279,6 +281,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       partNumber: movementType === "MATERIAL" ? partNum : undefined,
       rmQuantity: movementType === "MATERIAL" && outwardQtyRw ? parseFloat(outwardQtyRw) : undefined,
       returnFgQuantity: movementType === "MATERIAL" && returningFgQuantity ? parseFloat(returningFgQuantity) : undefined,
+      outwardWeight: movementType === "MATERIAL" && outwardWeight ? parseFloat(outwardWeight) : undefined,
       heatNumber: movementType === "MATERIAL" ? heatNumber.trim() : undefined,
       pricingBasis: movementType === "MATERIAL" ? pricingBasis : undefined,
       ratePerQuantity: (movementType === "MATERIAL" || isCommercialService) && ratePerQuantity ? parseFloat(ratePerQuantity) : undefined,
@@ -647,7 +650,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Outward Qty RM (NOS) *</label>
                 <input
@@ -672,6 +675,21 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   onChange={(e) => setReturningFgQuantity(e.target.value)}
                   placeholder="Finished goods expected back"
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Weight (KG) *</label>
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  data-tally-id="outwardWeight"
+                  value={outwardWeight}
+                  onChange={(e) => setOutwardWeight(e.target.value)}
+                  placeholder="e.g. 150.500"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   required
                 />
               </div>

@@ -480,6 +480,7 @@ model DeliveryChallanItem {
   itemCode             String?
   itemDescription      String
   quantity             Decimal         @db.Decimal(12, 3)
+  weight               Decimal?        @db.Decimal(12, 3)
   uom                  String          @default("NOS")
   returnedQuantity     Decimal?        @db.Decimal(12, 3)
   goodQty              Decimal?        @db.Decimal(12, 3)

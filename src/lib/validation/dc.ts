@@ -140,7 +140,10 @@ export const outwardDcSchema = z.object({
     (n) => n === undefined || n === null || n > 0,
     { message: "Rate Per Quantity must be greater than zero." },
   ),
-  outwardWeight: optionalFiniteNumber("Outward Weight must be a valid number."),
+  outwardWeight: optionalFiniteNumber("Outward Weight must be a valid number.").refine(
+    (n) => n === undefined || n === null || n > 0,
+    { message: "Outward Weight must be a valid number greater than zero." },
+  ),
   outwardGatingWeight: optionalFiniteNumber("Outward Gating Weight must be a valid number."),
   outwardQtyRw: optionalFiniteNumber("Outward Qty (RW) must be a valid number.").refine(
     (n) => n === undefined || n === null || n > 0,

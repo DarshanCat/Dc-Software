@@ -48,6 +48,7 @@ const createDcSchema = z.object({
   partNumber: z.string().trim().max(60).optional(),
   rmQuantity: z.coerce.number().optional(),
   returnFgQuantity: z.coerce.number().optional(),
+  outwardWeight: z.coerce.number({ invalid_type_error: "Material Weight (KG) must be a valid number." }).optional(),
   heatNumber: z.string().trim().max(60).optional(),
   vendorId: z.string().optional(),
   processId: z.string().optional(),
@@ -66,6 +67,10 @@ const createDcSchema = z.object({
     itemCode: z.string().optional(),
     itemDescription: z.string().min(1, "Item description is required"),
     quantity: z.coerce.number().positive("Quantity must be > 0"),
+    weight: z.coerce.number({ invalid_type_error: "Weight (KG) must be a valid number." })
+      .finite("Weight (KG) must be a valid finite number.")
+      .gt(0, "Weight (KG) must be greater than 0.")
+      .optional(),
     uom: z.string().default("NOS"),
     conditionIn: z.string().optional(),
     toolInstanceId: z.string().optional(),
@@ -82,11 +87,14 @@ const createDcSchema = z.object({
     if (!val.partNumber || !val.partNumber.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Part Number is required for Material DCs.", path: ["partNumber"] });
     }
-    if (!val.rmQuantity || val.rmQuantity <= 0) {
+    if (!val.rmQuantity || isNaN(val.rmQuantity) || !isFinite(val.rmQuantity) || val.rmQuantity <= 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "RM Qty must be > 0 for Material DCs.", path: ["rmQuantity"] });
     }
-    if (!val.returnFgQuantity || val.returnFgQuantity <= 0) {
+    if (!val.returnFgQuantity || isNaN(val.returnFgQuantity) || !isFinite(val.returnFgQuantity) || val.returnFgQuantity <= 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Expected Return FG Qty must be > 0 for Material DCs.", path: ["returnFgQuantity"] });
+    }
+    if (!val.outwardWeight || isNaN(val.outwardWeight) || !isFinite(val.outwardWeight) || val.outwardWeight <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Material Weight (KG) is required and must be greater than 0 for Material DCs.", path: ["outwardWeight"] });
     }
     if (!val.heatNumber || !val.heatNumber.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Heat Number is required for Material DCs.", path: ["heatNumber"] });
@@ -94,7 +102,7 @@ const createDcSchema = z.object({
     if (!val.pricingBasis) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a pricing basis: RM Quantity or FG Quantity.", path: ["pricingBasis"] });
     }
-    if (!val.ratePerQuantity || val.ratePerQuantity <= 0) {
+    if (!val.ratePerQuantity || isNaN(val.ratePerQuantity) || !isFinite(val.ratePerQuantity) || val.ratePerQuantity <= 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rate Per Quantity must be greater than zero.", path: ["ratePerQuantity"] });
     }
   } else if (val.isCommercialService) {
@@ -165,6 +173,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         partNumber: data.partNumber ? data.partNumber.trim() : null,
         rmQuantity: data.rmQuantity ? new Prisma.Decimal(data.rmQuantity) : null,
         returnFgQuantity: data.returnFgQuantity ? new Prisma.Decimal(data.returnFgQuantity) : null,
+        outwardWeight: data.outwardWeight ? new Prisma.Decimal(data.outwardWeight) : null,
         heatNumber: data.heatNumber ? data.heatNumber.trim() : null,
         pricingBasis: data.pricingBasis || null,
         ratePerQuantity: data.ratePerQuantity ? new Prisma.Decimal(data.ratePerQuantity) : null,
@@ -194,6 +203,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
             itemCode: item.itemCode || null,
             itemDescription: item.itemDescription.trim(),
             quantity: new Prisma.Decimal(item.quantity),
+            weight: item.weight ? new Prisma.Decimal(item.weight) : null,
             uom: item.uom || "NOS",
             conditionIn: item.conditionIn || null,
             toolInstanceId: item.toolInstanceId || null,

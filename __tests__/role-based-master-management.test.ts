@@ -177,7 +177,7 @@ describe("Role-Based Master Management", () => {
   describe("Safe Deletion Dependencies", () => {
     it("blocks vendor deletion if referenced in Delivery Challan records", async () => {
       vi.mocked(getSessionUser).mockResolvedValue({ id: "user-1", email: "mgr@test.com", roleKeys: ["MANAGEMENT"] } as any);
-      vi.mocked(requirePermission).mockResolvedValue(undefined);
+      vi.mocked(requirePermission).mockResolvedValue({ id: "user-1", email: "mgr@test.com", roleKeys: ["MANAGEMENT"] } as any);
       vi.mocked(prisma.vendor.findUnique).mockResolvedValue({ id: "v-1", vendorCode: "V1", vendorName: "Vendor One" } as any);
       vi.mocked(prisma.deliveryChallan.count).mockResolvedValue(3);
       vi.mocked(prisma.workOrder.count).mockResolvedValue(0);
@@ -191,7 +191,7 @@ describe("Role-Based Master Management", () => {
 
     it("blocks item deletion if referenced in Delivery Challan records", async () => {
       vi.mocked(getSessionUser).mockResolvedValue({ id: "user-2", email: "store@test.com", roleKeys: ["STORES"] } as any);
-      vi.mocked(requirePermission).mockResolvedValue(undefined);
+      vi.mocked(requirePermission).mockResolvedValue({ id: "user-2", email: "store@test.com", roleKeys: ["STORES"] } as any);
       vi.mocked(prisma.itemMaster.findUnique).mockResolvedValue({ id: "i-1", partNumber: "PN-999" } as any);
       vi.mocked(prisma.deliveryChallan.count).mockResolvedValue(2);
       vi.mocked(prisma.jobWorkStandard.count).mockResolvedValue(0);
@@ -205,7 +205,7 @@ describe("Role-Based Master Management", () => {
 
     it("blocks department deletion if referenced in Delivery Challans or Registration Requests", async () => {
       vi.mocked(getSessionUser).mockResolvedValue({ id: "user-1", email: "mgr@test.com", roleKeys: ["MANAGEMENT"] } as any);
-      vi.mocked(requirePermission).mockResolvedValue(undefined);
+      vi.mocked(requirePermission).mockResolvedValue({ id: "user-1", email: "mgr@test.com", roleKeys: ["MANAGEMENT"] } as any);
       vi.mocked(prisma.department.findUnique).mockResolvedValue({ id: "d-1", code: "PROD", name: "PRODUCTION" } as any);
       vi.mocked(prisma.deliveryChallan.count).mockResolvedValue(5);
       vi.mocked(prisma.registrationRequest.count).mockResolvedValue(0);
@@ -219,7 +219,7 @@ describe("Role-Based Master Management", () => {
 
     it("allows deleting unreferenced items", async () => {
       vi.mocked(getSessionUser).mockResolvedValue({ id: "user-2", email: "store@test.com", roleKeys: ["STORES"] } as any);
-      vi.mocked(requirePermission).mockResolvedValue(undefined);
+      vi.mocked(requirePermission).mockResolvedValue({ id: "user-2", email: "store@test.com", roleKeys: ["STORES"] } as any);
       vi.mocked(prisma.itemMaster.findUnique).mockResolvedValue({ id: "i-2", partNumber: "PN-UNUSED", partDescription: "Unused" } as any);
       vi.mocked(prisma.deliveryChallan.count).mockResolvedValue(0);
       vi.mocked(prisma.jobWorkStandard.count).mockResolvedValue(0);
@@ -236,7 +236,7 @@ describe("Role-Based Master Management", () => {
       vi.mocked(getSessionUser).mockResolvedValue({ id: "user-sec", email: "sec@test.com", roleKeys: ["SECURITY"] } as any);
       vi.mocked(requirePermission).mockRejectedValue(new ForbiddenError("Permission denied"));
 
-      const res = await createVendor({ vendorCode: "V-NEW", vendorName: "Test Vendor" });
+      const res = await createVendor({ vendorCode: "V-NEW", vendorName: "Test Vendor", defaultReturnDays: 30 });
       expect(res.ok).toBe(false);
       if (!res.ok) {
         expect(res.error).toContain("permission");
