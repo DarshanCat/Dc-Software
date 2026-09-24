@@ -21,7 +21,9 @@ export interface DcOption {
   partDescription: string;
   department: string;
   outwardQtyRw: number;
+  rmUom: string;
   returningFgQuantity: number;
+  fgUom: string;
   outwardWeight: number;
   outwardGatingWeight: number;
   outwardBoringWeight: number;
@@ -182,7 +184,7 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
           <option value="">-- Select Pending DC --</option>
           {currentList.map((d) => (
             <option key={d.id} value={d.id}>
-              {d.dcNumber} — {d.vendorName} (WO: {d.woNumber}, Outward Qty: {d.outwardQtyRw} NOS, Amount: ₹{d.expectedAmount})
+              {d.dcNumber} — {d.vendorName} (WO: {d.woNumber}, Outward Qty: {d.outwardQtyRw} {d.rmUom}, Amount: ₹{d.expectedAmount})
             </option>
           ))}
         </select>
@@ -234,11 +236,11 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-sans border-b pb-4">
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Outward Qty RW</span>
-              <span className="font-mono font-bold text-blue-900 text-sm">{selectedDc.outwardQtyRw} NOS</span>
+              <span className="font-mono font-bold text-blue-900 text-sm">{selectedDc.outwardQtyRw} {selectedDc.rmUom}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Returning FG Qty</span>
-              <span className="font-mono font-bold text-blue-900 text-sm">{selectedDc.returningFgQuantity} NOS</span>
+              <span className="font-mono font-bold text-blue-900 text-sm">{selectedDc.returningFgQuantity} {selectedDc.fgUom}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Weight (KG)</span>

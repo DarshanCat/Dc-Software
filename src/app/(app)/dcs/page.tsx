@@ -103,6 +103,7 @@ export default async function DcsPage({
               <th className="px-4 py-2.5 font-bold">Process</th>
               <th className="px-4 py-2.5 font-bold text-right">RM Qty</th>
               <th className="px-4 py-2.5 font-bold text-right">Exp FG Qty</th>
+              <th className="px-4 py-2.5 font-bold text-right">Weight (KG)</th>
               <th className="px-4 py-2.5 font-bold">Status</th>
               <th className="px-4 py-2.5 font-bold">Actions</th>
             </tr>
@@ -110,14 +111,20 @@ export default async function DcsPage({
           <tbody className="divide-y divide-slate-100 text-xs">
             {dcs.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400 italic">
+                <td colSpan={9} className="px-4 py-8 text-center text-slate-400 italic">
                   No Delivery Challans found for your role or requested queue.
                 </td>
               </tr>
             ) : (
               dcs.map((dc) => {
-                const inputWt = Number(dc.rmQuantity ?? 0);
+                // RM Qty / Exp FG Qty are item quantities (pieces/units), shown with their
+                // own UOM (NOS/PCS/SET/...) - never KG. Weight (KG) is a separate figure,
+                // captured once at Material DC creation (DeliveryChallan.outwardWeight).
+                const rmQty = Number(dc.rmQuantity ?? 0);
                 const expFg = Number(dc.returnFgQuantity ?? 0);
+                const rmUom = dc.rmUom || "NOS";
+                const fgUom = dc.fgUom || "NOS";
+                const weightKg = dc.outwardWeight != null ? Number(dc.outwardWeight) : null;
                 return (
                   <tr key={dc.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-2.5">
@@ -130,8 +137,9 @@ export default async function DcsPage({
                       {dc.vendor?.vendorName || dc.supplierNameSnapshot || (dc.destinationDepartment ? `${dc.destinationDepartment} (${dc.responsibleCustodian || ''})` : "Internal Custody")}
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{dc.process?.name ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{inputWt.toFixed(3)} kg</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{expFg.toFixed(3)} kg</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{rmQty.toFixed(3)} {rmUom}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{expFg.toFixed(3)} {fgUom}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{weightKg != null ? `${weightKg.toFixed(3)} KG` : "—"}</td>
                     <td className="px-4 py-2.5">
                       <span className={`rounded border px-2 py-0.5 text-[11px] font-bold ${STATUS_COLORS[dc.status] ?? "bg-slate-100 text-slate-600"}`}>
                         {dc.status.replace(/_/g, " ")}
