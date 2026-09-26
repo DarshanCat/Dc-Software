@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { recordInwardReceipt, RecordInwardReceiptInput } from "@/server/dcs/extended-actions";
+import { submitSecurityReturn } from "@/server/dcs/actions";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
 
@@ -29,8 +29,8 @@ export function InwardDcForm({ dcs }: Props) {
   const [inwardDate, setInwardDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [inwardDocumentNo, setInwardDocumentNo] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [inwardGatingWeight, setInwardGatingWeight] = useState("");
-  const [inwardBoringWeight, setInwardBoringWeight] = useState("");
+  const [vehicleNumber, setVehicleNumber] = useState("");
+  const [transporter, setTransporter] = useState("");
   const [remarks, setRemarks] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -50,24 +50,21 @@ export function InwardDcForm({ dcs }: Props) {
 
     setLoading(true);
 
-    const payload: RecordInwardReceiptInput = {
-      dcId: selectedDcId,
+    const res = await submitSecurityReturn(selectedDcId, {
       actualInwardQty: numQty,
       inwardDate,
       inwardDocumentNo: inwardDocumentNo.trim() || undefined,
       invoiceNumber: invoiceNumber.trim() || undefined,
-      inwardGatingWeight: inwardGatingWeight ? parseFloat(inwardGatingWeight) : undefined,
-      inwardBoringWeight: inwardBoringWeight ? parseFloat(inwardBoringWeight) : undefined,
+      vehicleNumber: vehicleNumber.trim() || undefined,
+      transporter: transporter.trim() || undefined,
       remarks: remarks.trim() || undefined,
-    };
-
-    const res = await recordInwardReceipt(payload);
+    });
     setLoading(false);
 
     if (!res.ok) {
       setError(res.error || "An error occurred while recording inward receipt.");
     } else {
-      setSuccess(`Inward receipt recorded for DC ${selectedDc?.dcNumber}.`);
+      setSuccess(`Security gate inward receipt recorded for DC ${selectedDc?.dcNumber}.`);
       setTimeout(() => router.push(`/dcs/${selectedDcId}`), 1200);
     }
   }
@@ -133,9 +130,9 @@ export function InwardDcForm({ dcs }: Props) {
             </div>
           )}
 
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 bg-slate-100 p-2.5 rounded-md">
-            <ShieldCheck className="h-4 w-4 text-blue-600" />
-            <span>Security Control Policy: Quality decision fields (Good, Rejection, Scrap Qty) are managed exclusively by Quality Inspection.</span>
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 bg-slate-100 p-2.5 rounded-md border border-slate-200">
+            <ShieldCheck className="h-4 w-4 text-blue-600 flex-shrink-0" />
+            <span>Security Responsibility Policy: Record physical gate arrival details. Store weights and Quality inspection decisions are managed downstream by Stores and Quality.</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -188,27 +185,23 @@ export function InwardDcForm({ dcs }: Props) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Inward Gating Weight (KG)</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Vehicle Number</label>
               <input
-                type="number"
-                step="0.001"
-                min="0"
-                value={inwardGatingWeight}
-                onChange={(e) => setInwardGatingWeight(e.target.value)}
-                placeholder="0.000"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                type="text"
+                value={vehicleNumber}
+                onChange={(e) => setVehicleNumber(e.target.value)}
+                placeholder="KA-05-AB-1234"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm uppercase font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Inward Boring Weight (KG)</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Transporter</label>
               <input
-                type="number"
-                step="0.001"
-                min="0"
-                value={inwardBoringWeight}
-                onChange={(e) => setInwardBoringWeight(e.target.value)}
-                placeholder="0.000"
+                type="text"
+                value={transporter}
+                onChange={(e) => setTransporter(e.target.value)}
+                placeholder="VRL Logistics"
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -246,3 +239,4 @@ export function InwardDcForm({ dcs }: Props) {
     </div>
   );
 }
+

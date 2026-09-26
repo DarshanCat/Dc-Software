@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { filterDcDataForRole } from "./sanitizer";
-import type { DeliveryChallan } from "@prisma/client";
+import type { DeliveryChallan, Prisma, DcStatus } from "@prisma/client";
 
 /**
  * Authoritative DC Queue Queries for Role-Based Operations.
@@ -45,6 +45,31 @@ export async function getSecurityCompletedQueue(roleKey: string = "SECURITY") {
     include: { vendor: { select: { vendorName: true } }, process: { select: { name: true } } },
     orderBy: { updatedAt: "desc" },
     take: 50,
+  });
+  return dcs.map((dc) => filterDcDataForRole(dc, roleKey));
+}
+
+export async function getMySecurityEntriesQueue(roleKey: string = "SECURITY", userId?: string) {
+  const whereCondition: Prisma.DeliveryChallanWhereInput = userId
+    ? {
+        OR: [
+          { securityEnteredBy: userId },
+          { securityDispatchedBy: userId },
+        ],
+      }
+    : {
+        OR: [
+          { securityEnteredBy: { not: null } },
+          { securityDispatchedBy: { not: null } },
+          { status: "SECURITY_RETURNED" as DcStatus },
+        ],
+      };
+
+  const dcs = await prisma.deliveryChallan.findMany({
+    where: whereCondition,
+    include: { vendor: { select: { vendorName: true } }, process: { select: { name: true } } },
+    orderBy: { updatedAt: "desc" },
+    take: 100,
   });
   return dcs.map((dc) => filterDcDataForRole(dc, roleKey));
 }

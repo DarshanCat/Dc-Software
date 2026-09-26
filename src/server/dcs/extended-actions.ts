@@ -12,7 +12,8 @@ import { Prisma, DcPurpose, DcStatus } from "@prisma/client";
 import { z } from "zod";
 import { stageResultBalance } from "@/analytics/math-engine";
 import { notifyUsersWithPermission } from "@/server/notifications/service";
-import { closeDc } from "./actions";
+import { closeDc, revalidateSecurityPaths } from "./actions";
+
 import {
   outwardDcSchema,
   inwardReceiptSchema,
@@ -585,14 +586,14 @@ export async function recordInwardReceipt(input: RecordInwardReceiptInput) {
     prisma.deliveryChallan.update({
       where: { id: input.dcId },
       data: {
-        status: "INWARD_RECEIVED",
+        status: "SECURITY_RETURNED",
         actualInwardQty: new Prisma.Decimal(input.actualInwardQty),
         securityFgQuantity: new Prisma.Decimal(input.actualInwardQty),
         inwardDate,
         inwardDocumentNo: input.inwardDocumentNo || null,
         invoiceNumber: input.invoiceNumber || dc.invoiceNumber,
-        inwardGatingWeight: input.inwardGatingWeight ? new Prisma.Decimal(input.inwardGatingWeight) : null,
-        inwardBoringWeight: input.inwardBoringWeight ? new Prisma.Decimal(input.inwardBoringWeight) : null,
+        securityReturnDate: inwardDate,
+        securityReturnTime: now.toLocaleTimeString(),
         securityReturnRemarks: input.remarks || null,
         securityEnteredBy: user!.id,
         securityEnteredAt: now,
@@ -602,7 +603,7 @@ export async function recordInwardReceipt(input: RecordInwardReceiptInput) {
       data: {
         dcId: input.dcId,
         fromStatus: dc.status,
-        toStatus: "INWARD_RECEIVED",
+        toStatus: "SECURITY_RETURNED",
         changedBy: user!.id,
         reason: `Physical Inward Receipt recorded (Actual Inward: ${input.actualInwardQty})`,
       },
@@ -631,8 +632,7 @@ export async function recordInwardReceipt(input: RecordInwardReceiptInput) {
     }
   );
 
-  revalidatePath(`/dcs/${input.dcId}`);
-  revalidatePath("/dcs");
+  await revalidateSecurityPaths(input.dcId);
   return { ok: true };
 }
 

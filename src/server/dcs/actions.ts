@@ -37,6 +37,23 @@ async function checkPermission(
   }
 }
 
+export async function revalidateSecurityPaths(dcId?: string) {
+  try {
+    if (dcId) revalidatePath(`/dcs/${dcId}`);
+    revalidatePath("/dcs");
+    revalidatePath("/security");
+    revalidatePath("/security/dashboard");
+    revalidatePath("/security/dispatch");
+    revalidatePath("/security/dispatched");
+    revalidatePath("/security/material-inward");
+    revalidatePath("/security/my-entries");
+    revalidatePath("/dcs/outward");
+    revalidatePath("/dcs/inward");
+  } catch {
+    // Ignore invalidations during test runner or background executions
+  }
+}
+
 // ================= SCHEMAS =================
 
 const createDcSchema = z.object({
@@ -490,8 +507,7 @@ export async function submitSecurityDispatch(
     reason: `Dispatched quantity ${input.dispatchQuantity}`,
   });
 
-  revalidatePath(`/dcs/${dcId}`);
-  revalidatePath("/dcs");
+  await revalidateSecurityPaths(dcId);
   return { ok: true };
 }
 
@@ -531,8 +547,7 @@ export async function confirmDcAtVendor(dcId: string): Promise<{ ok: boolean; er
     reason: "Vendor receipt confirmed",
   });
 
-  revalidatePath(`/dcs/${dcId}`);
-  revalidatePath("/dcs");
+  await revalidateSecurityPaths(dcId);
   return { ok: true };
 }
 
@@ -626,8 +641,7 @@ export async function submitSecurityReturn(
     reason: `Security Inward recorded (Actual Inward Qty: ${input.actualInwardQty})`,
   });
 
-  revalidatePath(`/dcs/${dcId}`);
-  revalidatePath("/dcs");
+  await revalidateSecurityPaths(dcId);
   return { ok: true };
 }
 
