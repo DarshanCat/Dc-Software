@@ -40,11 +40,23 @@ vi.mock("@/lib/db", () => ({
     deliveryChallan: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      create: vi.fn(),
       update: vi.fn(),
+    },
+    vendor: {
+      findUnique: vi.fn(),
+    },
+    itemMaster: {
+      findFirst: vi.fn(),
+    },
+    numberSequence: {
+      upsert: vi.fn().mockResolvedValue({ lastValue: 1 }),
+      update: vi.fn().mockResolvedValue({ current: 1 }),
     },
     statusHistory: {
       create: vi.fn(),
     },
+    $queryRaw: vi.fn().mockResolvedValue([{ id: "seq-1" }]),
     $transaction: vi.fn(async (cb) => {
       if (typeof cb === "function") return cb(prisma);
       return Promise.all(cb);
@@ -278,5 +290,51 @@ describe("Security Module Regression Suite", () => {
 
     const queue = await getSecurityDispatchQueue("ADMIN");
     expect(queue.length).toBe(1);
+  });
+
+  // 13. Security cannot create arbitrary DC material data through a crafted server request
+  it("13. rejects createOutwardDc server action when called by a SECURITY-only user", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockSecurityUser as any);
+    vi.mocked(requirePermission).mockResolvedValue(mockSecurityUser as any);
+
+    const { createOutwardDc } = await import("@/server/dcs/extended-actions");
+
+    const res = await createOutwardDc({
+      vendorId: "v-1",
+      department: "PRODUCTION",
+      woNumber: "WO-999",
+      partNumber: "PN-888",
+      outwardWeight: 10.5,
+      ratePerQuantity: 100,
+      pricingBasis: "RW",
+      outwardQtyRw: 50,
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain("prohibited from creating Delivery Challans");
+  });
+
+  // 14. Existing STORES DC creation flow continues to work
+  it("14. allows STORES user to create a DC with quantity, UOM, and dimensions", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(requirePermission).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(prisma.vendor.findUnique).mockResolvedValue({ id: "v-1", active: true } as any);
+    vi.mocked(prisma.itemMaster.findFirst).mockResolvedValue({ partNumber: "PN-888", active: true, partDescription: "Desc" } as any);
+    vi.mocked(prisma.deliveryChallan.create).mockResolvedValue({ id: "dc-new", dcNumber: "DC-2026-0001" } as any);
+
+    const { createOutwardDc } = await import("@/server/dcs/extended-actions");
+
+    const res = await createOutwardDc({
+      vendorId: "v-1",
+      department: "PRODUCTION",
+      woNumber: "WO-999",
+      partNumber: "PN-888",
+      outwardWeight: 10.5,
+      ratePerQuantity: 100,
+      pricingBasis: "RW",
+      outwardQtyRw: 50,
+    });
+
+    expect(res.ok).toBe(true);
   });
 });

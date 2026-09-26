@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/server/session";
 import { OutwardDcForm } from "./outward-form";
@@ -5,7 +6,12 @@ import { OutwardDcForm } from "./outward-form";
 export const dynamic = "force-dynamic";
 
 export default async function OutwardDcPage() {
-  await requireUser();
+  const user = await requireUser();
+  const roleKeys = user.roleKeys || [];
+  if (roleKeys.includes("SECURITY") && !roleKeys.some((r) => ["ADMIN", "STORES", "PRODUCTION", "MANAGEMENT"].includes(r))) {
+    redirect("/security/dispatch");
+  }
+
 
   const vendors = await prisma.vendor.findMany({
     where: { active: true },

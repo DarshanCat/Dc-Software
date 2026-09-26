@@ -142,6 +142,10 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
   const permCheck = await checkPermission(user, PERMISSIONS.DC_CREATE);
   if (!permCheck.ok) return permCheck;
 
+  if (user?.roleKeys?.includes("SECURITY") && !user.roleKeys.some((r: string) => ["ADMIN", "STORES", "PRODUCTION", "MANAGEMENT"].includes(r))) {
+    return { ok: false, error: "Security role is strictly prohibited from creating Delivery Challans." };
+  }
+
   const parsed = createDcSchema.safeParse(input);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
