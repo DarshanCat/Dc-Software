@@ -23,6 +23,8 @@ export interface DcPdfData {
   partNumber: string;
   rmQuantity: string;
   returnFgQuantity: string;
+  rmUom?: string | null;
+  fgUom?: string | null;
   outwardWeight?: string | null;
   heatNumber: string;
   pricingBasis?: string | null;
@@ -389,9 +391,13 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   const c4X = c3X + col3W;
 
   const partLines = wrapCellText(data.partNumber || "—", bold, 8.5, col1W - 16);
-  const rmDisplay = data.outwardWeight ? `${data.rmQuantity || "—"} NOS (${data.outwardWeight} KG)` : `${data.rmQuantity || "—"} NOS`;
+  const rmUnit = data.rmUom || "NOS";
+  const fgUnit = data.fgUom || "NOS";
+  const rmDisplay = data.outwardWeight
+    ? `${data.rmQuantity || "—"} ${rmUnit} (${data.outwardWeight} KG)`
+    : `${data.rmQuantity || "—"} ${rmUnit}`;
   const rmLines = wrapCellText(rmDisplay, bold, 8.5, col2W - 16);
-  const fgLines = wrapCellText(data.returnFgQuantity || "—", bold, 8.5, col3W - 16);
+  const fgLines = wrapCellText(`${data.returnFgQuantity || "—"} ${fgUnit}`, bold, 8.5, col3W - 16);
   const heatLines = wrapCellText(data.heatNumber || "—", bold, 8.5, col4W - 16);
 
   const maxLines = Math.max(1, partLines.length, rmLines.length, fgLines.length, heatLines.length);

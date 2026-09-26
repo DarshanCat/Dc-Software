@@ -6,6 +6,7 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { buildDcPublicUrl } from "@/services/dispatch.service";
 import { filterDcDataForRole } from "@/server/dcs/sanitizer";
+import { formatQuantity } from "@/lib/quantity-format";
 import { DcActions } from "./dc-actions";
 import { DocumentsPanel } from "@/components/documents-panel";
 
@@ -438,13 +439,13 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
               <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Outward Qty RM</span>
                 <span className="font-mono font-bold text-blue-900 text-base">
-                  {dc.outwardQtyRw != null ? Number(dc.outwardQtyRw).toFixed(3) : Number(dc.rmQuantity ?? 0).toFixed(3)} NOS
+                  {formatQuantity(dc.outwardQtyRw ?? dc.rmQuantity ?? 0, dc.rmUom)}
                 </span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Returning FG Qty</span>
                 <span className="font-mono font-bold text-blue-900 text-base">
-                  {dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"} NOS
+                  {formatQuantity(dc.returnFgQuantity, dc.fgUom)}
                 </span>
               </div>
             </div>

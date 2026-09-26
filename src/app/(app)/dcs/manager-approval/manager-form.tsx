@@ -8,6 +8,7 @@ import {
 } from "@/server/dcs/extended-actions";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, Check, X, RotateCcw, PauseCircle, FileText, CreditCard } from "lucide-react";
+import { formatQuantity } from "@/lib/quantity-format";
 
 export interface DcOption {
   id: string;
@@ -22,6 +23,8 @@ export interface DcOption {
   department: string;
   outwardQtyRw: number;
   returningFgQuantity: number;
+  rmUom: string;
+  fgUom: string;
   outwardWeight: number;
   outwardGatingWeight: number;
   outwardBoringWeight: number;
@@ -234,11 +237,11 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-sans border-b pb-4">
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Outward Qty RW</span>
-              <span className="font-mono font-bold text-blue-900 text-sm">{selectedDc.outwardQtyRw} NOS</span>
+              <span className="font-mono font-bold text-blue-900 text-sm">{formatQuantity(selectedDc.outwardQtyRw, selectedDc.rmUom)}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Returning FG Qty</span>
-              <span className="font-mono font-bold text-blue-900 text-sm">{selectedDc.returningFgQuantity} NOS</span>
+              <span className="font-mono font-bold text-blue-900 text-sm">{formatQuantity(selectedDc.returningFgQuantity, selectedDc.fgUom)}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Outward Gross Weight</span>
