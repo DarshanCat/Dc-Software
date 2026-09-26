@@ -35,6 +35,10 @@ interface DcRowLike {
   supplierNameSnapshot?: string | null;
   supplierAddressSnapshot?: string | null;
   supplierGstSnapshot?: string | null;
+  length?: unknown;
+  width?: unknown;
+  height?: unknown;
+  dimensionUom?: string | null;
   vendor: { vendorName: string; address: string | null; gstNumber: string | null; panNumber: string | null } | null;
   process: { name: string } | null;
 }
@@ -66,6 +70,7 @@ export interface DcPdfData {
   rmUom?: string | null;
   fgUom?: string | null;
   outwardWeight?: string | null;
+  dimensions?: string | null;
   heatNumber: string;
   pricingBasis: string | null;
   ratePerQuantity: string | null;
@@ -123,6 +128,10 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
     rmUom: dc.rmUom || "NOS",
     fgUom: dc.fgUom || "NOS",
     outwardWeight: dc.outwardWeight != null ? Number(dc.outwardWeight).toFixed(3) : null,
+    dimensions:
+      dc.length != null && dc.width != null && dc.height != null
+        ? `${Number(dc.length)} × ${Number(dc.width)} × ${Number(dc.height)} MM`
+        : null,
     heatNumber: dc.heatNumber || "—",
     pricingBasis: dc.pricingBasis ? (dc.pricingBasis === "RM" ? "Price Based On: RM Quantity" : "Price Based On: FG Quantity") : "—",
     ratePerQuantity: dc.ratePerQuantity != null ? Number(dc.ratePerQuantity).toFixed(2) : "—",

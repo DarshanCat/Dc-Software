@@ -53,6 +53,13 @@ vi.mock("@/lib/db", () => ({
       upsert: vi.fn().mockResolvedValue({ lastValue: 1 }),
       update: vi.fn().mockResolvedValue({ current: 1 }),
     },
+    user: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    systemSetting: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
     statusHistory: {
       create: vi.fn(),
     },
@@ -336,5 +343,131 @@ describe("Security Module Regression Suite", () => {
     });
 
     expect(res.ok).toBe(true);
+  });
+
+  // 15. Stores dimension entry saves L, W, H in MM on DRAFT/PENDING_APPROVAL
+  it("15. allows STORES user to save dimensions in MM for DRAFT/PENDING_APPROVAL DC", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(requirePermission).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
+      id: "dc-dim-1",
+      status: "PENDING_APPROVAL",
+      movementType: "MATERIAL",
+    } as any);
+
+    const { saveStoreDimensions } = await import("@/server/dcs/actions");
+    const res = await saveStoreDimensions("dc-dim-1", { length: 100, width: 50, height: 25 });
+
+    expect(res.ok).toBe(true);
+    expect(prisma.deliveryChallan.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "dc-dim-1" },
+        data: expect.objectContaining({
+          dimensionUom: "MM",
+        }),
+      }),
+    );
+  });
+
+  // 16. Management approval fails if dimensions are missing or <= 0
+  it("16. blocks approveDc if Stores has not entered valid dimensions for Material DC", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockAdminUser as any);
+    vi.mocked(requirePermission).mockResolvedValue(mockAdminUser as any);
+    vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
+      id: "dc-nodim-1",
+      dcNumber: "DC-NODIM-001",
+      status: "PENDING_APPROVAL",
+      movementType: "MATERIAL",
+      length: null,
+      width: null,
+      height: null,
+    } as any);
+
+    const { approveDc } = await import("@/server/dcs/actions");
+    const res = await approveDc("dc-nodim-1", "Manager Name");
+
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain("Stores must enter dimensions");
+  });
+
+  // 17. Management approval succeeds when dimensions L, W, H > 0 in MM exist
+  it("17. allows approveDc when Stores dimensions in MM exist", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockAdminUser as any);
+    vi.mocked(requirePermission).mockResolvedValue(mockAdminUser as any);
+    vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
+      id: "dc-dimok-1",
+      dcNumber: "DC-DIMOK-001",
+      status: "PENDING_APPROVAL",
+      movementType: "MATERIAL",
+      length: 100,
+      width: 50,
+      height: 25,
+      createdBy: "other-user",
+    } as any);
+    vi.mocked(prisma.deliveryChallan.update).mockResolvedValue({ id: "dc-dimok-1", status: "APPROVED" } as any);
+
+    const { approveDc } = await import("@/server/dcs/actions");
+    const res = await approveDc("dc-dimok-1", "Manager Name");
+
+    expect(res.ok).toBe(true);
+  });
+
+  // 18. Once APPROVED, dimensions are locked permanently
+  it("18. rejects saveStoreDimensions after DC is APPROVED", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(requirePermission).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
+      id: "dc-app-1",
+      status: "APPROVED",
+      movementType: "MATERIAL",
+    } as any);
+
+    const { saveStoreDimensions } = await import("@/server/dcs/actions");
+    const res = await saveStoreDimensions("dc-app-1", { length: 120, width: 60, height: 30 });
+
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain("Dimensions are locked");
+  });
+
+  // 19. PDF data loader includes dimensions formatted with MM
+  it("19. formats dimensions clearly with MM in loadDcPdfData", async () => {
+    vi.mocked(prisma.systemSetting.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
+      id: "dc-pdf-1",
+      dcNumber: "DC-PDF-001",
+      dcDate: new Date(),
+      status: "APPROVED",
+      purpose: "JOB_WORK",
+      woNumber: "WO-PDF-1",
+      partNumber: "PN-PDF-1",
+      rmQuantity: 50,
+      returnFgQuantity: 50,
+      outwardWeight: 20,
+      heatNumber: "HEAT-123",
+      remarks: "Test PDF",
+      vehicleNumber: "KA-01-1234",
+      transporter: "Transport",
+      ewayBillNumber: "EWAY-1",
+      eSugamNumber: "ESUGAM-1",
+      referenceNumber: "REF-1",
+      expectedReturnDate: new Date(),
+      qrToken: "token-123",
+      createdBy: "u-1",
+      approvedBy: "u-2",
+      preparedByName: "Prep",
+      approvedByName: "Appr",
+      length: 100,
+      width: 50,
+      height: 25,
+      dimensionUom: "MM",
+      vendor: { vendorName: "Vendor A", address: "Address A", gstNumber: "GST-A", panNumber: "PAN-A" },
+      process: { name: "Machining" },
+    } as any);
+
+    const { loadDcPdfData } = await import("@/server/dcs/pdf");
+    const pdfData = await loadDcPdfData("dc-pdf-1");
+
+    expect(pdfData).not.toBeNull();
+    expect(pdfData?.dimensions).toBe("100 × 50 × 25 MM");
   });
 });

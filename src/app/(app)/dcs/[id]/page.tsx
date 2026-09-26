@@ -9,6 +9,7 @@ import { filterDcDataForRole } from "@/server/dcs/sanitizer";
 import { formatQuantity } from "@/lib/quantity-format";
 import { DcActions } from "./dc-actions";
 import { DocumentsPanel } from "@/components/documents-panel";
+import { StoresDimensionForm } from "./stores-dimension-form";
 
 import { canCloseDc } from "@/server/dcs/actions";
 
@@ -65,6 +66,11 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
   const canViewHistory = user ? await hasPermission(user.id, PERMISSIONS.DC_HISTORY_FULL) : false;
   const canUploadDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_UPLOAD) : false;
   const canDeleteDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_DELETE) : false;
+  const canEditDimensions = user
+    ? (await hasPermission(user.id, PERMISSIONS.STORE_VERIFY)) ||
+      (await hasPermission(user.id, PERMISSIONS.DC_EDIT)) ||
+      Boolean(user.roleKeys?.some((r) => ["ADMIN", "STORES"].includes(r)))
+    : false;
 
   const closeEligibility = await canCloseDc(dc.id, user?.id);
 
@@ -473,11 +479,20 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
               <div className="pt-2 border-t text-xs">
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Dimensions (L × W × H)</span>
                 <span className="font-mono font-semibold text-slate-800">
-                  {dc.length ? `${dc.length}mm` : "—"} × {dc.width ? `${dc.width}mm` : "—"} × {dc.height ? `${dc.height}mm` : "—"}
+                  {dc.length ? `${dc.length} MM` : "—"} × {dc.width ? `${dc.width} MM` : "—"} × {dc.height ? `${dc.height} MM` : "—"}
                 </span>
               </div>
             )}
           </div>
+          <StoresDimensionForm
+            dcId={dc.id}
+            initialLength={dc.length ? Number(dc.length) : null}
+            initialWidth={dc.width ? Number(dc.width) : null}
+            initialHeight={dc.height ? Number(dc.height) : null}
+            status={dc.status}
+            movementType={dc.movementType}
+            canEditDimensions={canEditDimensions}
+          />
         </div>
       )}
 

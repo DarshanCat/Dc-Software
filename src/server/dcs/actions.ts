@@ -373,6 +373,56 @@ export async function rejectDcToDraft(dcId: string, reason: string): Promise<{ o
   return { ok: true };
 }
 
+export async function saveStoreDimensions(
+  dcId: string,
+  input: { length: number; width: number; height: number },
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  const permCheck = await checkPermission(user, PERMISSIONS.STORE_VERIFY);
+  if (!permCheck.ok) {
+    const editCheck = await checkPermission(user, PERMISSIONS.DC_EDIT);
+    if (!editCheck.ok) return permCheck;
+  }
+
+  const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
+  if (!dc) return { ok: false, error: "DC not found." };
+
+  if (dc.status !== "DRAFT" && dc.status !== "PENDING_APPROVAL") {
+    return { ok: false, error: "Dimensions are locked once the Delivery Challan is approved." };
+  }
+
+  const l = Number(input.length);
+  const w = Number(input.width);
+  const h = Number(input.height);
+
+  if (isNaN(l) || !isFinite(l) || l <= 0 || isNaN(w) || !isFinite(w) || w <= 0 || isNaN(h) || !isFinite(h) || h <= 0) {
+    return { ok: false, error: "Length, Width, and Height must be positive numeric values in MM." };
+  }
+
+  await prisma.deliveryChallan.update({
+    where: { id: dcId },
+    data: {
+      length: new Prisma.Decimal(l),
+      width: new Prisma.Decimal(w),
+      height: new Prisma.Decimal(h),
+      dimensionUom: "MM",
+    },
+  });
+
+  await writeAudit(prisma, {
+    userId: user!.id,
+    action: "STORES_DIMENSIONS_ENTERED",
+    module: "DeliveryChallan",
+    entityType: "DeliveryChallan",
+    entityId: dcId,
+    reason: `Stores entered dimensions: ${l} x ${w} x ${h} MM`,
+  });
+
+  revalidatePath(`/dcs/${dcId}`);
+  revalidatePath("/dcs");
+  return { ok: true };
+}
+
 // ================= 4. APPROVE DC (PENDING_APPROVAL -> APPROVED) =================
 
 export async function approveDc(dcId: string, approvedByName: string): Promise<{ ok: boolean; error?: string }> {
@@ -386,6 +436,12 @@ export async function approveDc(dcId: string, approvedByName: string): Promise<{
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
   if (dc.status !== "PENDING_APPROVAL") return { ok: false, error: `Only PENDING_APPROVAL DCs can be approved. Current status: ${dc.status}` };
+
+  if (dc.movementType === "MATERIAL") {
+    if (!dc.length || !dc.width || !dc.height || Number(dc.length) <= 0 || Number(dc.width) <= 0 || Number(dc.height) <= 0) {
+      return { ok: false, error: "Stores must enter dimensions (Length, Width, Height in MM) before the Delivery Challan can be approved by Management." };
+    }
+  }
 
   if (dc.createdBy === user!.id && !user!.roleKeys.includes("ADMIN")) {
     return { ok: false, error: "You cannot approve a Delivery Challan that you created." };

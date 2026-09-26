@@ -26,6 +26,7 @@ export interface DcPdfData {
   rmUom?: string | null;
   fgUom?: string | null;
   outwardWeight?: string | null;
+  dimensions?: string | null;
   heatNumber: string;
   pricingBasis?: string | null;
   ratePerQuantity?: string | null;
@@ -390,7 +391,10 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   const c3X = c2X + col2W;
   const c4X = c3X + col3W;
 
-  const partLines = wrapCellText(data.partNumber || "—", bold, 8.5, col1W - 16);
+  const partText = data.dimensions
+    ? `${data.partNumber || "—"}\n(Dimensions: ${data.dimensions})`
+    : (data.partNumber || "—");
+  const partLines = wrapCellText(partText, bold, 8.5, col1W - 16);
   const rmUnit = data.rmUom || "NOS";
   const fgUnit = data.fgUom || "NOS";
   const rmDisplay = data.outwardWeight

@@ -39,9 +39,6 @@ export function OutwardDcForm({ vendors, processes }: Props) {
   const [outwardGatingWeight, setOutwardGatingWeight] = useState<string>("");
   const [outwardQtyRw, setOutwardQtyRw] = useState<string>("");
   const [returningFgQuantity, setReturningFgQuantity] = useState<string>("");
-  const [length, setLength] = useState<string>("");
-  const [width, setWidth] = useState<string>("");
-  const [height, setHeight] = useState<string>("");
   const [outwardBoringWeight, setOutwardBoringWeight] = useState<string>("");
   const [remarks, setRemarks] = useState("");
 
@@ -73,9 +70,6 @@ export function OutwardDcForm({ vendors, processes }: Props) {
       outwardGatingWeight: outwardGatingWeight ? parseFloat(outwardGatingWeight) : undefined,
       outwardQtyRw: outwardQtyRw ? parseFloat(outwardQtyRw) : undefined,
       returningFgQuantity: returningFgQuantity ? parseFloat(returningFgQuantity) : undefined,
-      length: length ? parseFloat(length) : undefined,
-      width: width ? parseFloat(width) : undefined,
-      height: height ? parseFloat(height) : undefined,
       outwardBoringWeight: outwardBoringWeight ? parseFloat(outwardBoringWeight) : undefined,
       remarks: remarks.trim() || undefined,
     };
@@ -298,47 +292,6 @@ export function OutwardDcForm({ vendors, processes }: Props) {
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Dimensions L (mm)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              data-tally-id="length"
-              value={length}
-              onChange={(e) => setLength(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Length"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Dimensions W (mm)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              data-tally-id="width"
-              value={width}
-              onChange={(e) => setWidth(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Width"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Dimensions H (mm)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              data-tally-id="height"
-              value={height}
-              onChange={(e) => setHeight(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Height"
-            />
-          </div>
         </div>
       </div>
 
