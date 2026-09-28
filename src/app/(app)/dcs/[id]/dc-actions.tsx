@@ -183,49 +183,7 @@ export function DcActions({
         </div>
       )}
 
-      {permissions.canEditDimensions && isEditableStatus && isMaterialDc && !hasDimensions && (
-        <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-md text-xs font-medium flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Ruler className="h-4 w-4 text-amber-700 shrink-0" />
-            <span><strong>Stores Action Required:</strong> Material dimensions (Length, Width, Height in MM) must be saved before Management Approval.</span>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              const el = document.getElementById("stores-dimensions");
-              if (el) {
-                el.scrollIntoView({ behavior: "smooth" });
-                const firstInput = el.querySelector("input");
-                if (firstInput) (firstInput as HTMLInputElement).focus();
-              }
-            }}
-            className="bg-amber-700 hover:bg-amber-800 text-white text-[11px] font-bold shrink-0"
-          >
-            Enter Dimensions Now
-          </Button>
-        </div>
-      )}
-
       <div className="flex flex-wrap items-center gap-3 pt-1">
-        {permissions.canEditDimensions && isEditableStatus && isMaterialDc && (
-          <Button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              const el = document.getElementById("stores-dimensions");
-              if (el) {
-                el.scrollIntoView({ behavior: "smooth" });
-                const firstInput = el.querySelector("input");
-                if (firstInput) (firstInput as HTMLInputElement).focus();
-              }
-            }}
-            className={!hasDimensions ? "bg-amber-600 hover:bg-amber-700 text-white font-bold" : "bg-blue-600 hover:bg-blue-700 text-white font-semibold"}
-          >
-            <Ruler className="h-4 w-4 mr-1.5" />
-            {!hasDimensions ? "Enter Stores Dimensions (MM)" : "Edit Stores Dimensions (MM)"}
-          </Button>
-        )}
         {/* 1. DRAFT or SENT_BACK -> PENDING_APPROVAL / EDIT / DELETE */}
         {(status === "DRAFT" || status === "SENT_BACK") && permissions.canSubmit && (
           <>

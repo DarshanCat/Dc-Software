@@ -9,7 +9,6 @@ import { filterDcDataForRole } from "@/server/dcs/sanitizer";
 import { formatQuantity } from "@/lib/quantity-format";
 import { DcActions } from "./dc-actions";
 import { DocumentsPanel } from "@/components/documents-panel";
-import { StoresDimensionForm } from "./stores-dimension-form";
 
 import { canCloseDc } from "@/server/dcs/actions";
 
@@ -486,15 +485,6 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
               </div>
             )}
           </div>
-          <StoresDimensionForm
-            dcId={dc.id}
-            initialLength={dc.length ? Number(dc.length) : null}
-            initialWidth={dc.width ? Number(dc.width) : null}
-            initialHeight={dc.height ? Number(dc.height) : null}
-            status={dc.status}
-            movementType={dc.movementType}
-            canEditDimensions={canEditDimensions}
-          />
         </div>
       )}
 

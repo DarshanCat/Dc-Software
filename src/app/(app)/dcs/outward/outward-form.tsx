@@ -40,6 +40,9 @@ export function OutwardDcForm({ vendors, processes }: Props) {
   const [outwardQtyRw, setOutwardQtyRw] = useState<string>("");
   const [returningFgQuantity, setReturningFgQuantity] = useState<string>("");
   const [outwardBoringWeight, setOutwardBoringWeight] = useState<string>("");
+  const [length, setLength] = useState<string>("");
+  const [width, setWidth] = useState<string>("");
+  const [height, setHeight] = useState<string>("");
   const [remarks, setRemarks] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -55,6 +58,9 @@ export function OutwardDcForm({ vendors, processes }: Props) {
 
     if (!selectedVendorId) return setError("Supplier (Vendor) is mandatory.");
     if (!woNumber.trim()) return setError("WO ID is mandatory.");
+    if (!length || Number(length) <= 0 || isNaN(Number(length)) || !isFinite(Number(length))) return setError("Length (MM) is mandatory and must be greater than 0.");
+    if (!width || Number(width) <= 0 || isNaN(Number(width)) || !isFinite(Number(width))) return setError("Width (MM) is mandatory and must be greater than 0.");
+    if (!height || Number(height) <= 0 || isNaN(Number(height)) || !isFinite(Number(height))) return setError("Height (MM) is mandatory and must be greater than 0.");
 
     setLoading(true);
 
@@ -71,6 +77,10 @@ export function OutwardDcForm({ vendors, processes }: Props) {
       outwardQtyRw: outwardQtyRw ? parseFloat(outwardQtyRw) : undefined,
       returningFgQuantity: returningFgQuantity ? parseFloat(returningFgQuantity) : undefined,
       outwardBoringWeight: outwardBoringWeight ? parseFloat(outwardBoringWeight) : undefined,
+      length: length ? parseFloat(length) : undefined,
+      width: width ? parseFloat(width) : undefined,
+      height: height ? parseFloat(height) : undefined,
+      dimensionUom: "MM",
       remarks: remarks.trim() || undefined,
     };
 
@@ -292,6 +302,50 @@ export function OutwardDcForm({ vendors, processes }: Props) {
             />
           </div>
 
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Length (MM) *</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              data-tally-id="length"
+              value={length}
+              onChange={(e) => setLength(e.target.value)}
+              placeholder="e.g. 250.00"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Width (MM) *</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              data-tally-id="width"
+              value={width}
+              onChange={(e) => setWidth(e.target.value)}
+              placeholder="e.g. 180.00"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Height (MM) *</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              data-tally-id="height"
+              value={height}
+              onChange={(e) => setHeight(e.target.value)}
+              placeholder="e.g. 120.00"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              required
+            />
+          </div>
         </div>
       </div>
 

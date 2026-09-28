@@ -95,6 +95,15 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
     if (!input.outwardWeight || isNaN(input.outwardWeight) || !isFinite(input.outwardWeight) || input.outwardWeight <= 0) {
       return { ok: false, error: "Material Weight (KG) is mandatory and must be greater than 0 for Material DCs." };
     }
+    if (!input.length || isNaN(input.length) || !isFinite(input.length) || input.length <= 0) {
+      return { ok: false, error: "Length (MM) is mandatory and must be greater than 0." };
+    }
+    if (!input.width || isNaN(input.width) || !isFinite(input.width) || input.width <= 0) {
+      return { ok: false, error: "Width (MM) is mandatory and must be greater than 0." };
+    }
+    if (!input.height || isNaN(input.height) || !isFinite(input.height) || input.height <= 0) {
+      return { ok: false, error: "Height (MM) is mandatory and must be greater than 0." };
+    }
     if (!input.pricingBasis) {
       return { ok: false, error: "Please select a pricing basis: RW Quantity or Returning FG Quantity." };
     }
@@ -154,6 +163,10 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         partNumber: partNum || null,
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
+        length: input.length ? new Prisma.Decimal(input.length) : null,
+        width: input.width ? new Prisma.Decimal(input.width) : null,
+        height: input.height ? new Prisma.Decimal(input.height) : null,
+        dimensionUom: "MM",
         vendorId: input.vendorId,
         department: input.department ? input.department.trim() : null,
         purpose: input.purpose || "JOB_WORK",
@@ -179,7 +192,6 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         outwardQtyRw: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         rmUom: input.rmUom || "NOS",
         fgUom: input.fgUom || "NOS",
-        dimensionUom: "MM",
         outwardBoringWeight: input.outwardBoringWeight ? new Prisma.Decimal(input.outwardBoringWeight) : null,
         remarks: input.remarks || null,
 

@@ -66,6 +66,10 @@ const createDcSchema = z.object({
   rmQuantity: z.coerce.number().optional(),
   returnFgQuantity: z.coerce.number().optional(),
   outwardWeight: z.coerce.number({ invalid_type_error: "Material Weight (KG) must be a valid number." }).optional(),
+  length: z.coerce.number({ invalid_type_error: "Length (MM) must be a valid number." }).optional(),
+  width: z.coerce.number({ invalid_type_error: "Width (MM) must be a valid number." }).optional(),
+  height: z.coerce.number({ invalid_type_error: "Height (MM) must be a valid number." }).optional(),
+  dimensionUom: z.string().default("MM"),
   heatNumber: z.string().trim().max(60).optional(),
   vendorId: z.string().optional(),
   processId: z.string().optional(),
@@ -112,6 +116,15 @@ const createDcSchema = z.object({
     }
     if (!val.outwardWeight || isNaN(val.outwardWeight) || !isFinite(val.outwardWeight) || val.outwardWeight <= 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Material Weight (KG) is required and must be greater than 0 for Material DCs.", path: ["outwardWeight"] });
+    }
+    if (!val.length || isNaN(val.length) || !isFinite(val.length) || val.length <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Length (MM) is required and must be greater than 0.", path: ["length"] });
+    }
+    if (!val.width || isNaN(val.width) || !isFinite(val.width) || val.width <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Width (MM) is required and must be greater than 0.", path: ["width"] });
+    }
+    if (!val.height || isNaN(val.height) || !isFinite(val.height) || val.height <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Height (MM) is required and must be greater than 0.", path: ["height"] });
     }
     if (!val.heatNumber || !val.heatNumber.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Heat Number is required for Material DCs.", path: ["heatNumber"] });
@@ -195,6 +208,10 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         rmQuantity: data.rmQuantity ? new Prisma.Decimal(data.rmQuantity) : null,
         returnFgQuantity: data.returnFgQuantity ? new Prisma.Decimal(data.returnFgQuantity) : null,
         outwardWeight: data.outwardWeight ? new Prisma.Decimal(data.outwardWeight) : null,
+        length: data.length ? new Prisma.Decimal(data.length) : null,
+        width: data.width ? new Prisma.Decimal(data.width) : null,
+        height: data.height ? new Prisma.Decimal(data.height) : null,
+        dimensionUom: "MM",
         heatNumber: data.heatNumber ? data.heatNumber.trim() : null,
         pricingBasis: data.pricingBasis || null,
         ratePerQuantity: data.ratePerQuantity ? new Prisma.Decimal(data.ratePerQuantity) : null,

@@ -321,8 +321,8 @@ describe("Security Module Regression Suite", () => {
     expect(res.error).toContain("prohibited from creating Delivery Challans");
   });
 
-  // 14. Existing STORES DC creation flow continues to work
-  it("14. allows STORES user to create a DC with quantity, UOM, and dimensions", async () => {
+  // 14. STORES DC creation with mandatory dimensions L, W, H in MM
+  it("14. allows STORES user to create a DC with quantity, UOM, and dimensions L x W x H MM", async () => {
     vi.mocked(getSessionUser).mockResolvedValue(mockStoreUser as any);
     vi.mocked(requirePermission).mockResolvedValue(mockStoreUser as any);
     vi.mocked(prisma.vendor.findUnique).mockResolvedValue({ id: "v-1", active: true } as any);
@@ -340,58 +340,73 @@ describe("Security Module Regression Suite", () => {
       ratePerQuantity: 100,
       pricingBasis: "RW",
       outwardQtyRw: 50,
+      length: 250,
+      width: 180,
+      height: 120,
     });
 
     expect(res.ok).toBe(true);
-  });
-
-  // 15. Stores dimension entry saves L, W, H in MM on DRAFT/PENDING_APPROVAL
-  it("15. allows STORES user to save dimensions in MM for DRAFT/PENDING_APPROVAL DC", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue(mockStoreUser as any);
-    vi.mocked(requirePermission).mockResolvedValue(mockStoreUser as any);
-    vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
-      id: "dc-dim-1",
-      status: "PENDING_APPROVAL",
-      movementType: "MATERIAL",
-    } as any);
-
-    const { saveStoreDimensions } = await import("@/server/dcs/actions");
-    const res = await saveStoreDimensions("dc-dim-1", { length: 100, width: 50, height: 25 });
-
-    expect(res.ok).toBe(true);
-    expect(prisma.deliveryChallan.update).toHaveBeenCalledWith(
+    expect(prisma.deliveryChallan.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "dc-dim-1" },
         data: expect.objectContaining({
-          dimensionUom: "MM",
+          length: expect.anything(),
+          width: expect.anything(),
+          height: expect.anything(),
         }),
       }),
     );
   });
 
-  // 16. Management approval fails if dimensions are missing or <= 0
-  it("16. blocks approveDc if Stores has not entered valid dimensions for Material DC", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue(mockAdminUser as any);
-    vi.mocked(requirePermission).mockResolvedValue(mockAdminUser as any);
-    vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
-      id: "dc-nodim-1",
-      dcNumber: "DC-NODIM-001",
-      status: "PENDING_APPROVAL",
-      movementType: "MATERIAL",
-      length: null,
-      width: null,
-      height: null,
-    } as any);
+  // 15. DC creation fails if dimensions are missing
+  it("15. rejects DC creation if dimensions (Length, Width, Height) are missing", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(requirePermission).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(prisma.vendor.findUnique).mockResolvedValue({ id: "v-1", active: true } as any);
 
-    const { approveDc } = await import("@/server/dcs/actions");
-    const res = await approveDc("dc-nodim-1", "Manager Name");
+    const { createOutwardDc } = await import("@/server/dcs/extended-actions");
+
+    const res = await createOutwardDc({
+      vendorId: "v-1",
+      department: "PRODUCTION",
+      woNumber: "WO-999",
+      partNumber: "PN-888",
+      outwardWeight: 10.5,
+      ratePerQuantity: 100,
+      pricingBasis: "RW",
+      outwardQtyRw: 50,
+      // length, width, height missing!
+    });
 
     expect(res.ok).toBe(false);
-    expect(res.error).toContain("Stores must enter dimensions");
+    expect(res.error).toContain("Length (MM) is mandatory");
   });
 
-  // 17. Management approval succeeds when dimensions L, W, H > 0 in MM exist
-  it("17. allows approveDc when Stores dimensions in MM exist", async () => {
+  // 16. DC creation fails if dimensions <= 0 or invalid
+  it("16. rejects DC creation if dimension values are <= 0 or non-finite", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(requirePermission).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(prisma.vendor.findUnique).mockResolvedValue({ id: "v-1", active: true } as any);
+
+    const { createOutwardDc } = await import("@/server/dcs/extended-actions");
+
+    const resZero = await createOutwardDc({
+      vendorId: "v-1",
+      department: "PRODUCTION",
+      woNumber: "WO-999",
+      partNumber: "PN-888",
+      outwardWeight: 10.5,
+      ratePerQuantity: 100,
+      pricingBasis: "RW",
+      outwardQtyRw: 50,
+      length: 0,
+      width: 100,
+      height: 50,
+    });
+    expect(resZero.ok).toBe(false);
+  });
+
+  // 17. Management approval succeeds when DC has saved dimensions
+  it("17. allows approveDc when DC has saved dimensions in MM", async () => {
     vi.mocked(getSessionUser).mockResolvedValue(mockAdminUser as any);
     vi.mocked(requirePermission).mockResolvedValue(mockAdminUser as any);
     vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
@@ -399,9 +414,9 @@ describe("Security Module Regression Suite", () => {
       dcNumber: "DC-DIMOK-001",
       status: "PENDING_APPROVAL",
       movementType: "MATERIAL",
-      length: 100,
-      width: 50,
-      height: 25,
+      length: 250,
+      width: 180,
+      height: 120,
       createdBy: "other-user",
     } as any);
     vi.mocked(prisma.deliveryChallan.update).mockResolvedValue({ id: "dc-dimok-1", status: "APPROVED" } as any);
@@ -412,21 +427,36 @@ describe("Security Module Regression Suite", () => {
     expect(res.ok).toBe(true);
   });
 
-  // 18. Once APPROVED, dimensions are locked permanently
-  it("18. rejects saveStoreDimensions after DC is APPROVED", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue(mockStoreUser as any);
-    vi.mocked(requirePermission).mockResolvedValue(mockStoreUser as any);
-    vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
-      id: "dc-app-1",
-      status: "APPROVED",
-      movementType: "MATERIAL",
-    } as any);
+  // 18. Dimensions are read-only for Management, Security, Stores, Quality, Accounts, ADMIN
+  it("18. exposes saved dimensions read-only for all authorized roles", async () => {
+    const { filterDcDataForRole } = await import("@/server/dcs/sanitizer");
+    const mockDcRecord = {
+      id: "dc-100",
+      dcNumber: "DC-100",
+      length: 250,
+      width: 180,
+      height: 120,
+      dimensionUom: "MM",
+      rmQuantity: 10,
+    };
 
-    const { saveStoreDimensions } = await import("@/server/dcs/actions");
-    const res = await saveStoreDimensions("dc-app-1", { length: 120, width: 60, height: 30 });
+    const mgrData = filterDcDataForRole(mockDcRecord as any, "MANAGEMENT");
+    expect(mgrData.length).toBe(250);
+    expect(mgrData.width).toBe(180);
+    expect(mgrData.height).toBe(120);
 
-    expect(res.ok).toBe(false);
-    expect(res.error).toContain("Dimensions are locked");
+    const secData = filterDcDataForRole(mockDcRecord as any, "SECURITY");
+    expect(secData.length).toBe(250);
+    expect(secData.width).toBe(180);
+
+    const storeData = filterDcDataForRole(mockDcRecord as any, "STORES");
+    expect(storeData.length).toBe(250);
+
+    const qualData = filterDcDataForRole(mockDcRecord as any, "QUALITY");
+    expect(qualData.length).toBe(250);
+
+    const accData = filterDcDataForRole(mockDcRecord as any, "ACCOUNTS");
+    expect(accData.length).toBe(250);
   });
 
   // 19. PDF data loader includes dimensions formatted with MM
@@ -456,9 +486,9 @@ describe("Security Module Regression Suite", () => {
       approvedBy: "u-2",
       preparedByName: "Prep",
       approvedByName: "Appr",
-      length: 100,
-      width: 50,
-      height: 25,
+      length: 250,
+      width: 180,
+      height: 120,
       dimensionUom: "MM",
       vendor: { vendorName: "Vendor A", address: "Address A", gstNumber: "GST-A", panNumber: "PAN-A" },
       process: { name: "Machining" },
@@ -468,39 +498,45 @@ describe("Security Module Regression Suite", () => {
     const pdfData = await loadDcPdfData("dc-pdf-1");
 
     expect(pdfData).not.toBeNull();
-    expect(pdfData?.dimensions).toBe("100 × 50 × 25 MM");
+    expect(pdfData?.dimensions).toBe("250 × 180 × 120 MM");
   });
 
-  // 20. Rejects dimension mutation by pure ADMIN or non-STORES user
-  it("20. rejects saveStoreDimensions when called by a pure ADMIN or non-STORES user", async () => {
-    vi.mocked(getSessionUser).mockResolvedValue(mockAdminUser as any);
-    vi.mocked(requirePermission).mockRejectedValue(new ForbiddenError("Permission denied"));
+  // 20. Security role is strictly prohibited from creating Delivery Challans
+  it("20. rejects DC creation when attempted by a pure SECURITY user", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockSecurityUser as any);
 
-    const { saveStoreDimensions } = await import("@/server/dcs/actions");
-    const res = await saveStoreDimensions("dc-dim-1", { length: 100, width: 50, height: 25 });
+    const { createOutwardDc } = await import("@/server/dcs/extended-actions");
+    const res = await createOutwardDc({
+      vendorId: "v-1",
+      department: "PRODUCTION",
+      woNumber: "WO-999",
+      partNumber: "PN-888",
+      outwardWeight: 10.5,
+      length: 250,
+      width: 180,
+      height: 120,
+    });
 
     expect(res.ok).toBe(false);
-    expect(res.error).toContain("Only the Stores role is authorized to enter material dimensions.");
+    expect(res.error).toContain("Security role is strictly prohibited from creating Delivery Challans");
   });
 
-  // 21. Rejects invalid numeric values (NaN, Infinity, zero, negative) in saveStoreDimensions
-  it("21. rejects invalid dimension values (<= 0 or non-finite) in saveStoreDimensions", async () => {
+  // 21. Rejects invalid numeric values (NaN, Infinity, zero, negative) during DC creation
+  it("21. rejects invalid dimension values (<= 0 or non-finite) in createOutwardDc", async () => {
     vi.mocked(getSessionUser).mockResolvedValue(mockStoreUser as any);
     vi.mocked(requirePermission).mockResolvedValue(mockStoreUser as any);
-    vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
-      id: "dc-dim-1",
-      status: "DRAFT",
-      movementType: "MATERIAL",
-    } as any);
 
-    const { saveStoreDimensions } = await import("@/server/dcs/actions");
-    const resZero = await saveStoreDimensions("dc-dim-1", { length: 0, width: 50, height: 25 });
-    expect(resZero.ok).toBe(false);
-
-    const resNeg = await saveStoreDimensions("dc-dim-1", { length: 100, width: -10, height: 25 });
+    const { createOutwardDc } = await import("@/server/dcs/extended-actions");
+    const resNeg = await createOutwardDc({
+      vendorId: "v-1",
+      department: "PRODUCTION",
+      woNumber: "WO-999",
+      partNumber: "PN-888",
+      outwardWeight: 10.5,
+      length: 100,
+      width: -10,
+      height: 25,
+    });
     expect(resNeg.ok).toBe(false);
-
-    const resNaN = await saveStoreDimensions("dc-dim-1", { length: 100, width: 50, height: NaN });
-    expect(resNaN.ok).toBe(false);
   });
 });
