@@ -280,6 +280,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
           canPaymentApprove,
           canAccountsEntry,
           canClose,
+          canEditDimensions,
         }}
         closeEligibility={closeEligibility}
         dcData={{
@@ -301,6 +302,9 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
           invoiceAmount: dc.invoiceAmount != null ? Number(dc.invoiceAmount) : (dc.pricingSnapshot ? Number(dc.pricingSnapshot) : 0),
           paymentReferenceNumber: dc.paymentReferenceNumber || dc.paymentReference,
           paymentDate: dc.paymentDate ? dc.paymentDate.toISOString().split("T")[0] : null,
+          length: dc.length ? Number(dc.length) : null,
+          width: dc.width ? Number(dc.width) : null,
+          height: dc.height ? Number(dc.height) : null,
         }}
       />
 

@@ -115,6 +115,76 @@ export default async function StoreDashboardPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Queue 2: Material DCs Awaiting Dimension Entry */}
+      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
+        <div className="bg-amber-900 px-4 py-3 text-white flex items-center justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wider">Material DCs — Dimension Entry Queue (L × W × H MM)</h2>
+          <span className="rounded bg-amber-800 px-2 py-0.5 text-xs font-semibold">
+            {[...draftDcs, ...pendingApproval].filter(dc => dc.movementType === "MATERIAL").length} DCs
+          </span>
+        </div>
+        <table className="w-full text-left text-xs">
+          <thead className="bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-600 border-b border-slate-200">
+            <tr>
+              <th className="px-4 py-2.5">DC Number</th>
+              <th className="px-4 py-2.5">Status</th>
+              <th className="px-4 py-2.5">Vendor</th>
+              <th className="px-4 py-2.5">Part Number</th>
+              <th className="px-4 py-2.5">Dimensions (MM) Status</th>
+              <th className="px-4 py-2.5 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {[...draftDcs, ...pendingApproval].filter(dc => dc.movementType === "MATERIAL").length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-6 text-center text-slate-400 italic">No draft or pending approval Material DCs.</td>
+              </tr>
+            ) : (
+              [...draftDcs, ...pendingApproval]
+                .filter(dc => dc.movementType === "MATERIAL")
+                .map((dc) => {
+                  const hasDims = Boolean(dc.length && dc.width && dc.height);
+                  return (
+                    <tr key={dc.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-mono font-bold text-slate-900">{dc.dcNumber}</td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                          {dc.status.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-800">{dc.vendor?.vendorName}</td>
+                      <td className="px-4 py-3 font-mono text-slate-800">{dc.partNumber || "—"}</td>
+                      <td className="px-4 py-3 font-mono text-xs">
+                        {hasDims ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                            {Number(dc.length)} × {Number(dc.width)} × {Number(dc.height)} MM
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                            Dimensions Required
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Link
+                          href={`/dcs/${dc.id}#stores-dimensions`}
+                          className={`inline-block rounded px-3 py-1 text-xs font-bold text-white transition-colors ${
+                            hasDims
+                              ? "bg-slate-700 hover:bg-slate-800"
+                              : "bg-amber-600 hover:bg-amber-700 shadow-sm"
+                          }`}
+                        >
+                          {hasDims ? "Edit Dimensions" : "Enter Dimensions (MM)"}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

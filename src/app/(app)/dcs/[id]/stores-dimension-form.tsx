@@ -67,7 +67,7 @@ export function StoresDimensionForm({
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4 shadow-sm">
+    <div id="stores-dimensions" className="rounded-lg border border-slate-200 bg-white p-5 space-y-4 shadow-sm scroll-mt-6">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">
           <Ruler className="h-5 w-5 text-blue-600" />
