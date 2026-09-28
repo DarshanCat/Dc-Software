@@ -378,10 +378,11 @@ export async function saveStoreDimensions(
   input: { length: number; width: number; height: number },
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  const permCheck = await checkPermission(user, PERMISSIONS.STORE_VERIFY);
-  if (!permCheck.ok) {
-    const editCheck = await checkPermission(user, PERMISSIONS.DC_EDIT);
-    if (!editCheck.ok) return permCheck;
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const isStores = user.roleKeys?.includes("STORES") || (await hasPermission(user.id, PERMISSIONS.STORE_VERIFY));
+  if (!isStores) {
+    return { ok: false, error: "Only the Stores role is authorized to enter material dimensions." };
   }
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });

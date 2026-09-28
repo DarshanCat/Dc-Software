@@ -67,9 +67,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
   const canUploadDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_UPLOAD) : false;
   const canDeleteDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_DELETE) : false;
   const canEditDimensions = user
-    ? (await hasPermission(user.id, PERMISSIONS.STORE_VERIFY)) ||
-      (await hasPermission(user.id, PERMISSIONS.DC_EDIT)) ||
-      Boolean(user.roleKeys?.some((r) => ["ADMIN", "STORES"].includes(r)))
+    ? Boolean(user.roleKeys?.includes("STORES") || (await hasPermission(user.id, PERMISSIONS.STORE_VERIFY)))
     : false;
 
   const closeEligibility = await canCloseDc(dc.id, user?.id);

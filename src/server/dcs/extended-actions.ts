@@ -179,10 +179,7 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         outwardQtyRw: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         rmUom: input.rmUom || "NOS",
         fgUom: input.fgUom || "NOS",
-        dimensionUom: input.dimensionUom || "mm",
-        length: input.length ? new Prisma.Decimal(input.length) : null,
-        width: input.width ? new Prisma.Decimal(input.width) : null,
-        height: input.height ? new Prisma.Decimal(input.height) : null,
+        dimensionUom: "MM",
         outwardBoringWeight: input.outwardBoringWeight ? new Prisma.Decimal(input.outwardBoringWeight) : null,
         remarks: input.remarks || null,
 
@@ -324,9 +321,6 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
         outwardWeight: input.outwardWeight ? new Prisma.Decimal(input.outwardWeight) : null,
         outwardGatingWeight: input.outwardGatingWeight ? new Prisma.Decimal(input.outwardGatingWeight) : null,
         outwardQtyRw: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
-        length: input.length ? new Prisma.Decimal(input.length) : null,
-        width: input.width ? new Prisma.Decimal(input.width) : null,
-        height: input.height ? new Prisma.Decimal(input.height) : null,
         outwardBoringWeight: input.outwardBoringWeight ? new Prisma.Decimal(input.outwardBoringWeight) : null,
         remarks: input.remarks || null,
 

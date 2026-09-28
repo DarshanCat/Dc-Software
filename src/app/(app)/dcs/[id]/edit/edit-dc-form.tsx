@@ -83,10 +83,6 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
   const [outwardGatingWeight, setOutwardGatingWeight] = useState(dc.outwardGatingWeight ? String(dc.outwardGatingWeight) : "");
   const [outwardBoringWeight, setOutwardBoringWeight] = useState(dc.outwardBoringWeight ? String(dc.outwardBoringWeight) : "");
 
-  const [length, setLength] = useState(dc.length ? String(dc.length) : "");
-  const [width, setWidth] = useState(dc.width ? String(dc.width) : "");
-  const [height, setHeight] = useState(dc.height ? String(dc.height) : "");
-
   const [pricingBasis, setPricingBasis] = useState<"RW" | "FG">(dc.pricingBasis === "FG" ? "FG" : "RW");
   const [ratePerQuantity, setRatePerQuantity] = useState(dc.ratePerQuantity ? String(dc.ratePerQuantity) : "");
   const [remarks, setRemarks] = useState(dc.remarks || "");
@@ -155,9 +151,6 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
       outwardGatingWeight: outwardGatingWeight ? parseFloat(outwardGatingWeight) : undefined,
       outwardQtyRw: outwardQtyRw ? parseFloat(outwardQtyRw) : undefined,
       returningFgQuantity: returningFgQuantity ? parseFloat(returningFgQuantity) : undefined,
-      length: length ? parseFloat(length) : undefined,
-      width: width ? parseFloat(width) : undefined,
-      height: height ? parseFloat(height) : undefined,
       outwardBoringWeight: outwardBoringWeight ? parseFloat(outwardBoringWeight) : undefined,
       remarks: remarks.trim() || undefined,
       submitForApproval,
@@ -434,55 +427,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
           </div>
         </div>
 
-        {/* SECTION 5: DIMENSIONS */}
-        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
-            Section 5: Dimensions (mm)
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Length (mm)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                data-tally-id="length"
-                value={length}
-                onChange={(e) => setLength(e.target.value)}
-                placeholder="Length"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Width (mm)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                data-tally-id="width"
-                value={width}
-                onChange={(e) => setWidth(e.target.value)}
-                placeholder="Width"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Height (mm)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                data-tally-id="height"
-                value={height}
-                onChange={(e) => setHeight(e.target.value)}
-                placeholder="Height"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-        </div>
 
         {/* SECTION 6: PRICING & COMMERCIAL */}
         <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-6 shadow-sm space-y-4">

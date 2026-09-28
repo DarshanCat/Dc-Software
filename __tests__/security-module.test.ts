@@ -470,4 +470,37 @@ describe("Security Module Regression Suite", () => {
     expect(pdfData).not.toBeNull();
     expect(pdfData?.dimensions).toBe("100 × 50 × 25 MM");
   });
+
+  // 20. Rejects dimension mutation by pure ADMIN or non-STORES user
+  it("20. rejects saveStoreDimensions when called by a pure ADMIN or non-STORES user", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockAdminUser as any);
+    vi.mocked(requirePermission).mockRejectedValue(new ForbiddenError("Permission denied"));
+
+    const { saveStoreDimensions } = await import("@/server/dcs/actions");
+    const res = await saveStoreDimensions("dc-dim-1", { length: 100, width: 50, height: 25 });
+
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain("Only the Stores role is authorized to enter material dimensions.");
+  });
+
+  // 21. Rejects invalid numeric values (NaN, Infinity, zero, negative) in saveStoreDimensions
+  it("21. rejects invalid dimension values (<= 0 or non-finite) in saveStoreDimensions", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(requirePermission).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
+      id: "dc-dim-1",
+      status: "DRAFT",
+      movementType: "MATERIAL",
+    } as any);
+
+    const { saveStoreDimensions } = await import("@/server/dcs/actions");
+    const resZero = await saveStoreDimensions("dc-dim-1", { length: 0, width: 50, height: 25 });
+    expect(resZero.ok).toBe(false);
+
+    const resNeg = await saveStoreDimensions("dc-dim-1", { length: 100, width: -10, height: 25 });
+    expect(resNeg.ok).toBe(false);
+
+    const resNaN = await saveStoreDimensions("dc-dim-1", { length: 100, width: 50, height: NaN });
+    expect(resNaN.ok).toBe(false);
+  });
 });

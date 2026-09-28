@@ -234,7 +234,7 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-sans border-b pb-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-xs font-sans border-b pb-4">
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Outward Qty RW</span>
               <span className="font-mono font-bold text-blue-900 text-sm">{formatQuantity(selectedDc.outwardQtyRw, selectedDc.rmUom)}</span>
@@ -250,6 +250,14 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Gating / Boring Wt</span>
               <span className="font-mono text-slate-800">{selectedDc.outwardGatingWeight} KG / {selectedDc.outwardBoringWeight} KG</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Dimensions (MM)</span>
+              <span className="font-mono text-slate-800 font-semibold">
+                {selectedDc.length && selectedDc.width && selectedDc.height
+                  ? `${selectedDc.length} × ${selectedDc.width} × ${selectedDc.height} MM`
+                  : <span className="text-amber-600 font-semibold">Pending Stores Entry</span>}
+              </span>
             </div>
           </div>
 
