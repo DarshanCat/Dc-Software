@@ -90,6 +90,24 @@ export async function getStoreCompletedQueue(roleKey: string = "STORES") {
   return dcs.map((dc) => filterDcDataForRole(dc, roleKey));
 }
 
+/**
+ * Every DC a given user personally created, across the full lifecycle (DRAFT
+ * through CLOSED) - scoped strictly to that user's own createdBy id, regardless
+ * of ROLE_ALLOWED_STATUSES. A Stores user must be able to track a DC they
+ * created even after it leaves Stores' own action queues (e.g. once APPROVED,
+ * DISPATCHED, or beyond) - this does not grant any mutation right, only
+ * visibility of their own records.
+ */
+export async function getStoreCreatedDcs(userId: string, roleKey: string = "STORES") {
+  const dcs = await prisma.deliveryChallan.findMany({
+    where: { createdBy: userId },
+    include: { vendor: { select: { vendorName: true } }, process: { select: { name: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  return dcs.map((dc) => filterDcDataForRole(dc, roleKey));
+}
+
 // ==========================================================
 // CUSTODIAN QUEUE (Other DCs: Tool / Asset)
 // ==========================================================

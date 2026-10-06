@@ -102,6 +102,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         returnFgQuantity: data.returnFgQuantity ? new Prisma.Decimal(data.returnFgQuantity) : null,
         outwardWeight: data.outwardWeight ? new Prisma.Decimal(data.outwardWeight) : null,
         heatNumber: data.heatNumber ? data.heatNumber.trim() : null,
+        materialGrade: data.materialGrade ? data.materialGrade.trim() : null,
         pricingBasis: data.pricingBasis || null,
         ratePerQuantity: data.ratePerQuantity ? new Prisma.Decimal(data.ratePerQuantity) : null,
         expectedAmount: expectedAmount > 0 ? new Prisma.Decimal(expectedAmount) : null,

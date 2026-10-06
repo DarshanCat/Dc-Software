@@ -25,6 +25,7 @@ export interface DcPdfData {
   returnFgQuantity: string;
   weightKg: string;
   heatNumber: string;
+  materialGrade: string;
   pricingBasis?: string | null;
   ratePerQuantity?: string | null;
   expectedAmount?: string | null;
@@ -473,6 +474,33 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   });
 
   y = dataRowY - dataRowHeight - 12;
+
+  // ================= 3B. MATERIAL GRADE STRIP =================
+  // A single full-width label/value strip, directly under the material details
+  // table (Part Number / Heat Number), so Material Grade reads as part of the
+  // same material identification group without cramming a 6th narrow column
+  // into that table.
+  const gradeAvailW = CONTENT_WIDTH - 16;
+  const gradeLines = wrapCellText(data.materialGrade || "—", bold, 9, gradeAvailW);
+  const gradeBoxHeight = Math.max(26, 14 + gradeLines.length * 11);
+
+  ensureSpace(gradeBoxHeight + 12);
+
+  const gradeBoxTop = y;
+  currentPage.drawRectangle({
+    x: MARGIN,
+    y: gradeBoxTop - gradeBoxHeight,
+    width: CONTENT_WIDTH,
+    height: gradeBoxHeight,
+    borderColor: LINE,
+    borderWidth: 0.75,
+  });
+  currentPage.drawText("MATERIAL GRADE", { x: MARGIN + 8, y: gradeBoxTop - 10, size: 7, font: bold, color: LIGHT_GREY });
+  gradeLines.forEach((line, idx) => {
+    currentPage.drawText(line, { x: MARGIN + 8, y: gradeBoxTop - 21 - idx * 11, size: 9, font: bold, color: DARK });
+  });
+
+  y = gradeBoxTop - gradeBoxHeight - 12;
 
   // ================= 4. PRICING & COMMERCIAL TERMS BLOCK =================
   const pColW = CONTENT_WIDTH / 3;

@@ -96,6 +96,7 @@ export default async function EditDcPage({
     woNumber: dc.woNumber,
     partNumber: dc.partNumber,
     partDescriptionSnapshot: dc.partDescriptionSnapshot,
+    materialGrade: dc.materialGrade,
     outwardQtyRw: dc.outwardQtyRw ? Number(dc.outwardQtyRw.toString()) : null,
     returningFgQuantity: dc.returnFgQuantity ? Number(dc.returnFgQuantity.toString()) : null,
     outwardWeight: dc.outwardWeight ? Number(dc.outwardWeight.toString()) : null,

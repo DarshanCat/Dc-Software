@@ -135,6 +135,7 @@ export const outwardDcSchema = z.object({
   woNumber: optionalText("Work Order number is invalid.", 100),
   partNumber: optionalText("Part number is invalid.", 100),
   partDescription: optionalText("Part description is invalid."),
+  materialGrade: optionalText("Material Grade is invalid.", 60),
   pricingBasis: z.enum(["RW", "FG"]).nullable().optional(),
   ratePerQuantity: optionalFiniteNumber("Rate Per Quantity must be a valid number.").refine(
     (n) => n === undefined || n === null || n > 0,
@@ -182,6 +183,26 @@ export function validateMaterialWeightKg(
   return null;
 }
 
+export const MAX_MATERIAL_GRADE_LENGTH = 60;
+
+/**
+ * Material Grade is mandatory for MATERIAL Delivery Challans (e.g. "SG 500/7",
+ * "EN-GJS-500-7", "GG 25", "FG 260"). Not mandatory for TOOL/COMPANY_PROPERTY DCs.
+ * Trims surrounding whitespace only - no format restriction on the grade text itself.
+ */
+export function validateMaterialGrade(
+  movementType: string | null | undefined,
+  materialGrade: string | null | undefined,
+): string | null {
+  if (movementType !== "MATERIAL") return null;
+  const trimmed = (materialGrade ?? "").trim();
+  if (!trimmed) return "Material Grade is required for Material DCs.";
+  if (trimmed.length > MAX_MATERIAL_GRADE_LENGTH) {
+    return `Material Grade cannot exceed ${MAX_MATERIAL_GRADE_LENGTH} characters.`;
+  }
+  return null;
+}
+
 export const createDcSchema = z.object({
   movementType: z.enum(["MATERIAL", "TOOL", "COMPANY_PROPERTY"]).default("MATERIAL"),
   isCommercialService: z.boolean().default(false),
@@ -197,6 +218,7 @@ export const createDcSchema = z.object({
     .max(MAX_QUANTITY, "Weight (KG) is unreasonably large.")
     .optional(),
   heatNumber: z.string().trim().max(60).optional(),
+  materialGrade: z.string().trim().max(MAX_MATERIAL_GRADE_LENGTH, `Material Grade cannot exceed ${MAX_MATERIAL_GRADE_LENGTH} characters.`).optional(),
   vendorId: z.string().optional(),
   processId: z.string().optional(),
   purpose: z.enum([
@@ -238,6 +260,10 @@ export const createDcSchema = z.object({
     }
     if (!val.heatNumber || !val.heatNumber.trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Heat Number is required for Material DCs.", path: ["heatNumber"] });
+    }
+    const gradeError = validateMaterialGrade(val.movementType, val.materialGrade);
+    if (gradeError) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: gradeError, path: ["materialGrade"] });
     }
     const weightError = validateMaterialWeightKg(val.movementType, val.outwardWeight);
     if (weightError) {

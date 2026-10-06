@@ -19,6 +19,7 @@ export interface DcOption {
   woNumber: string;
   partNumber: string;
   partDescription: string;
+  materialGrade: string;
   department: string;
   outwardQtyRw: number;
   rmUom: string;
@@ -218,6 +219,10 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Part Number</span>
               <span className="font-mono font-bold text-slate-900">{selectedDc.partNumber}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Material Grade</span>
+              <span className="font-mono font-bold text-slate-900">{selectedDc.materialGrade}</span>
             </div>
             <div className="col-span-2">
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Supplier Address</span>

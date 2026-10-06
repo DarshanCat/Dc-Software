@@ -315,6 +315,7 @@ model DeliveryChallan {
   rmQuantity         Decimal?  @db.Decimal(12, 3)
   returnFgQuantity   Decimal?  @db.Decimal(12, 3)
   heatNumber         String?
+  materialGrade      String?
   expectedScrap      Decimal?  @db.Decimal(12, 3)
 
   // Master Snapshot Fields

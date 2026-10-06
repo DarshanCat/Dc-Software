@@ -65,6 +65,7 @@ describe("Three Issues Fix — PDF Heat Number, Vendor Fallback & Safe Test DC D
     returnFgQuantity: "10.000",
     weightKg: "10.500 KG",
     heatNumber: "H-101",
+    materialGrade: "SG 500/7",
     vehicleNumber: "KA-01-1234",
     transporter: "Self",
     ewayBillNumber: "EWB123",

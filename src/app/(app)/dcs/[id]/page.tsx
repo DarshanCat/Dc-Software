@@ -436,6 +436,10 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
                 <span className="font-mono font-bold text-slate-900 text-sm">{dc.heatNumber || "N/A"}</span>
               </div>
               <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Material Grade</span>
+                <span className="font-mono font-bold text-slate-900 text-sm">{dc.materialGrade || "N/A"}</span>
+              </div>
+              <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Outward Qty RM</span>
                 <span className="font-mono font-bold text-blue-900 text-base">
                   {dc.outwardQtyRw != null ? Number(dc.outwardQtyRw).toFixed(3) : Number(dc.rmQuantity ?? 0).toFixed(3)} {dc.rmUom || "NOS"}

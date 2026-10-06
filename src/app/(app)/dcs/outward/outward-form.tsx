@@ -38,6 +38,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
   const [woNumber, setWoNumber] = useState("");
   const [partNumber, setPartNumber] = useState("");
   const [partDescription, setPartDescription] = useState("");
+  const [materialGrade, setMaterialGrade] = useState("");
   const [pricingBasis, setPricingBasis] = useState<"RW" | "FG">("RW");
   const [ratePerQuantity, setRatePerQuantity] = useState<string>("");
   const [outwardWeight, setOutwardWeight] = useState<string>("");
@@ -63,6 +64,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
 
     if (!selectedVendorId) return setError("Supplier (Vendor) is mandatory.");
     if (!woNumber.trim()) return setError("WO ID is mandatory.");
+    if (!materialGrade.trim()) return setError("Material Grade is mandatory for Material DCs.");
     const weightVal = parseFloat(outwardWeight);
     if (!outwardWeight || !Number.isFinite(weightVal) || weightVal <= 0) {
       return setError("Weight (KG) is required and must be a positive number for Material DCs.");
@@ -76,6 +78,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
       woNumber: woNumber.trim(),
       partNumber: partNumber.trim(),
       partDescription: partDescription.trim() || undefined,
+      materialGrade: materialGrade.trim(),
       pricingBasis,
       ratePerQuantity: ratePerQuantity ? parseFloat(ratePerQuantity) : undefined,
       outwardWeight: outwardWeight ? parseFloat(outwardWeight) : undefined,
@@ -226,6 +229,20 @@ export function OutwardDcForm({ vendors, processes }: Props) {
               value={partDescription}
               placeholder="Auto-filled from Part Master"
               className="w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-700 focus:outline-none cursor-not-allowed font-medium"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Material Grade *</label>
+            <input
+              type="text"
+              data-tally-id="materialGrade"
+              value={materialGrade}
+              onChange={(e) => setMaterialGrade(e.target.value)}
+              placeholder="e.g. SG 500/7"
+              maxLength={60}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
             />
           </div>
         </div>

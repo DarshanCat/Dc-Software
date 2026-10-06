@@ -21,6 +21,7 @@ import {
   qualityInspectionSchema,
   firstIssueMessage,
   validateMaterialWeightKg,
+  validateMaterialGrade,
 } from "@/lib/validation/dc";
 
 async function checkPermission(user: any, permission: string): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -57,6 +58,7 @@ export interface CreateOutwardDcInput {
   woNumber?: string;
   partNumber?: string;
   partDescription?: string;
+  materialGrade?: string;
   pricingBasis?: "RW" | "FG";
   ratePerQuantity?: number;
   outwardWeight?: number;
@@ -98,6 +100,8 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
     }
     const weightError = validateMaterialWeightKg(movementType, input.outwardWeight);
     if (weightError) return { ok: false, error: weightError };
+    const gradeError = validateMaterialGrade(movementType, input.materialGrade);
+    if (gradeError) return { ok: false, error: gradeError };
   }
 
   const rate = input.ratePerQuantity ?? 0;
@@ -150,6 +154,7 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         partNumber: partNum || null,
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
+        materialGrade: input.materialGrade ? input.materialGrade.trim() : null,
         vendorId: input.vendorId,
         department: input.department ? input.department.trim() : null,
         purpose: input.purpose || "JOB_WORK",
@@ -247,6 +252,8 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
   }
   const weightError = validateMaterialWeightKg(input.movementType || "MATERIAL", input.outwardWeight);
   if (weightError) return { ok: false, error: weightError };
+  const gradeError = validateMaterialGrade(input.movementType || "MATERIAL", input.materialGrade);
+  if (gradeError) return { ok: false, error: gradeError };
 
   let pricingQty = 0;
   if (input.pricingBasis === "RW") {
@@ -294,6 +301,7 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
         partNumber: partNum || null,
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
+        materialGrade: input.materialGrade ? input.materialGrade.trim() : null,
         vendorId: input.vendorId,
         department: input.department.trim(),
         purpose: input.purpose || "JOB_WORK",

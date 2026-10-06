@@ -57,6 +57,8 @@ const baseMaterialInput = {
   rmQuantity: 100,
   returnFgQuantity: 98,
   heatNumber: "HEAT-500",
+  materialGrade: "SG 500/7",
+  outwardWeight: 50,
   pricingBasis: "RM" as const,
   ratePerQuantity: 10,
   purpose: "JOB_WORK" as const,
@@ -133,6 +135,71 @@ describe("Weight (KG) persistence through DRAFT -> PENDING_APPROVAL -> APPROVED"
   it("rejects creation server-side even if a malformed weight somehow bypasses the browser", async () => {
     const { createDc } = await import("../src/server/dcs/actions");
     const res = await createDc({ ...baseMaterialInput, outwardWeight: "abc" } as any);
+    expect(res.ok).toBe(false);
+  });
+});
+
+describe("Material Grade persistence (14/15/24)", () => {
+  beforeEach(() => {
+    dcStore.clear();
+    dcCounter = 0;
+    currentUser = storesUser;
+    vi.clearAllMocks();
+    prismaMock.vendor.findUnique.mockResolvedValue({ id: "vendor-1", vendorName: "Test Vendor", active: true, gstNumber: "29GST1", address: "Addr", addressLine2: null, area: null, city: null, state: null, pincode: null, country: "India" });
+    prismaMock.user.findMany.mockResolvedValue([]);
+  });
+
+  it("13: persists the entered Material Grade to DeliveryChallan.materialGrade on create", async () => {
+    const { createDc } = await import("../src/server/dcs/actions");
+    const res = await createDc({ ...baseMaterialInput, materialGrade: "EN-GJS-500-7" } as any);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(dcStore.get(res.dcId).materialGrade).toBe("EN-GJS-500-7");
+  });
+
+  it("14: Material Grade survives being re-fetched (simulated page refresh) unchanged", async () => {
+    const { createDc } = await import("../src/server/dcs/actions");
+    const res = await createDc({ ...baseMaterialInput, materialGrade: "GG 25" } as any);
+    if (!res.ok) throw new Error("setup failed");
+
+    const refetched = await prismaMock.deliveryChallan.findUnique({ where: { id: res.dcId } });
+    expect(refetched.materialGrade).toBe("GG 25");
+  });
+
+  it("Material Grade survives DRAFT -> PENDING_APPROVAL -> APPROVED unchanged (15: stays read-only, visible on detail)", async () => {
+    const { createDc, submitForApproval, approveDc } = await import("../src/server/dcs/actions");
+
+    const created = await createDc({ ...baseMaterialInput, materialGrade: "FG 260" } as any);
+    if (!created.ok) throw new Error("setup failed");
+    expect(dcStore.get(created.dcId).materialGrade).toBe("FG 260");
+
+    await submitForApproval(created.dcId);
+    expect(dcStore.get(created.dcId).materialGrade).toBe("FG 260");
+
+    currentUser = managementUser;
+    await approveDc(created.dcId, "Manager Name");
+    expect(dcStore.get(created.dcId).materialGrade).toBe("FG 260");
+  });
+
+  it("24: submitForApproval and approveDc never include materialGrade in their update payload - Management cannot modify it during approval", async () => {
+    const { createDc, submitForApproval, approveDc } = await import("../src/server/dcs/actions");
+    const created = await createDc({ ...baseMaterialInput, materialGrade: "SG 500/7" } as any);
+    if (!created.ok) throw new Error("setup failed");
+
+    await submitForApproval(created.dcId);
+    currentUser = managementUser;
+    await approveDc(created.dcId, "Manager Name");
+
+    for (const call of prismaMock.deliveryChallan.update.mock.calls) {
+      const [{ data }] = call;
+      expect(data).not.toHaveProperty("materialGrade");
+    }
+  });
+
+  it("12: rejects creation server-side when Material Grade is blank, even if the browser's required attribute is bypassed", async () => {
+    const { createDc } = await import("../src/server/dcs/actions");
+    const { materialGrade, ...withoutGrade } = baseMaterialInput;
+    const res = await createDc(withoutGrade as any);
     expect(res.ok).toBe(false);
   });
 });

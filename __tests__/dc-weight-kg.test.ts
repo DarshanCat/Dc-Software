@@ -9,6 +9,7 @@ const baseMaterialPayload = {
   rmQuantity: 100,
   returnFgQuantity: 98,
   heatNumber: "HEAT-1",
+  materialGrade: "SG 500/7",
   pricingBasis: "RM" as const,
   ratePerQuantity: 10,
   purpose: "JOB_WORK" as const,
