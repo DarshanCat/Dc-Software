@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSessionUser } from "@/server/session";
 import { getSecurityDispatchQueue, getSecurityReturnQueue, getSecurityCompletedQueue } from "@/server/dcs/queries";
 import { SecurityInwardForm } from "../security-inward-form";
+import { formatQuantity } from "@/lib/quantity-format";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +76,7 @@ export default async function SecurityDashboardPage() {
                   <td className="px-4 py-3 font-semibold text-slate-800">{dc.vendor?.vendorName}</td>
                   <td className="px-4 py-3 font-mono text-slate-800">{dc.partNumber || "—"}</td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">
-                    {dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"} kg
+                    {formatQuantity(dc.rmQuantity, dc.rmUom)}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <Link
@@ -122,10 +123,10 @@ export default async function SecurityDashboardPage() {
                   <td className="px-4 py-3 font-semibold text-slate-800">{dc.vendor?.vendorName}</td>
                   <td className="px-4 py-3 font-mono text-slate-800">{dc.partNumber || "—"}</td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">
-                    {dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"} kg
+                    {formatQuantity(dc.rmQuantity, dc.rmUom)}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">
-                    {dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"} kg
+                    {formatQuantity(dc.returnFgQuantity, dc.fgUom)}
                   </td>
                   <td className="px-4 py-3">
                     <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900 border border-amber-300">
@@ -140,6 +141,8 @@ export default async function SecurityDashboardPage() {
                         partNumber: dc.partNumber,
                         rmQuantity: dc.rmQuantity != null ? Number(dc.rmQuantity) : null,
                         returnFgQuantity: dc.returnFgQuantity != null ? Number(dc.returnFgQuantity) : null,
+                        rmUom: dc.rmUom,
+                        fgUom: dc.fgUom,
                         vendorName: dc.vendor?.vendorName,
                       }}
                     />

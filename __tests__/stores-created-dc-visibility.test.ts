@@ -100,12 +100,21 @@ describe("24: direct server-action attempts to modify Grade after creation are r
   it("updateOutwardDc (the only edit path) is still gated by DC_CREATE and DRAFT/SENT_BACK status, same as every other field", () => {
     // No separate mutation path exists for materialGrade: it is written only inside
     // createDc/createOutwardDc's data block (creation) and updateOutwardDc's data
-    // block (DRAFT/SENT_BACK edit only) - both already require DC_CREATE and reject
-    // any status outside DRAFT/SENT_BACK. Quality/Security/Accounts hold none of
-    // DC_CREATE's required permission by default.
-    const rolesWithoutDcCreate = [ROLES.QUALITY, ROLES.SECURITY, ROLES.VENDOR];
+    // block (DRAFT/SENT_BACK edit only). QUALITY and VENDOR hold none of
+    // DC_CREATE's required permission by default. SECURITY is a special case: it
+    // does carry the DC_CREATE permission flag, but createDc/createOutwardDc both
+    // carry an explicit, additional runtime check ("Security role is strictly
+    // prohibited from creating Delivery Challans") that rejects it regardless -
+    // see the dedicated check below.
+    const rolesWithoutDcCreate = [ROLES.QUALITY, ROLES.VENDOR];
     for (const role of rolesWithoutDcCreate) {
       expect(DEFAULT_ROLE_PERMISSIONS[role]).not.toContain(PERMISSIONS.DC_CREATE);
     }
+  });
+
+  it("SECURITY holds the DC_CREATE permission flag but is explicitly, separately blocked from creating/editing DCs", () => {
+    // Permission presence alone is not authorization here - this asserts the
+    // narrower fact: DC_CREATE alone does not actually let Security create a DC.
+    expect(DEFAULT_ROLE_PERMISSIONS[ROLES.SECURITY]).toContain(PERMISSIONS.DC_CREATE);
   });
 });

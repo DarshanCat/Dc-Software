@@ -36,6 +36,10 @@ interface DcRowLike {
   supplierNameSnapshot?: string | null;
   supplierAddressSnapshot?: string | null;
   supplierGstSnapshot?: string | null;
+  length?: unknown;
+  width?: unknown;
+  height?: unknown;
+  dimensionUom?: string | null;
   vendor: { vendorName: string; address: string | null; gstNumber: string | null; panNumber: string | null } | null;
   process: { name: string } | null;
 }
@@ -65,6 +69,7 @@ export interface DcPdfData {
   rmQuantity: string;
   returnFgQuantity: string;
   weightKg: string;
+  dimensions?: string | null;
   heatNumber: string;
   materialGrade: string;
   pricingBasis: string | null;
@@ -124,6 +129,10 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
     rmQuantity: dc.rmQuantity != null ? `${Number(dc.rmQuantity).toFixed(3)} ${dc.rmUom || "NOS"}` : "—",
     returnFgQuantity: dc.returnFgQuantity != null ? `${Number(dc.returnFgQuantity).toFixed(3)} ${dc.fgUom || "NOS"}` : "—",
     weightKg: dc.outwardWeight != null ? `${Number(dc.outwardWeight).toFixed(3)} KG` : "—",
+    dimensions:
+      dc.length != null && dc.width != null && dc.height != null
+        ? `${Number(dc.length)} × ${Number(dc.width)} × ${Number(dc.height)} MM`
+        : null,
     heatNumber: dc.heatNumber || "—",
     materialGrade: dc.materialGrade || "—",
     pricingBasis: dc.pricingBasis ? (dc.pricingBasis === "RM" ? "Price Based On: RM Quantity" : "Price Based On: FG Quantity") : "—",

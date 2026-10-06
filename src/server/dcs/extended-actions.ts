@@ -13,7 +13,7 @@ import { z } from "zod";
 import { stageResultBalance } from "@/analytics/math-engine";
 import { notifyUsersWithPermission } from "@/server/notifications/service";
 import { formatVendorFullAddress } from "@/lib/vendor-address";
-import { closeDc } from "./actions";
+import { closeDc, revalidateSecurityPaths } from "./actions";
 import {
   outwardDcSchema,
   inwardReceiptSchema,
@@ -82,6 +82,10 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
   const permCheck = await checkPermission(user, PERMISSIONS.DC_CREATE);
   if (!permCheck.ok) return permCheck;
 
+  if (user?.roleKeys?.includes("SECURITY") && !user.roleKeys.some((r: string) => ["ADMIN", "STORES", "PRODUCTION", "MANAGEMENT"].includes(r))) {
+    return { ok: false, error: "Security role is strictly prohibited from creating Delivery Challans." };
+  }
+
   const outwardError = firstIssueMessage(outwardDcSchema, input);
   if (outwardError) return { ok: false, error: outwardError };
 
@@ -91,6 +95,18 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
   if (movementType === "MATERIAL") {
     if (!input.woNumber) return { ok: false, error: "Work Order (WO ID) is mandatory for Material DCs." };
     if (!input.department) return { ok: false, error: "Department is mandatory." };
+    if (!input.outwardWeight || isNaN(input.outwardWeight) || !isFinite(input.outwardWeight) || input.outwardWeight <= 0) {
+      return { ok: false, error: "Material Weight (KG) is mandatory and must be greater than 0 for Material DCs." };
+    }
+    if (!input.length || isNaN(input.length) || !isFinite(input.length) || input.length <= 0) {
+      return { ok: false, error: "Length (MM) is mandatory and must be greater than 0." };
+    }
+    if (!input.width || isNaN(input.width) || !isFinite(input.width) || input.width <= 0) {
+      return { ok: false, error: "Width (MM) is mandatory and must be greater than 0." };
+    }
+    if (!input.height || isNaN(input.height) || !isFinite(input.height) || input.height <= 0) {
+      return { ok: false, error: "Height (MM) is mandatory and must be greater than 0." };
+    }
     if (!input.pricingBasis) {
       return { ok: false, error: "Please select a pricing basis: RW Quantity or Returning FG Quantity." };
     }
@@ -155,6 +171,10 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
         materialGrade: input.materialGrade ? input.materialGrade.trim() : null,
+        length: input.length ? new Prisma.Decimal(input.length) : null,
+        width: input.width ? new Prisma.Decimal(input.width) : null,
+        height: input.height ? new Prisma.Decimal(input.height) : null,
+        dimensionUom: "MM",
         vendorId: input.vendorId,
         department: input.department ? input.department.trim() : null,
         purpose: input.purpose || "JOB_WORK",
@@ -180,10 +200,6 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         outwardQtyRw: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         rmUom: input.rmUom || "NOS",
         fgUom: input.fgUom || "NOS",
-        dimensionUom: input.dimensionUom || "mm",
-        length: input.length ? new Prisma.Decimal(input.length) : null,
-        width: input.width ? new Prisma.Decimal(input.width) : null,
-        height: input.height ? new Prisma.Decimal(input.height) : null,
         outwardBoringWeight: input.outwardBoringWeight ? new Prisma.Decimal(input.outwardBoringWeight) : null,
         remarks: input.remarks || null,
 
@@ -241,6 +257,12 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
 
   if (existingDc.status !== "DRAFT" && existingDc.status !== "SENT_BACK") {
     return { ok: false, error: `Delivery Challan cannot be edited in current status (${existingDc.status}).` };
+  }
+
+  if (existingDc.movementType === "MATERIAL") {
+    if (!input.outwardWeight || isNaN(input.outwardWeight) || !isFinite(input.outwardWeight) || input.outwardWeight <= 0) {
+      return { ok: false, error: "Material Weight (KG) is mandatory and must be greater than 0 for Material DCs." };
+    }
   }
 
   if (!input.pricingBasis) {
@@ -324,9 +346,6 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
         outwardWeight: input.outwardWeight ? new Prisma.Decimal(input.outwardWeight) : null,
         outwardGatingWeight: input.outwardGatingWeight ? new Prisma.Decimal(input.outwardGatingWeight) : null,
         outwardQtyRw: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
-        length: input.length ? new Prisma.Decimal(input.length) : null,
-        width: input.width ? new Prisma.Decimal(input.width) : null,
-        height: input.height ? new Prisma.Decimal(input.height) : null,
         outwardBoringWeight: input.outwardBoringWeight ? new Prisma.Decimal(input.outwardBoringWeight) : null,
         remarks: input.remarks || null,
 
@@ -590,14 +609,14 @@ export async function recordInwardReceipt(input: RecordInwardReceiptInput) {
     prisma.deliveryChallan.update({
       where: { id: input.dcId },
       data: {
-        status: "INWARD_RECEIVED",
+        status: "SECURITY_RETURNED",
         actualInwardQty: new Prisma.Decimal(input.actualInwardQty),
         securityFgQuantity: new Prisma.Decimal(input.actualInwardQty),
         inwardDate,
         inwardDocumentNo: input.inwardDocumentNo || null,
         invoiceNumber: input.invoiceNumber || dc.invoiceNumber,
-        inwardGatingWeight: input.inwardGatingWeight ? new Prisma.Decimal(input.inwardGatingWeight) : null,
-        inwardBoringWeight: input.inwardBoringWeight ? new Prisma.Decimal(input.inwardBoringWeight) : null,
+        securityReturnDate: inwardDate,
+        securityReturnTime: now.toLocaleTimeString(),
         securityReturnRemarks: input.remarks || null,
         securityEnteredBy: user!.id,
         securityEnteredAt: now,
@@ -607,7 +626,7 @@ export async function recordInwardReceipt(input: RecordInwardReceiptInput) {
       data: {
         dcId: input.dcId,
         fromStatus: dc.status,
-        toStatus: "INWARD_RECEIVED",
+        toStatus: "SECURITY_RETURNED",
         changedBy: user!.id,
         reason: `Physical Inward Receipt recorded (Actual Inward: ${input.actualInwardQty})`,
       },
@@ -636,8 +655,7 @@ export async function recordInwardReceipt(input: RecordInwardReceiptInput) {
     }
   );
 
-  revalidatePath(`/dcs/${input.dcId}`);
-  revalidatePath("/dcs");
+  await revalidateSecurityPaths(input.dcId);
   return { ok: true };
 }
 

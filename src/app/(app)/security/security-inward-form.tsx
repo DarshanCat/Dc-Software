@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { submitSecurityReturn } from "@/server/dcs/actions";
+import { formatQuantity } from "@/lib/quantity-format";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 
@@ -12,6 +13,8 @@ interface SecurityInwardFormProps {
     partNumber?: string | null;
     rmQuantity?: number | string | null;
     returnFgQuantity?: number | string | null;
+    rmUom?: string | null;
+    fgUom?: string | null;
     vendorName?: string;
   };
   onSuccess?: () => void;
@@ -134,7 +137,7 @@ export function SecurityInwardForm({ dc, onSuccess }: SecurityInwardFormProps) {
                   </div>
                   <div>
                     <span className="text-slate-500 font-medium">Sent RM Quantity:</span>
-                    <p className="font-mono font-bold text-slate-900">{dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"} kg</p>
+                    <p className="font-mono font-bold text-slate-900">{formatQuantity(dc.rmQuantity, dc.rmUom)}</p>
                   </div>
                 </div>
 

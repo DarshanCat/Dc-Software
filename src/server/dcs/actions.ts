@@ -39,6 +39,23 @@ async function checkPermission(
   }
 }
 
+export async function revalidateSecurityPaths(dcId?: string) {
+  try {
+    if (dcId) revalidatePath(`/dcs/${dcId}`);
+    revalidatePath("/dcs");
+    revalidatePath("/security");
+    revalidatePath("/security/dashboard");
+    revalidatePath("/security/dispatch");
+    revalidatePath("/security/dispatched");
+    revalidatePath("/security/material-inward");
+    revalidatePath("/security/my-entries");
+    revalidatePath("/dcs/outward");
+    revalidatePath("/dcs/inward");
+  } catch {
+    // Ignore invalidations during test runner or background executions
+  }
+}
+
 export type CreateDcInput = z.infer<typeof createDcSchema>;
 
 export type ActionResult =
@@ -51,6 +68,10 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
   const user = await getSessionUser();
   const permCheck = await checkPermission(user, PERMISSIONS.DC_CREATE);
   if (!permCheck.ok) return permCheck;
+
+  if (user?.roleKeys?.includes("SECURITY") && !user.roleKeys.some((r: string) => ["ADMIN", "STORES", "PRODUCTION", "MANAGEMENT"].includes(r))) {
+    return { ok: false, error: "Security role is strictly prohibited from creating Delivery Challans." };
+  }
 
   const parsed = createDcSchema.safeParse(input);
   if (!parsed.success) {
@@ -101,6 +122,10 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         rmQuantity: data.rmQuantity ? new Prisma.Decimal(data.rmQuantity) : null,
         returnFgQuantity: data.returnFgQuantity ? new Prisma.Decimal(data.returnFgQuantity) : null,
         outwardWeight: data.outwardWeight ? new Prisma.Decimal(data.outwardWeight) : null,
+        length: data.length ? new Prisma.Decimal(data.length) : null,
+        width: data.width ? new Prisma.Decimal(data.width) : null,
+        height: data.height ? new Prisma.Decimal(data.height) : null,
+        dimensionUom: "MM",
         heatNumber: data.heatNumber ? data.heatNumber.trim() : null,
         materialGrade: data.materialGrade ? data.materialGrade.trim() : null,
         pricingBasis: data.pricingBasis || null,
@@ -131,6 +156,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
             itemCode: item.itemCode || null,
             itemDescription: item.itemDescription.trim(),
             quantity: new Prisma.Decimal(item.quantity),
+            weight: item.weight ? new Prisma.Decimal(item.weight) : null,
             uom: item.uom || "NOS",
             conditionIn: item.conditionIn || null,
             toolInstanceId: item.toolInstanceId || null,
@@ -279,6 +305,57 @@ export async function rejectDcToDraft(dcId: string, reason: string): Promise<{ o
   return { ok: true };
 }
 
+export async function saveStoreDimensions(
+  dcId: string,
+  input: { length: number; width: number; height: number },
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const isStores = user.roleKeys?.includes("STORES") || (await hasPermission(user.id, PERMISSIONS.STORE_VERIFY));
+  if (!isStores) {
+    return { ok: false, error: "Only the Stores role is authorized to enter material dimensions." };
+  }
+
+  const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
+  if (!dc) return { ok: false, error: "DC not found." };
+
+  if (dc.status !== "DRAFT" && dc.status !== "PENDING_APPROVAL") {
+    return { ok: false, error: "Dimensions are locked once the Delivery Challan is approved." };
+  }
+
+  const l = Number(input.length);
+  const w = Number(input.width);
+  const h = Number(input.height);
+
+  if (isNaN(l) || !isFinite(l) || l <= 0 || isNaN(w) || !isFinite(w) || w <= 0 || isNaN(h) || !isFinite(h) || h <= 0) {
+    return { ok: false, error: "Length, Width, and Height must be positive numeric values in MM." };
+  }
+
+  await prisma.deliveryChallan.update({
+    where: { id: dcId },
+    data: {
+      length: new Prisma.Decimal(l),
+      width: new Prisma.Decimal(w),
+      height: new Prisma.Decimal(h),
+      dimensionUom: "MM",
+    },
+  });
+
+  await writeAudit(prisma, {
+    userId: user!.id,
+    action: "STORES_DIMENSIONS_ENTERED",
+    module: "DeliveryChallan",
+    entityType: "DeliveryChallan",
+    entityId: dcId,
+    reason: `Stores entered dimensions: ${l} x ${w} x ${h} MM`,
+  });
+
+  revalidatePath(`/dcs/${dcId}`);
+  revalidatePath("/dcs");
+  return { ok: true };
+}
+
 // ================= 4. APPROVE DC (PENDING_APPROVAL -> APPROVED) =================
 
 export async function approveDc(dcId: string, approvedByName: string): Promise<{ ok: boolean; error?: string }> {
@@ -292,6 +369,12 @@ export async function approveDc(dcId: string, approvedByName: string): Promise<{
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
   if (dc.status !== "PENDING_APPROVAL") return { ok: false, error: `Only PENDING_APPROVAL DCs can be approved. Current status: ${dc.status}` };
+
+  if (dc.movementType === "MATERIAL") {
+    if (!dc.length || !dc.width || !dc.height || Number(dc.length) <= 0 || Number(dc.width) <= 0 || Number(dc.height) <= 0) {
+      return { ok: false, error: "Stores must enter dimensions (Length, Width, Height in MM) before the Delivery Challan can be approved by Management." };
+    }
+  }
 
   if (dc.createdBy === user!.id && !user!.roleKeys.includes("ADMIN")) {
     return { ok: false, error: "You cannot approve a Delivery Challan that you created." };
@@ -417,8 +500,7 @@ export async function submitSecurityDispatch(
     reason: `Dispatched quantity ${input.dispatchQuantity}`,
   });
 
-  revalidatePath(`/dcs/${dcId}`);
-  revalidatePath("/dcs");
+  await revalidateSecurityPaths(dcId);
   return { ok: true };
 }
 
@@ -458,8 +540,7 @@ export async function confirmDcAtVendor(dcId: string): Promise<{ ok: boolean; er
     reason: "Vendor receipt confirmed",
   });
 
-  revalidatePath(`/dcs/${dcId}`);
-  revalidatePath("/dcs");
+  await revalidateSecurityPaths(dcId);
   return { ok: true };
 }
 
@@ -553,8 +634,7 @@ export async function submitSecurityReturn(
     reason: `Security Inward recorded (Actual Inward Qty: ${input.actualInwardQty})`,
   });
 
-  revalidatePath(`/dcs/${dcId}`);
-  revalidatePath("/dcs");
+  await revalidateSecurityPaths(dcId);
   return { ok: true };
 }
 

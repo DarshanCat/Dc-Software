@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
@@ -8,6 +9,10 @@ export const dynamic = "force-dynamic";
 
 export default async function OutwardDcPage() {
   const user = await requireUser();
+  const roleKeys = user.roleKeys || [];
+  if (roleKeys.includes("SECURITY") && !roleKeys.some((r) => ["ADMIN", "STORES", "PRODUCTION", "MANAGEMENT"].includes(r))) {
+    redirect("/security/dispatch");
+  }
   const canCreate = await hasPermission(user.id, PERMISSIONS.DC_CREATE);
   if (!canCreate) {
     return (

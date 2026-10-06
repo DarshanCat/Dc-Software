@@ -19,6 +19,7 @@ import {
 import { deleteDraftDc, deleteTestDc } from "@/server/dcs/extended-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Ruler } from "lucide-react";
 
 export function DcActions({
   dcId,
@@ -42,6 +43,7 @@ export function DcActions({
     canPaymentApprove: boolean;
     canAccountsEntry: boolean;
     canClose: boolean;
+    canEditDimensions?: boolean;
   };
   closeEligibility?: {
     eligible: boolean;
@@ -66,6 +68,9 @@ export function DcActions({
     invoiceAmount?: number | null;
     paymentReferenceNumber?: string | null;
     paymentDate?: string | null;
+    length?: number | null;
+    width?: number | null;
+    height?: number | null;
   };
 }) {
   const router = useRouter();
@@ -151,6 +156,14 @@ export function DcActions({
       router.refresh();
     }
   }
+
+  const hasDimensions = Boolean(
+    dcData.length != null && Number(dcData.length) > 0 &&
+    dcData.width != null && Number(dcData.width) > 0 &&
+    dcData.height != null && Number(dcData.height) > 0
+  );
+  const isMaterialDc = (dcData.movementType || "MATERIAL") === "MATERIAL";
+  const isEditableStatus = status === "DRAFT" || status === "PENDING_APPROVAL" || status === "SENT_BACK";
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">

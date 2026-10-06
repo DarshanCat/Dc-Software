@@ -37,12 +37,22 @@ describe("DC Permission Configuration & Matrix", () => {
     }
   });
 
-  it("verifies roles without DC creation permission (SECURITY, VENDOR, PURCHASE, QUALITY)", () => {
-    const noCreateRoles = [ROLES.SECURITY, ROLES.VENDOR, ROLES.PURCHASE, ROLES.QUALITY];
+  it("verifies roles without DC creation permission (VENDOR, PURCHASE, QUALITY)", () => {
+    const noCreateRoles = [ROLES.VENDOR, ROLES.PURCHASE, ROLES.QUALITY];
     for (const role of noCreateRoles) {
       const perms = DEFAULT_ROLE_PERMISSIONS[role];
       expect(perms, `Role ${role} should NOT have DC_CREATE`).not.toContain(PERMISSIONS.DC_CREATE);
       expect(perms, `Role ${role} should NOT have DC_APPROVE`).not.toContain(PERMISSIONS.DC_APPROVE);
     }
+  });
+
+  it("verifies SECURITY cannot approve, and holds DC_CREATE only as a flag overridden by an explicit runtime block", () => {
+    // SECURITY carries the DC_CREATE permission flag (see src/config/permissions.ts),
+    // but createDc/createOutwardDc both reject any SECURITY-only user with "Security
+    // role is strictly prohibited from creating Delivery Challans" regardless of the
+    // permission flag - permission presence alone is not authorization here.
+    const perms = DEFAULT_ROLE_PERMISSIONS[ROLES.SECURITY];
+    expect(perms).toContain(PERMISSIONS.DC_CREATE);
+    expect(perms, "Role SECURITY should NOT have DC_APPROVE").not.toContain(PERMISSIONS.DC_APPROVE);
   });
 });

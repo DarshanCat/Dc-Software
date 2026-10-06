@@ -9,7 +9,7 @@ export default async function InwardDcPage() {
 
   const dcs = await prisma.deliveryChallan.findMany({
     where: {
-      status: { in: ["OUTWARD_CREATED", "MATERIAL_OUT", "DISPATCHED", "AT_VENDOR", "APPROVED"] },
+      status: { in: ["DISPATCHED", "AT_VENDOR"] },
     },
     include: { vendor: true },
     orderBy: { createdAt: "desc" },

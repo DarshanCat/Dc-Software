@@ -8,6 +8,7 @@ import { getVendorScope } from "@/server/dcs/vendor-scope";
 import { ROLE_ALLOWED_STATUSES } from "@/config/dc-visibility";
 import { Button } from "@/components/ui/button";
 import { DcListRowActions } from "./dc-list-actions";
+import { formatQuantity } from "@/lib/quantity-format";
 
 export const dynamic = "force-dynamic";
 
@@ -137,8 +138,8 @@ export default async function DcsPage({
                       {dc.vendor?.vendorName || dc.supplierNameSnapshot || (dc.destinationDepartment ? `${dc.destinationDepartment} (${dc.responsibleCustodian || ''})` : "Internal Custody")}
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{dc.process?.name ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{rmQty.toFixed(3)} {rmUom}</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{expFg.toFixed(3)} {fgUom}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{formatQuantity(rmQty, rmUom)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{formatQuantity(expFg, fgUom)}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{weightKg != null ? `${weightKg.toFixed(3)} KG` : "—"}</td>
                     <td className="px-4 py-2.5">
                       <span className={`rounded border px-2 py-0.5 text-[11px] font-bold ${STATUS_COLORS[dc.status] ?? "bg-slate-100 text-slate-600"}`}>

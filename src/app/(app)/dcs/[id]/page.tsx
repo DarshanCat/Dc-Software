@@ -6,6 +6,7 @@ import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { buildDcPublicUrl } from "@/services/dispatch.service";
 import { filterDcDataForRole } from "@/server/dcs/sanitizer";
+import { formatQuantity } from "@/lib/quantity-format";
 import { DcActions } from "./dc-actions";
 import { DocumentsPanel } from "@/components/documents-panel";
 
@@ -64,6 +65,9 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
   const canViewHistory = user ? await hasPermission(user.id, PERMISSIONS.DC_HISTORY_FULL) : false;
   const canUploadDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_UPLOAD) : false;
   const canDeleteDocs = user ? await hasPermission(user.id, PERMISSIONS.DOCUMENT_DELETE) : false;
+  const canEditDimensions = user
+    ? Boolean(user.roleKeys?.includes("STORES") || (await hasPermission(user.id, PERMISSIONS.STORE_VERIFY)))
+    : false;
 
   const closeEligibility = await canCloseDc(dc.id, user?.id);
 
@@ -275,6 +279,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
           canPaymentApprove,
           canAccountsEntry,
           canClose,
+          canEditDimensions,
         }}
         closeEligibility={closeEligibility}
         dcData={{
@@ -296,6 +301,9 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
           invoiceAmount: dc.invoiceAmount != null ? Number(dc.invoiceAmount) : (dc.pricingSnapshot ? Number(dc.pricingSnapshot) : 0),
           paymentReferenceNumber: dc.paymentReferenceNumber || dc.paymentReference,
           paymentDate: dc.paymentDate ? dc.paymentDate.toISOString().split("T")[0] : null,
+          length: dc.length ? Number(dc.length) : null,
+          width: dc.width ? Number(dc.width) : null,
+          height: dc.height ? Number(dc.height) : null,
         }}
       />
 
@@ -442,13 +450,13 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
               <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Outward Qty RM</span>
                 <span className="font-mono font-bold text-blue-900 text-base">
-                  {dc.outwardQtyRw != null ? Number(dc.outwardQtyRw).toFixed(3) : Number(dc.rmQuantity ?? 0).toFixed(3)} {dc.rmUom || "NOS"}
+                  {formatQuantity(dc.outwardQtyRw ?? dc.rmQuantity ?? 0, dc.rmUom)}
                 </span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Returning FG Qty</span>
                 <span className="font-mono font-bold text-blue-900 text-base">
-                  {dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"} {dc.fgUom || "NOS"}
+                  {formatQuantity(dc.returnFgQuantity, dc.fgUom)}
                 </span>
               </div>
             </div>
@@ -476,7 +484,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
               <div className="pt-2 border-t text-xs">
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Dimensions (L × W × H)</span>
                 <span className="font-mono font-semibold text-slate-800">
-                  {dc.length ? `${dc.length}mm` : "—"} × {dc.width ? `${dc.width}mm` : "—"} × {dc.height ? `${dc.height}mm` : "—"}
+                  {dc.length ? `${dc.length} MM` : "—"} × {dc.width ? `${dc.width} MM` : "—"} × {dc.height ? `${dc.height} MM` : "—"}
                 </span>
               </div>
             )}

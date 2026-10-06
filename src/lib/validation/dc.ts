@@ -141,7 +141,10 @@ export const outwardDcSchema = z.object({
     (n) => n === undefined || n === null || n > 0,
     { message: "Rate Per Quantity must be greater than zero." },
   ),
-  outwardWeight: optionalFiniteNumber("Outward Weight must be a valid number."),
+  outwardWeight: optionalFiniteNumber("Outward Weight must be a valid number.").refine(
+    (n) => n === undefined || n === null || n > 0,
+    { message: "Outward Weight must be a valid number greater than zero." },
+  ),
   outwardGatingWeight: optionalFiniteNumber("Outward Gating Weight must be a valid number."),
   outwardQtyRw: optionalFiniteNumber("Outward Qty (RW) must be a valid number.").refine(
     (n) => n === undefined || n === null || n > 0,
@@ -217,6 +220,10 @@ export const createDcSchema = z.object({
     .finite("Weight (KG) must be a valid, finite number.")
     .max(MAX_QUANTITY, "Weight (KG) is unreasonably large.")
     .optional(),
+  length: z.coerce.number({ invalid_type_error: "Length (MM) must be a valid number." }).optional(),
+  width: z.coerce.number({ invalid_type_error: "Width (MM) must be a valid number." }).optional(),
+  height: z.coerce.number({ invalid_type_error: "Height (MM) must be a valid number." }).optional(),
+  dimensionUom: z.string().default("MM"),
   heatNumber: z.string().trim().max(60).optional(),
   materialGrade: z.string().trim().max(MAX_MATERIAL_GRADE_LENGTH, `Material Grade cannot exceed ${MAX_MATERIAL_GRADE_LENGTH} characters.`).optional(),
   vendorId: z.string().optional(),
@@ -236,6 +243,10 @@ export const createDcSchema = z.object({
     itemCode: z.string().optional(),
     itemDescription: z.string().min(1, "Item description is required"),
     quantity: z.coerce.number().positive("Quantity must be > 0"),
+    weight: z.coerce.number({ invalid_type_error: "Weight (KG) must be a valid number." })
+      .finite("Weight (KG) must be a valid finite number.")
+      .gt(0, "Weight (KG) must be greater than 0.")
+      .optional(),
     uom: z.string().default("NOS"),
     conditionIn: z.string().optional(),
     toolInstanceId: z.string().optional(),
@@ -268,6 +279,15 @@ export const createDcSchema = z.object({
     const weightError = validateMaterialWeightKg(val.movementType, val.outwardWeight);
     if (weightError) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: weightError, path: ["outwardWeight"] });
+    }
+    if (!val.length || !Number.isFinite(val.length) || val.length <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Length (MM) is required and must be greater than 0.", path: ["length"] });
+    }
+    if (!val.width || !Number.isFinite(val.width) || val.width <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Width (MM) is required and must be greater than 0.", path: ["width"] });
+    }
+    if (!val.height || !Number.isFinite(val.height) || val.height <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Height (MM) is required and must be greater than 0.", path: ["height"] });
     }
     if (!val.pricingBasis) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a pricing basis: RM Quantity or FG Quantity.", path: ["pricingBasis"] });

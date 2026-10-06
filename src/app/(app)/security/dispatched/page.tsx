@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSessionUser } from "@/server/session";
 import { getSecurityReturnQueue } from "@/server/dcs/queries";
+import { formatQuantity } from "@/lib/quantity-format";
 
 export const dynamic = "force-dynamic";
 
@@ -50,10 +51,10 @@ export default async function SecurityDispatchedPage() {
                   <td className="px-4 py-3 font-semibold text-slate-800">{dc.vendor?.vendorName || "—"}</td>
                   <td className="px-4 py-3 font-mono text-slate-800">{dc.partNumber || "—"}</td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">
-                    {dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—"} kg
+                    {formatQuantity(dc.rmQuantity, dc.rmUom)}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">
-                    {dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—"} kg
+                    {formatQuantity(dc.returnFgQuantity, dc.fgUom)}
                   </td>
                   <td className="px-4 py-3">
                     <span className="rounded bg-indigo-100 px-2 py-0.5 text-[11px] font-bold text-indigo-900 border border-indigo-300">

@@ -1,5 +1,5 @@
 import { getSessionUser } from "@/server/session";
-import { getSecurityCompletedQueue } from "@/server/dcs/queries";
+import { getMySecurityEntriesQueue } from "@/server/dcs/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +7,7 @@ export default async function SecurityMyEntriesPage() {
   const user = await getSessionUser();
   const userRole = user?.roleKeys?.[0] || "SECURITY";
 
-  const dcs = await getSecurityCompletedQueue(userRole);
+  const dcs = await getMySecurityEntriesQueue(userRole, user?.id);
 
   return (
     <div className="space-y-6">
@@ -46,7 +46,7 @@ export default async function SecurityMyEntriesPage() {
               dcs.map((dc) => (
                 <tr key={dc.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-mono font-bold text-slate-900">{dc.dcNumber}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-800">{dc.vendor?.vendorName || "—"}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-800">{(dc as any).vendor?.vendorName || (dc as any).supplierNameSnapshot || "—"}</td>
                   <td className="px-4 py-3 font-mono text-slate-800">{dc.partNumber || "—"}</td>
                   <td className="px-4 py-3 text-right font-mono font-bold text-emerald-900">
                     {dc.securityFgQuantity != null ? Number(dc.securityFgQuantity).toFixed(3) : "—"} kg

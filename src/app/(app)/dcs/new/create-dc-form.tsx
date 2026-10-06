@@ -110,7 +110,10 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
   const [materialGrade, setMaterialGrade] = useState("");
   const [outwardQtyRw, setOutwardQtyRw] = useState("");
   const [returningFgQuantity, setReturningFgQuantity] = useState("");
-  const [weightKg, setWeightKg] = useState("");
+  const [outwardWeight, setOutwardWeight] = useState("");
+  const [length, setLength] = useState("");
+  const [width, setWidth] = useState("");
+  const [height, setHeight] = useState("");
 
   // Pricing fields
   const [pricingBasis, setPricingBasis] = useState<"RM" | "FG">("RM");
@@ -246,10 +249,12 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       if (!partNum) return setError("Part Number is mandatory for Material DCs.");
       if (!heatNumber.trim()) return setError("Heat Number is mandatory for Material DCs.");
       if (!materialGrade.trim()) return setError("Material Grade is mandatory for Material DCs.");
-      if (!outwardQtyRw || Number(outwardQtyRw) <= 0) return setError("Outward Qty RM must be > 0 for Material DCs.");
-      if (!returningFgQuantity || Number(returningFgQuantity) <= 0) return setError("Returning FG Qty must be > 0 for Material DCs.");
-      const weightVal = parseFloat(weightKg);
-      if (!weightKg || !Number.isFinite(weightVal) || weightVal <= 0) return setError("Weight (KG) is required and must be a positive number for Material DCs.");
+      if (!outwardQtyRw || Number(outwardQtyRw) <= 0 || isNaN(Number(outwardQtyRw))) return setError("Outward Qty RM must be > 0 for Material DCs.");
+      if (!returningFgQuantity || Number(returningFgQuantity) <= 0 || isNaN(Number(returningFgQuantity))) return setError("Returning FG Qty must be > 0 for Material DCs.");
+      if (!outwardWeight || Number(outwardWeight) <= 0 || isNaN(Number(outwardWeight)) || !isFinite(Number(outwardWeight))) return setError("Weight (KG) is mandatory and must be greater than 0 for Material DCs.");
+      if (!length || Number(length) <= 0 || isNaN(Number(length)) || !isFinite(Number(length))) return setError("Length (MM) is mandatory and must be greater than 0.");
+      if (!width || Number(width) <= 0 || isNaN(Number(width)) || !isFinite(Number(width))) return setError("Width (MM) is mandatory and must be greater than 0.");
+      if (!height || Number(height) <= 0 || isNaN(Number(height)) || !isFinite(Number(height))) return setError("Height (MM) is mandatory and must be greater than 0.");
       if (!pricingBasis) return setError("Please select a pricing basis for Material DCs.");
       const rateVal = parseFloat(ratePerQuantity);
       if (isNaN(rateVal) || rateVal <= 0) return setError("Rate Per Quantity must be greater than zero for Material DCs.");
@@ -289,7 +294,11 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       partNumber: movementType === "MATERIAL" ? partNum : undefined,
       rmQuantity: movementType === "MATERIAL" && outwardQtyRw ? parseFloat(outwardQtyRw) : undefined,
       returnFgQuantity: movementType === "MATERIAL" && returningFgQuantity ? parseFloat(returningFgQuantity) : undefined,
-      outwardWeight: movementType === "MATERIAL" && weightKg ? parseFloat(weightKg) : undefined,
+      outwardWeight: movementType === "MATERIAL" && outwardWeight ? parseFloat(outwardWeight) : undefined,
+      length: movementType === "MATERIAL" && length ? parseFloat(length) : undefined,
+      width: movementType === "MATERIAL" && width ? parseFloat(width) : undefined,
+      height: movementType === "MATERIAL" && height ? parseFloat(height) : undefined,
+      dimensionUom: "MM",
       heatNumber: movementType === "MATERIAL" ? heatNumber.trim() : undefined,
       materialGrade: movementType === "MATERIAL" ? materialGrade.trim() : undefined,
       pricingBasis: movementType === "MATERIAL" ? pricingBasis : undefined,
@@ -709,10 +718,57 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   step="0.001"
                   min="0.001"
                   data-tally-id="outwardWeight"
-                  value={weightKg}
-                  onChange={(e) => setWeightKg(e.target.value)}
-                  placeholder="Material weight sent, in KG"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={outwardWeight}
+                  onChange={(e) => setOutwardWeight(e.target.value)}
+                  placeholder="e.g. 150.500"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Length (MM) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  data-tally-id="length"
+                  value={length}
+                  onChange={(e) => setLength(e.target.value)}
+                  placeholder="e.g. 250.00"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Width (MM) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  data-tally-id="width"
+                  value={width}
+                  onChange={(e) => setWidth(e.target.value)}
+                  placeholder="e.g. 180.00"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Height (MM) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  data-tally-id="height"
+                  value={height}
+                  onChange={(e) => setHeight(e.target.value)}
+                  placeholder="e.g. 120.00"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   required
                 />
               </div>
