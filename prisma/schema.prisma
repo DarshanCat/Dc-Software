@@ -261,6 +261,16 @@ enum DcMovementType {
   COMPANY_PROPERTY
 }
 
+// Business classification of *how* a Material DC's material is being processed -
+// orthogonal to DcMovementType (MATERIAL/TOOL/COMPANY_PROPERTY), which classifies
+// *what* is moving. Only meaningful for MATERIAL DCs; nullable so existing TOOL/
+// COMPANY_PROPERTY DCs and historical MATERIAL DCs created before this field
+// existed remain valid without a migration default/backfill.
+enum DcMaterialType {
+  PRODUCTION
+  CONVERSION
+}
+
 enum DcStatus {
   DRAFT
   PENDING_APPROVAL
@@ -426,6 +436,7 @@ model DeliveryChallan {
   vendorId           String?
   vendor             Vendor?   @relation(fields: [vendorId], references: [id])
   movementType       DcMovementType @default(MATERIAL)
+  materialType       DcMaterialType?
   isCommercialService Boolean       @default(false)
   destinationDepartment String?
   responsibleCustodian String?
@@ -472,6 +483,7 @@ model DeliveryChallan {
   @@index([vendorId])
   @@index([status])
   @@index([movementType])
+  @@index([materialType])
   @@index([expectedReturnDate])
   @@index([vendorId, status])
 }

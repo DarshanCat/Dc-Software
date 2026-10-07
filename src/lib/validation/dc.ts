@@ -136,6 +136,7 @@ export const outwardDcSchema = z.object({
   partNumber: optionalText("Part number is invalid.", 100),
   partDescription: optionalText("Part description is invalid."),
   materialGrade: optionalText("Material Grade is invalid.", 60),
+  materialType: z.enum(["PRODUCTION", "CONVERSION"], { invalid_type_error: "Material Type must be either Production or Conversion." }).nullable().optional(),
   pricingBasis: z.enum(["RW", "FG"]).nullable().optional(),
   ratePerQuantity: optionalFiniteNumber("Rate Per Quantity must be a valid number.").refine(
     (n) => n === undefined || n === null || n > 0,
@@ -206,6 +207,25 @@ export function validateMaterialGrade(
   return null;
 }
 
+export const MATERIAL_TYPES = ["PRODUCTION", "CONVERSION"] as const;
+
+/**
+ * Material Type (PRODUCTION / CONVERSION) is a business classification mandatory
+ * for MATERIAL Delivery Challans, orthogonal to movementType. Not mandatory for
+ * TOOL/COMPANY_PROPERTY DCs, mirroring validateMaterialGrade/validateMaterialWeightKg.
+ */
+export function validateMaterialType(
+  movementType: string | null | undefined,
+  materialType: string | null | undefined,
+): string | null {
+  if (movementType !== "MATERIAL") return null;
+  if (!materialType) return "Material Type is required for Material DCs.";
+  if (!(MATERIAL_TYPES as readonly string[]).includes(materialType)) {
+    return "Material Type must be either Production or Conversion.";
+  }
+  return null;
+}
+
 export const createDcSchema = z.object({
   movementType: z.enum(["MATERIAL", "TOOL", "COMPANY_PROPERTY"]).default("MATERIAL"),
   isCommercialService: z.boolean().default(false),
@@ -226,6 +246,7 @@ export const createDcSchema = z.object({
   dimensionUom: z.string().default("MM"),
   heatNumber: z.string().trim().max(60).optional(),
   materialGrade: z.string().trim().max(MAX_MATERIAL_GRADE_LENGTH, `Material Grade cannot exceed ${MAX_MATERIAL_GRADE_LENGTH} characters.`).optional(),
+  materialType: z.enum(MATERIAL_TYPES, { invalid_type_error: "Material Type must be either Production or Conversion." }).optional(),
   vendorId: z.string().optional(),
   processId: z.string().optional(),
   purpose: z.enum([
@@ -275,6 +296,10 @@ export const createDcSchema = z.object({
     const gradeError = validateMaterialGrade(val.movementType, val.materialGrade);
     if (gradeError) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: gradeError, path: ["materialGrade"] });
+    }
+    const materialTypeError = validateMaterialType(val.movementType, val.materialType);
+    if (materialTypeError) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: materialTypeError, path: ["materialType"] });
     }
     const weightError = validateMaterialWeightKg(val.movementType, val.outwardWeight);
     if (weightError) {

@@ -10,6 +10,7 @@ const baseMaterialPayload = {
   returnFgQuantity: 98,
   heatNumber: "HEAT-1",
   materialGrade: "SG 500/7",
+  materialType: "PRODUCTION" as const,
   length: 100,
   width: 50,
   height: 25,

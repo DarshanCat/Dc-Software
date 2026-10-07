@@ -448,6 +448,12 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
                 <span className="font-mono font-bold text-slate-900 text-sm">{dc.materialGrade || "N/A"}</span>
               </div>
               <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Material Type</span>
+                <span className="font-mono font-bold text-slate-900 text-sm">
+                  {dc.materialType ? (dc.materialType === "PRODUCTION" ? "Production" : "Conversion") : "N/A"}
+                </span>
+              </div>
+              <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Outward Qty RM</span>
                 <span className="font-mono font-bold text-blue-900 text-base">
                   {formatQuantity(dc.outwardQtyRw ?? dc.rmQuantity ?? 0, dc.rmUom)}

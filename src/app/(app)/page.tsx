@@ -33,7 +33,7 @@ export default async function DashboardPage() {
   // Dispatch to role-specific dashboard if not ADMIN
   if (!roleKeys.includes("ADMIN")) {
     if (roleKeys.includes("SECURITY")) return <SecurityDashboardPage />;
-    if (roleKeys.includes("STORES")) return <StoreDashboardPage />;
+    if (roleKeys.includes("STORES")) return <StoreDashboardPage searchParams={Promise.resolve({})} />;
     if (roleKeys.includes("MANAGEMENT")) return <ManagementDashboardPage />;
     if (roleKeys.includes("ACCOUNTS")) return <AccountsDashboardPage />;
     if (roleKeys.includes("PRODUCTION")) return <ProductionDashboardPage />;

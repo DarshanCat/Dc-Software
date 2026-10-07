@@ -6,6 +6,7 @@ import { PERMISSIONS } from "@/config/permissions";
 import { filterDcDataForRole } from "@/server/dcs/sanitizer";
 import { getVendorScope } from "@/server/dcs/vendor-scope";
 import { ROLE_ALLOWED_STATUSES } from "@/config/dc-visibility";
+import { buildDcDateRange } from "@/lib/dc-date";
 import { Button } from "@/components/ui/button";
 import { DcListRowActions } from "./dc-list-actions";
 import { formatQuantity } from "@/lib/quantity-format";
@@ -31,17 +32,25 @@ const STATUS_COLORS: Record<string, string> = {
 export default async function DcsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; overdue?: string }>;
+  searchParams: Promise<{ status?: string; overdue?: string; dcDateFrom?: string; dcDateTo?: string; materialType?: string }>;
 }) {
-  const { status, overdue } = await searchParams;
+  const { status, overdue, dcDateFrom, dcDateTo, materialType } = await searchParams;
   const user = await getSessionUser();
   const canCreate = user ? await hasPermission(user.id, PERMISSIONS.DC_CREATE) : false;
   const userRole = user?.roleKeys?.[0] || "GUEST";
   const roleKeys = user?.roleKeys || [];
   const isAdmin = roleKeys.includes("ADMIN");
 
+  const dateRange = buildDcDateRange(dcDateFrom, dcDateTo);
+  // An invalid range (or From > To) must return no rows rather than silently
+  // showing an unfiltered list - never fail open on a bad date filter.
+  const dcDateCondition = dateRange.error ? { gte: new Date(8640000000000000) } : dateRange.where;
+  const materialTypeFilter = materialType === "PRODUCTION" || materialType === "CONVERSION" ? materialType : undefined;
+
   const where: Record<string, unknown> = {
     ...getVendorScope(user),
+    ...(dcDateCondition ? { dcDate: dcDateCondition } : {}),
+    ...(materialTypeFilter ? { materialType: materialTypeFilter } : {}),
   };
 
   if (!isAdmin) {
@@ -94,6 +103,49 @@ export default async function DcsPage({
         )}
       </div>
 
+      <form className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4" action="/dcs">
+        {status && <input type="hidden" name="status" value={status} />}
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-700">DC Date From</label>
+          <input
+            type="date"
+            name="dcDateFrom"
+            defaultValue={dcDateFrom ?? ""}
+            className="h-9 rounded-md border border-slate-300 px-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-700">DC Date To</label>
+          <input
+            type="date"
+            name="dcDateTo"
+            defaultValue={dcDateTo ?? ""}
+            className="h-9 rounded-md border border-slate-300 px-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-700">Material Type</label>
+          <select
+            name="materialType"
+            defaultValue={materialType ?? ""}
+            className="h-9 rounded-md border border-slate-300 px-2 text-sm"
+          >
+            <option value="">All</option>
+            <option value="PRODUCTION">Production</option>
+            <option value="CONVERSION">Conversion</option>
+          </select>
+        </div>
+        <button type="submit" className="h-9 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white">
+          Search
+        </button>
+        <a href="/dcs" className="h-9 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 flex items-center">
+          Clear
+        </a>
+        {dateRange.error && (
+          <p className="w-full text-xs font-medium text-red-600">{dateRange.error} No results are shown below.</p>
+        )}
+      </form>
+
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-600 border-b border-slate-200">
@@ -102,6 +154,7 @@ export default async function DcsPage({
               <th className="px-4 py-2.5 font-bold">Date</th>
               <th className="px-4 py-2.5 font-bold">Vendor</th>
               <th className="px-4 py-2.5 font-bold">Process</th>
+              <th className="px-4 py-2.5 font-bold">Material Type</th>
               <th className="px-4 py-2.5 font-bold text-right">RM Qty</th>
               <th className="px-4 py-2.5 font-bold text-right">Exp FG Qty</th>
               <th className="px-4 py-2.5 font-bold text-right">Weight (KG)</th>
@@ -112,7 +165,7 @@ export default async function DcsPage({
           <tbody className="divide-y divide-slate-100 text-xs">
             {dcs.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-slate-400 italic">
+                <td colSpan={10} className="px-4 py-8 text-center text-slate-400 italic">
                   No Delivery Challans found for your role or requested queue.
                 </td>
               </tr>
@@ -138,6 +191,9 @@ export default async function DcsPage({
                       {dc.vendor?.vendorName || dc.supplierNameSnapshot || (dc.destinationDepartment ? `${dc.destinationDepartment} (${dc.responsibleCustodian || ''})` : "Internal Custody")}
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{dc.process?.name ?? "—"}</td>
+                    <td className="px-4 py-2.5 text-slate-600">
+                      {dc.materialType === "PRODUCTION" ? "Production" : dc.materialType === "CONVERSION" ? "Conversion" : "—"}
+                    </td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{formatQuantity(rmQty, rmUom)}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{formatQuantity(expFg, fgUom)}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{weightKg != null ? `${weightKg.toFixed(3)} KG` : "—"}</td>

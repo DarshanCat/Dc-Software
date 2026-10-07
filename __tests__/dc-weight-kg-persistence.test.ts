@@ -58,6 +58,7 @@ const baseMaterialInput = {
   returnFgQuantity: 98,
   heatNumber: "HEAT-500",
   materialGrade: "SG 500/7",
+  materialType: "PRODUCTION" as const,
   outwardWeight: 50,
   length: 100,
   width: 50,

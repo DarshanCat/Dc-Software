@@ -39,6 +39,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
   const [partNumber, setPartNumber] = useState("");
   const [partDescription, setPartDescription] = useState("");
   const [materialGrade, setMaterialGrade] = useState("");
+  const [materialType, setMaterialType] = useState<"PRODUCTION" | "CONVERSION" | "">("");
   const [pricingBasis, setPricingBasis] = useState<"RW" | "FG">("RW");
   const [ratePerQuantity, setRatePerQuantity] = useState<string>("");
   const [outwardWeight, setOutwardWeight] = useState<string>("");
@@ -65,6 +66,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
     if (!selectedVendorId) return setError("Supplier (Vendor) is mandatory.");
     if (!woNumber.trim()) return setError("WO ID is mandatory.");
     if (!materialGrade.trim()) return setError("Material Grade is mandatory for Material DCs.");
+    if (!materialType) return setError("Material Type is mandatory for Material DCs.");
     const weightVal = parseFloat(outwardWeight);
     if (!outwardWeight || !Number.isFinite(weightVal) || weightVal <= 0) {
       return setError("Weight (KG) is required and must be a positive number for Material DCs.");
@@ -82,6 +84,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
       partNumber: partNumber.trim(),
       partDescription: partDescription.trim() || undefined,
       materialGrade: materialGrade.trim(),
+      materialType: materialType || undefined,
       pricingBasis,
       ratePerQuantity: ratePerQuantity ? parseFloat(ratePerQuantity) : undefined,
       outwardWeight: outwardWeight ? parseFloat(outwardWeight) : undefined,
@@ -248,6 +251,21 @@ export function OutwardDcForm({ vendors, processes }: Props) {
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Material Type *</label>
+            <select
+              data-tally-id="materialType"
+              value={materialType}
+              onChange={(e) => setMaterialType(e.target.value as "PRODUCTION" | "CONVERSION" | "")}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              required
+            >
+              <option value="">-- Select Material Type --</option>
+              <option value="PRODUCTION">Production</option>
+              <option value="CONVERSION">Conversion</option>
+            </select>
           </div>
         </div>
       </div>

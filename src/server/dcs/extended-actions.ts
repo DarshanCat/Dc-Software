@@ -22,6 +22,7 @@ import {
   firstIssueMessage,
   validateMaterialWeightKg,
   validateMaterialGrade,
+  validateMaterialType,
 } from "@/lib/validation/dc";
 
 async function checkPermission(user: any, permission: string): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -59,6 +60,7 @@ export interface CreateOutwardDcInput {
   partNumber?: string;
   partDescription?: string;
   materialGrade?: string;
+  materialType?: "PRODUCTION" | "CONVERSION";
   pricingBasis?: "RW" | "FG";
   ratePerQuantity?: number;
   outwardWeight?: number;
@@ -118,6 +120,8 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
     if (weightError) return { ok: false, error: weightError };
     const gradeError = validateMaterialGrade(movementType, input.materialGrade);
     if (gradeError) return { ok: false, error: gradeError };
+    const materialTypeError = validateMaterialType(movementType, input.materialType);
+    if (materialTypeError) return { ok: false, error: materialTypeError };
   }
 
   const rate = input.ratePerQuantity ?? 0;
@@ -171,6 +175,7 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
         materialGrade: input.materialGrade ? input.materialGrade.trim() : null,
+        materialType: input.materialType || null,
         length: input.length ? new Prisma.Decimal(input.length) : null,
         width: input.width ? new Prisma.Decimal(input.width) : null,
         height: input.height ? new Prisma.Decimal(input.height) : null,
@@ -276,6 +281,8 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
   if (weightError) return { ok: false, error: weightError };
   const gradeError = validateMaterialGrade(input.movementType || "MATERIAL", input.materialGrade);
   if (gradeError) return { ok: false, error: gradeError };
+  const materialTypeError = validateMaterialType(input.movementType || "MATERIAL", input.materialType);
+  if (materialTypeError) return { ok: false, error: materialTypeError };
 
   let pricingQty = 0;
   if (input.pricingBasis === "RW") {
@@ -324,6 +331,7 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
         materialGrade: input.materialGrade ? input.materialGrade.trim() : null,
+        materialType: input.materialType || null,
         vendorId: input.vendorId,
         department: input.department.trim(),
         purpose: input.purpose || "JOB_WORK",

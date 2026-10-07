@@ -45,6 +45,7 @@ interface DcData {
   partNumber: string | null;
   partDescriptionSnapshot: string | null;
   materialGrade: string | null;
+  materialType: string | null;
   outwardQtyRw: number | null;
   returningFgQuantity: number | null;
   outwardWeight: number | null;
@@ -82,6 +83,9 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
   const [customPartNumber, setCustomPartNumber] = useState(dc.partNumber || "");
   const [partDescription, setPartDescription] = useState(dc.partDescriptionSnapshot || "");
   const [materialGrade, setMaterialGrade] = useState(dc.materialGrade || "");
+  const [materialType, setMaterialType] = useState<"PRODUCTION" | "CONVERSION" | "">(
+    dc.materialType === "PRODUCTION" || dc.materialType === "CONVERSION" ? dc.materialType : ""
+  );
 
   const [outwardQtyRw, setOutwardQtyRw] = useState(dc.outwardQtyRw ? String(dc.outwardQtyRw) : "");
   const [returningFgQuantity, setReturningFgQuantity] = useState(dc.returningFgQuantity ? String(dc.returningFgQuantity) : "");
@@ -131,6 +135,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
     const partNum = customPartNumber.trim() || (items.find((i) => i.id === selectedPartId)?.itemCode || "");
     if (!partNum) return setError("Part Number is mandatory.");
     if (!materialGrade.trim()) return setError("Material Grade is required for Material DCs.");
+    if (!materialType) return setError("Material Type is required for Material DCs.");
 
     if (!pricingBasis) return setError("Please select a pricing basis: RW Quantity or Returning FG Quantity.");
     const rateVal = parseFloat(ratePerQuantity);
@@ -158,6 +163,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
       partNumber: partNum,
       partDescription: partDescription.trim() || undefined,
       materialGrade: materialGrade.trim(),
+      materialType: materialType || undefined,
       pricingBasis,
       ratePerQuantity: rateVal,
       outwardWeight: outwardWeight ? parseFloat(outwardWeight) : undefined,
@@ -359,6 +365,21 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Material Type *</label>
+              <select
+                data-tally-id="materialType"
+                value={materialType}
+                onChange={(e) => setMaterialType(e.target.value as "PRODUCTION" | "CONVERSION" | "")}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                required
+              >
+                <option value="">-- Select Material Type --</option>
+                <option value="PRODUCTION">Production</option>
+                <option value="CONVERSION">Conversion</option>
+              </select>
             </div>
           </div>
         </div>

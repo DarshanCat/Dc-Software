@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { filterDcDataForRole } from "./sanitizer";
-import type { DeliveryChallan, Prisma, DcStatus } from "@prisma/client";
+import { buildDcDateRange } from "@/lib/dc-date";
+import type { DeliveryChallan, Prisma, DcStatus, DcMaterialType } from "@prisma/client";
 
 /**
  * Authoritative DC Queue Queries for Role-Based Operations.
@@ -115,22 +116,85 @@ export async function getStoreCompletedQueue(roleKey: string = "STORES") {
   return dcs.map((dc) => filterDcDataForRole(dc, roleKey));
 }
 
+export interface StoresAllDcsFilters {
+  dcDateFrom?: string | null;
+  dcDateTo?: string | null;
+  materialType?: string | null;
+  status?: string | null;
+  search?: string | null;
+}
+
+export interface StoresAllDcsResult {
+  dcs: Array<ReturnType<typeof filterDcDataForRole> & { createdByName: string }>;
+  error?: string;
+}
+
 /**
- * Every DC a given user personally created, across the full lifecycle (DRAFT
- * through CLOSED) - scoped strictly to that user's own createdBy id, regardless
- * of ROLE_ALLOWED_STATUSES. A Stores user must be able to track a DC they
- * created even after it leaves Stores' own action queues (e.g. once APPROVED,
- * DISPATCHED, or beyond) - this does not grant any mutation right, only
- * visibility of their own records.
+ * Every Delivery Challan visible to Stores, across the full lifecycle (DRAFT
+ * through CLOSED) and regardless of who created it - Stores must be able to
+ * track every DC in the system, not only the ones they personally created.
+ * `createdBy` is resolved to a display name so creator attribution is never
+ * lost even though visibility is no longer scoped to it. This does not grant
+ * any mutation right, only visibility; DC-stage write permissions (DC_CREATE,
+ * STORE_VERIFY, ...) are unchanged and enforced by their own server actions.
+ *
+ * Date filtering uses the authoritative DeliveryChallan.dcDate with the same
+ * inclusive IST business-day boundaries as Manager's date search
+ * (buildDcDateRange) - an invalid range (or From > To) must return no rows
+ * rather than silently showing an unfiltered list.
  */
-export async function getStoreCreatedDcs(userId: string, roleKey: string = "STORES") {
+export async function getAllDcsForStores(
+  filters: StoresAllDcsFilters = {},
+  roleKey: string = "STORES",
+): Promise<StoresAllDcsResult> {
+  const dateRange = buildDcDateRange(filters.dcDateFrom, filters.dcDateTo);
+
+  const where: Prisma.DeliveryChallanWhereInput = {};
+
+  if (dateRange.error) {
+    // Fail closed: never show an unfiltered list when the range itself is invalid.
+    where.dcDate = { gte: new Date(8640000000000000) };
+  } else if (dateRange.where) {
+    where.dcDate = dateRange.where;
+  }
+
+  if (filters.materialType === "PRODUCTION" || filters.materialType === "CONVERSION") {
+    where.materialType = filters.materialType as DcMaterialType;
+  }
+
+  if (filters.status) {
+    where.status = filters.status as DcStatus;
+  }
+
+  const search = (filters.search ?? "").trim();
+  if (search) {
+    where.OR = [
+      { dcNumber: { contains: search, mode: "insensitive" } },
+      { woNumber: { contains: search, mode: "insensitive" } },
+      { partNumber: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
   const dcs = await prisma.deliveryChallan.findMany({
-    where: { createdBy: userId },
+    where,
     include: { vendor: { select: { vendorName: true } }, process: { select: { name: true } } },
-    orderBy: { createdAt: "desc" },
-    take: 100,
+    orderBy: { dcDate: "desc" },
+    take: 200,
   });
-  return dcs.map((dc) => filterDcDataForRole(dc, roleKey));
+
+  const creatorIds = [...new Set(dcs.map((dc) => dc.createdBy).filter((v): v is string => !!v))];
+  const creators = creatorIds.length
+    ? await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true, email: true } })
+    : [];
+  const creatorMap = new Map(creators.map((u) => [u.id, u.name || u.email]));
+
+  return {
+    dcs: dcs.map((dc) => ({
+      ...filterDcDataForRole(dc, roleKey),
+      createdByName: dc.createdBy ? creatorMap.get(dc.createdBy) || dc.createdBy : "—",
+    })),
+    error: dateRange.error,
+  };
 }
 
 // ==========================================================

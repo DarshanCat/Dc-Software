@@ -8,21 +8,24 @@ export const dynamic = "force-dynamic";
 export default async function ManagerApprovalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dcDateFrom?: string; dcDateTo?: string }>;
+  searchParams: Promise<{ dcDateFrom?: string; dcDateTo?: string; materialType?: string }>;
 }) {
   await requireUser();
 
-  const { dcDateFrom, dcDateTo } = await searchParams;
+  const { dcDateFrom, dcDateTo, materialType } = await searchParams;
   const dateRange = buildDcDateRange(dcDateFrom, dcDateTo);
   // An invalid range (or From > To) must return no rows rather than silently
   // showing an unfiltered queue - never fail open on a bad date filter.
   const dcDateCondition = dateRange.error ? { gte: new Date(8640000000000000) } : dateRange.where;
+  const materialTypeCondition =
+    materialType === "PRODUCTION" || materialType === "CONVERSION" ? materialType : undefined;
 
   const [preOutwardDcsRaw, paymentDcsRaw] = await Promise.all([
     prisma.deliveryChallan.findMany({
       where: {
         status: "PENDING_APPROVAL",
         ...(dcDateCondition ? { dcDate: dcDateCondition } : {}),
+        ...(materialTypeCondition ? { materialType: materialTypeCondition } : {}),
       },
       include: { vendor: true },
       orderBy: { createdAt: "desc" },
@@ -32,6 +35,7 @@ export default async function ManagerApprovalPage({
       where: {
         status: { in: ["QUALITY_COMPLETED", "MANAGER_APPROVAL_PENDING"] },
         ...(dcDateCondition ? { dcDate: dcDateCondition } : {}),
+        ...(materialTypeCondition ? { materialType: materialTypeCondition } : {}),
       },
       include: { vendor: true },
       orderBy: { createdAt: "desc" },
@@ -50,6 +54,7 @@ export default async function ManagerApprovalPage({
     partNumber: dc.partNumberSnapshot || dc.partNumber || "N/A",
     partDescription: dc.partDescriptionSnapshot || "N/A",
     materialGrade: dc.materialGrade || "N/A",
+    materialType: dc.materialType,
     department: dc.department || "PRODUCTION",
     outwardQtyRw: Number(dc.outwardQtyRw ?? dc.rmQuantity ?? 0),
     rmUom: dc.rmUom || "NOS",
@@ -104,6 +109,18 @@ export default async function ManagerApprovalPage({
             defaultValue={dcDateTo ?? ""}
             className="h-9 rounded-md border border-slate-300 px-2 text-sm"
           />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-700">Material Type</label>
+          <select
+            name="materialType"
+            defaultValue={materialType ?? ""}
+            className="h-9 rounded-md border border-slate-300 px-2 text-sm"
+          >
+            <option value="">All</option>
+            <option value="PRODUCTION">Production</option>
+            <option value="CONVERSION">Conversion</option>
+          </select>
         </div>
         <button type="submit" className="h-9 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white">
           Search

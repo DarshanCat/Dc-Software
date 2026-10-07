@@ -108,6 +108,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
   const [partDescription, setPartDescription] = useState("");
   const [heatNumber, setHeatNumber] = useState("");
   const [materialGrade, setMaterialGrade] = useState("");
+  const [materialType, setMaterialType] = useState<"PRODUCTION" | "CONVERSION" | "">("");
   const [outwardQtyRw, setOutwardQtyRw] = useState("");
   const [returningFgQuantity, setReturningFgQuantity] = useState("");
   const [outwardWeight, setOutwardWeight] = useState("");
@@ -249,6 +250,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       if (!partNum) return setError("Part Number is mandatory for Material DCs.");
       if (!heatNumber.trim()) return setError("Heat Number is mandatory for Material DCs.");
       if (!materialGrade.trim()) return setError("Material Grade is mandatory for Material DCs.");
+      if (!materialType) return setError("Material Type is mandatory for Material DCs.");
       if (!outwardQtyRw || Number(outwardQtyRw) <= 0 || isNaN(Number(outwardQtyRw))) return setError("Outward Qty RM must be > 0 for Material DCs.");
       if (!returningFgQuantity || Number(returningFgQuantity) <= 0 || isNaN(Number(returningFgQuantity))) return setError("Returning FG Qty must be > 0 for Material DCs.");
       if (!outwardWeight || Number(outwardWeight) <= 0 || isNaN(Number(outwardWeight)) || !isFinite(Number(outwardWeight))) return setError("Weight (KG) is mandatory and must be greater than 0 for Material DCs.");
@@ -301,6 +303,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       dimensionUom: "MM",
       heatNumber: movementType === "MATERIAL" ? heatNumber.trim() : undefined,
       materialGrade: movementType === "MATERIAL" ? materialGrade.trim() : undefined,
+      materialType: movementType === "MATERIAL" ? (materialType || undefined) : undefined,
       pricingBasis: movementType === "MATERIAL" ? pricingBasis : undefined,
       ratePerQuantity: (movementType === "MATERIAL" || isCommercialService) && ratePerQuantity ? parseFloat(ratePerQuantity) : undefined,
       preparedByName: preparedByName.trim(),
@@ -612,7 +615,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
               Section 2: Material &amp; Work Order Specification
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">WO ID (Work Order Number) *</label>
                 <input
@@ -679,6 +682,21 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Material Type *</label>
+                <select
+                  data-tally-id="materialType"
+                  value={materialType}
+                  onChange={(e) => setMaterialType(e.target.value as "PRODUCTION" | "CONVERSION" | "")}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  required
+                >
+                  <option value="">-- Select Material Type --</option>
+                  <option value="PRODUCTION">Production</option>
+                  <option value="CONVERSION">Conversion</option>
+                </select>
               </div>
             </div>
 

@@ -27,6 +27,7 @@ export interface DcPdfData {
   dimensions?: string | null;
   heatNumber: string;
   materialGrade: string;
+  materialType: string;
   pricingBasis?: string | null;
   ratePerQuantity?: string | null;
   expectedAmount?: string | null;
@@ -505,6 +506,30 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   });
 
   y = gradeBoxTop - gradeBoxHeight - 12;
+
+  // ================= 3C. MATERIAL TYPE STRIP =================
+  // Same full-width label/value strip pattern as Material Grade above, directly
+  // below it - "Material Type: Production" / "Material Type: Conversion".
+  const materialTypeAvailW = CONTENT_WIDTH - 16;
+  const materialTypeLines = wrapCellText(`Material Type: ${data.materialType || "—"}`, bold, 9, materialTypeAvailW);
+  const materialTypeBoxHeight = Math.max(26, 14 + materialTypeLines.length * 11);
+
+  ensureSpace(materialTypeBoxHeight + 12);
+
+  const materialTypeBoxTop = y;
+  currentPage.drawRectangle({
+    x: MARGIN,
+    y: materialTypeBoxTop - materialTypeBoxHeight,
+    width: CONTENT_WIDTH,
+    height: materialTypeBoxHeight,
+    borderColor: LINE,
+    borderWidth: 0.75,
+  });
+  materialTypeLines.forEach((line, idx) => {
+    currentPage.drawText(line, { x: MARGIN + 8, y: materialTypeBoxTop - 16 - idx * 11, size: 9, font: bold, color: DARK });
+  });
+
+  y = materialTypeBoxTop - materialTypeBoxHeight - 12;
 
   // ================= 4. PRICING & COMMERCIAL TERMS BLOCK =================
   const pColW = CONTENT_WIDTH / 3;

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
 import { filterDcDataForRole } from "@/server/dcs/sanitizer";
-import { getStoreCreatedDcs } from "@/server/dcs/queries";
+import { getAllDcsForStores } from "@/server/dcs/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +20,22 @@ const MY_DC_STATUS_COLORS: Record<string, string> = {
   CANCELLED: "bg-red-100 text-red-700",
 };
 
-export default async function StoreDashboardPage() {
+export default async function StoreDashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    dcDateFrom?: string;
+    dcDateTo?: string;
+    materialType?: string;
+    status?: string;
+    search?: string;
+  }>;
+}) {
   const user = await getSessionUser();
   const userRole = user?.roleKeys?.[0] || "STORES";
+  const { dcDateFrom, dcDateTo, materialType, status: allDcsStatus, search } = await searchParams;
 
-  const [storeVerifyQueueRaw, pendingApprovalRaw, draftDcsRaw, myDcsRaw] = await Promise.all([
+  const [storeVerifyQueueRaw, pendingApprovalRaw, draftDcsRaw, allDcsResult] = await Promise.all([
     prisma.deliveryChallan.findMany({
       where: { status: "SECURITY_RETURNED" },
       include: { vendor: true, process: true },
@@ -40,17 +51,18 @@ export default async function StoreDashboardPage() {
       include: { vendor: true, process: true },
       orderBy: { updatedAt: "desc" },
     }),
-    // DCs this Stores user personally created, across every lifecycle status -
-    // scoped strictly to the authenticated user's own id, so no other user's
-    // (or vendor's) data is exposed. This is in addition to, not a replacement
-    // for, the existing operational queues above.
-    user ? getStoreCreatedDcs(user.id, userRole) : Promise.resolve([]),
+    // Every Delivery Challan in the system, regardless of who created it -
+    // Stores must be able to see all DCs, not only the ones it personally
+    // created. Creator attribution (createdByName) is preserved, and
+    // server-side filters (date range, Material Type, status, search) scope
+    // the result set, never the browser.
+    getAllDcsForStores({ dcDateFrom, dcDateTo, materialType, status: allDcsStatus, search }, userRole),
   ]);
 
   const storeVerifyQueue = storeVerifyQueueRaw.map((dc) => filterDcDataForRole(dc, userRole));
   const pendingApproval = pendingApprovalRaw.map((dc) => filterDcDataForRole(dc, userRole));
   const draftDcs = draftDcsRaw.map((dc) => filterDcDataForRole(dc, userRole));
-  const myDcs = myDcsRaw;
+  const allDcs = allDcsResult.dcs;
 
   return (
     <div className="space-y-6">
@@ -137,21 +149,80 @@ export default async function StoreDashboardPage() {
         </table>
       </div>
 
-      {/* My Created DCs: every DC this Stores user has created, across the full lifecycle */}
+      {/* All DCs: every Delivery Challan in the system, regardless of creator */}
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
         <div className="bg-slate-900 px-4 py-3 text-white flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wider">My Created Delivery Challans</h2>
-          <span className="rounded bg-slate-700 px-2 py-0.5 text-xs font-semibold">{myDcs.length} DC(s)</span>
+          <h2 className="text-sm font-bold uppercase tracking-wider">All Delivery Challans</h2>
+          <span className="rounded bg-slate-700 px-2 py-0.5 text-xs font-semibold">{allDcs.length} DC(s)</span>
         </div>
+
+        <form className="flex flex-wrap items-end gap-3 border-b border-slate-200 bg-slate-50 p-4" action="/stores/dashboard">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">DC Date From</label>
+            <input
+              type="date"
+              name="dcDateFrom"
+              defaultValue={dcDateFrom ?? ""}
+              className="h-9 rounded-md border border-slate-300 px-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">DC Date To</label>
+            <input
+              type="date"
+              name="dcDateTo"
+              defaultValue={dcDateTo ?? ""}
+              className="h-9 rounded-md border border-slate-300 px-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">Material Type</label>
+            <select name="materialType" defaultValue={materialType ?? ""} className="h-9 rounded-md border border-slate-300 px-2 text-sm">
+              <option value="">All</option>
+              <option value="PRODUCTION">Production</option>
+              <option value="CONVERSION">Conversion</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">Status</label>
+            <select name="status" defaultValue={allDcsStatus ?? ""} className="h-9 rounded-md border border-slate-300 px-2 text-sm">
+              <option value="">All</option>
+              {Object.keys(MY_DC_STATUS_COLORS).map((s) => (
+                <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-slate-700">DC No / WO / Part No</label>
+            <input
+              type="text"
+              name="search"
+              defaultValue={search ?? ""}
+              placeholder="Search..."
+              className="h-9 rounded-md border border-slate-300 px-2 text-sm"
+            />
+          </div>
+          <button type="submit" className="h-9 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white">
+            Search
+          </button>
+          <a href="/stores/dashboard" className="h-9 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 flex items-center">
+            Clear
+          </a>
+          {allDcsResult.error && (
+            <p className="w-full text-xs font-medium text-red-600">{allDcsResult.error} No results are shown below.</p>
+          )}
+        </form>
+
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-600 border-b border-slate-200">
             <tr>
               <th className="px-4 py-2.5">DC Number</th>
               <th className="px-4 py-2.5">DC Date</th>
+              <th className="px-4 py-2.5">Created By</th>
               <th className="px-4 py-2.5">Vendor</th>
               <th className="px-4 py-2.5">WO ID</th>
               <th className="px-4 py-2.5">Part Number</th>
-              <th className="px-4 py-2.5">Material Grade</th>
+              <th className="px-4 py-2.5">Material Type</th>
               <th className="px-4 py-2.5 text-right">RM Qty</th>
               <th className="px-4 py-2.5 text-right">Expected FG Qty</th>
               <th className="px-4 py-2.5">Status</th>
@@ -159,19 +230,22 @@ export default async function StoreDashboardPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {myDcs.length === 0 ? (
+            {allDcs.length === 0 ? (
               <tr>
-                <td colSpan={10} className="p-6 text-center text-slate-400 italic">You have not created any Delivery Challans yet.</td>
+                <td colSpan={11} className="p-6 text-center text-slate-400 italic">No Delivery Challans match the current filters.</td>
               </tr>
             ) : (
-              myDcs.map((dc) => (
+              allDcs.map((dc) => (
                 <tr key={dc.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-mono font-bold text-slate-900">{dc.dcNumber}</td>
                   <td className="px-4 py-3 text-slate-600">{dc.dcDate.toLocaleDateString()}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-800">{dc.createdByName}</td>
                   <td className="px-4 py-3 font-semibold text-slate-800">{dc.vendor?.vendorName || dc.supplierNameSnapshot || "—"}</td>
                   <td className="px-4 py-3 font-mono text-slate-800">{dc.woNumber || "—"}</td>
                   <td className="px-4 py-3 font-mono text-slate-800">{dc.partNumberSnapshot || dc.partNumber || "—"}</td>
-                  <td className="px-4 py-3 font-mono text-slate-800">{dc.materialGrade || "—"}</td>
+                  <td className="px-4 py-3 text-slate-800">
+                    {dc.materialType === "PRODUCTION" ? "Production" : dc.materialType === "CONVERSION" ? "Conversion" : "—"}
+                  </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">
                     {dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "0.000"} {dc.rmUom || "NOS"}
                   </td>

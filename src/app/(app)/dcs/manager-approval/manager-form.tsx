@@ -21,6 +21,7 @@ export interface DcOption {
   partNumber: string;
   partDescription: string;
   materialGrade: string;
+  materialType: string | null;
   department: string;
   outwardQtyRw: number;
   rmUom: string;
@@ -224,6 +225,12 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Material Grade</span>
               <span className="font-mono font-bold text-slate-900">{selectedDc.materialGrade}</span>
+            </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Material Type</span>
+              <span className="font-mono font-bold text-slate-900">
+                {selectedDc.materialType === "PRODUCTION" ? "Production" : selectedDc.materialType === "CONVERSION" ? "Conversion" : "N/A"}
+              </span>
             </div>
             <div className="col-span-2">
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Supplier Address</span>

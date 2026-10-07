@@ -21,6 +21,7 @@ interface DcRowLike {
   outwardWeight: unknown;
   heatNumber: string | null;
   materialGrade: string | null;
+  materialType: string | null;
   remarks: string | null;
   vehicleNumber: string | null;
   transporter: string | null;
@@ -72,6 +73,7 @@ export interface DcPdfData {
   dimensions?: string | null;
   heatNumber: string;
   materialGrade: string;
+  materialType: string;
   pricingBasis: string | null;
   ratePerQuantity: string | null;
   expectedAmount: string | null;
@@ -135,6 +137,7 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
         : null,
     heatNumber: dc.heatNumber || "—",
     materialGrade: dc.materialGrade || "—",
+    materialType: dc.materialType === "PRODUCTION" ? "Production" : dc.materialType === "CONVERSION" ? "Conversion" : "—",
     pricingBasis: dc.pricingBasis ? (dc.pricingBasis === "RM" ? "Price Based On: RM Quantity" : "Price Based On: FG Quantity") : "—",
     ratePerQuantity: dc.ratePerQuantity != null ? Number(dc.ratePerQuantity).toFixed(2) : "—",
     expectedAmount: dc.expectedAmount != null ? Number(dc.expectedAmount).toFixed(2) : "—",
