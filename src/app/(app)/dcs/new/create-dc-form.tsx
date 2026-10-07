@@ -6,15 +6,20 @@ import { createDc, CreateDcInput } from "@/server/dcs/actions";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, AlertCircle, Plus, Trash2 } from "lucide-react";
 import { useTallyNavigation } from "@/hooks/use-tally-navigation";
+import { formatVendorFullAddress } from "@/lib/vendor-address";
 
 interface VendorOption {
   id: string;
   vendorCode: string;
   vendorName: string;
   address: string | null;
+  addressLine2: string | null;
+  area: string | null;
   gstNumber: string | null;
   city: string | null;
   state: string | null;
+  pincode: string | null;
+  country: string | null;
 }
 
 interface ItemOption {
@@ -102,6 +107,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
   const [customPartNumber, setCustomPartNumber] = useState("");
   const [partDescription, setPartDescription] = useState("");
   const [heatNumber, setHeatNumber] = useState("");
+  const [materialGrade, setMaterialGrade] = useState("");
   const [outwardQtyRw, setOutwardQtyRw] = useState("");
   const [returningFgQuantity, setReturningFgQuantity] = useState("");
   const [outwardWeight, setOutwardWeight] = useState("");
@@ -242,6 +248,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       if (!woNumber.trim()) return setError("WO ID (Work Order) is mandatory for Material DCs.");
       if (!partNum) return setError("Part Number is mandatory for Material DCs.");
       if (!heatNumber.trim()) return setError("Heat Number is mandatory for Material DCs.");
+      if (!materialGrade.trim()) return setError("Material Grade is mandatory for Material DCs.");
       if (!outwardQtyRw || Number(outwardQtyRw) <= 0 || isNaN(Number(outwardQtyRw))) return setError("Outward Qty RM must be > 0 for Material DCs.");
       if (!returningFgQuantity || Number(returningFgQuantity) <= 0 || isNaN(Number(returningFgQuantity))) return setError("Returning FG Qty must be > 0 for Material DCs.");
       if (!outwardWeight || Number(outwardWeight) <= 0 || isNaN(Number(outwardWeight)) || !isFinite(Number(outwardWeight))) return setError("Weight (KG) is mandatory and must be greater than 0 for Material DCs.");
@@ -293,6 +300,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       height: movementType === "MATERIAL" && height ? parseFloat(height) : undefined,
       dimensionUom: "MM",
       heatNumber: movementType === "MATERIAL" ? heatNumber.trim() : undefined,
+      materialGrade: movementType === "MATERIAL" ? materialGrade.trim() : undefined,
       pricingBasis: movementType === "MATERIAL" ? pricingBasis : undefined,
       ratePerQuantity: (movementType === "MATERIAL" || isCommercialService) && ratePerQuantity ? parseFloat(ratePerQuantity) : undefined,
       preparedByName: preparedByName.trim(),
@@ -589,7 +597,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   type="text"
                   readOnly
                   data-tally-skip="true"
-                  value={selectedVendor ? selectedVendor.address || `${selectedVendor.city || ""}, ${selectedVendor.state || ""}` : ""}
+                  value={selectedVendor ? formatVendorFullAddress(selectedVendor) : ""}
                   className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 focus:outline-none"
                   placeholder="Snapshot from Master Data"
                 />
@@ -604,7 +612,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
               Section 2: Material &amp; Work Order Specification
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">WO ID (Work Order Number) *</label>
                 <input
@@ -654,6 +662,20 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   value={heatNumber}
                   onChange={(e) => setHeatNumber(e.target.value)}
                   placeholder="e.g. HT-2026-X"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Material Grade *</label>
+                <input
+                  type="text"
+                  data-tally-id="materialGrade"
+                  value={materialGrade}
+                  onChange={(e) => setMaterialGrade(e.target.value)}
+                  placeholder="e.g. SG 500/7"
+                  maxLength={60}
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   required
                 />

@@ -28,9 +28,9 @@ describe("Role-Based Navigation, Route Security & Matrix", () => {
 
     const items = nav[0].items.map((i) => i.label);
     expect(items).toContain("Security Dashboard");
-    expect(items).toContain("Waiting for Dispatch");
+    expect(items).toContain("Gate Dispatch (Outgoing)");
     expect(items).toContain("Dispatched / At Vendor");
-    expect(items).toContain("Material Inward / Return");
+    expect(items).toContain("Gate Inward (Return)");
     expect(items).toContain("My Security Entries");
   });
 

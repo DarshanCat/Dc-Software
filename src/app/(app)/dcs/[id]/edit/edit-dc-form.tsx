@@ -6,15 +6,20 @@ import { updateOutwardDc, UpdateOutwardDcInput } from "@/server/dcs/extended-act
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useTallyNavigation } from "@/hooks/use-tally-navigation";
+import { formatVendorFullAddress } from "@/lib/vendor-address";
 
 interface VendorOption {
   id: string;
   vendorCode: string;
   vendorName: string;
   address: string | null;
+  addressLine2: string | null;
+  area: string | null;
   gstNumber: string | null;
   city: string | null;
   state: string | null;
+  pincode: string | null;
+  country: string | null;
 }
 
 interface ItemOption {
@@ -39,6 +44,7 @@ interface DcData {
   woNumber: string;
   partNumber: string | null;
   partDescriptionSnapshot: string | null;
+  materialGrade: string | null;
   outwardQtyRw: number | null;
   returningFgQuantity: number | null;
   outwardWeight: number | null;
@@ -75,6 +81,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
   const [selectedPartId, setSelectedPartId] = useState(matchingItem ? matchingItem.id : "");
   const [customPartNumber, setCustomPartNumber] = useState(dc.partNumber || "");
   const [partDescription, setPartDescription] = useState(dc.partDescriptionSnapshot || "");
+  const [materialGrade, setMaterialGrade] = useState(dc.materialGrade || "");
 
   const [outwardQtyRw, setOutwardQtyRw] = useState(dc.outwardQtyRw ? String(dc.outwardQtyRw) : "");
   const [returningFgQuantity, setReturningFgQuantity] = useState(dc.returningFgQuantity ? String(dc.returningFgQuantity) : "");
@@ -123,10 +130,15 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
     if (!woNumber.trim()) return setError("WO ID (Work Order) is mandatory.");
     const partNum = customPartNumber.trim() || (items.find((i) => i.id === selectedPartId)?.itemCode || "");
     if (!partNum) return setError("Part Number is mandatory.");
+    if (!materialGrade.trim()) return setError("Material Grade is required for Material DCs.");
 
     if (!pricingBasis) return setError("Please select a pricing basis: RW Quantity or Returning FG Quantity.");
     const rateVal = parseFloat(ratePerQuantity);
     if (isNaN(rateVal) || rateVal <= 0) return setError("Rate Per Quantity must be greater than zero.");
+    const weightVal = parseFloat(outwardWeight);
+    if (!outwardWeight || !Number.isFinite(weightVal) || weightVal <= 0) {
+      return setError("Weight (KG) is required and must be a positive number for Material DCs.");
+    }
 
     if (pricingBasis === "RW") {
       const rwVal = parseFloat(outwardQtyRw);
@@ -145,6 +157,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
       woNumber: woNumber.trim(),
       partNumber: partNum,
       partDescription: partDescription.trim() || undefined,
+      materialGrade: materialGrade.trim(),
       pricingBasis,
       ratePerQuantity: rateVal,
       outwardWeight: outwardWeight ? parseFloat(outwardWeight) : undefined,
@@ -226,7 +239,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
                 type="text"
                 readOnly
                 data-tally-skip="true"
-                value={selectedVendor ? selectedVendor.address || `${selectedVendor.city || ""}, ${selectedVendor.state || ""}` : ""}
+                value={selectedVendor ? formatVendorFullAddress(selectedVendor) : ""}
                 className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 focus:outline-none"
               />
             </div>
@@ -333,6 +346,20 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
                 className="w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-700 focus:outline-none cursor-not-allowed font-medium"
               />
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Material Grade *</label>
+              <input
+                type="text"
+                data-tally-id="materialGrade"
+                value={materialGrade}
+                onChange={(e) => setMaterialGrade(e.target.value)}
+                placeholder="e.g. SG 500/7"
+                maxLength={60}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
           </div>
         </div>
 
@@ -381,11 +408,11 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Outward Weight (KG) *</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Weight (KG) *</label>
               <input
                 type="number"
                 step="0.001"
-                min="0"
+                min="0.001"
                 data-tally-id="outwardWeight"
                 value={outwardWeight}
                 onChange={(e) => setOutwardWeight(e.target.value)}

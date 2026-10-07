@@ -23,11 +23,10 @@ export interface DcPdfData {
   partNumber: string;
   rmQuantity: string;
   returnFgQuantity: string;
-  rmUom?: string | null;
-  fgUom?: string | null;
-  outwardWeight?: string | null;
+  weightKg: string;
   dimensions?: string | null;
   heatNumber: string;
+  materialGrade: string;
   pricingBasis?: string | null;
   ratePerQuantity?: string | null;
   expectedAmount?: string | null;
@@ -381,30 +380,28 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   const tableHeaderHeight = 20;
 
   // Table Columns Width
-  const col1W = CONTENT_WIDTH * 0.34;
-  const col2W = CONTENT_WIDTH * 0.22;
-  const col3W = CONTENT_WIDTH * 0.22;
-  const col4W = CONTENT_WIDTH * 0.22;
+  const col1W = CONTENT_WIDTH * 0.24;
+  const col2W = CONTENT_WIDTH * 0.16;
+  const col3W = CONTENT_WIDTH * 0.16;
+  const col4W = CONTENT_WIDTH * 0.18;
+  const col5W = CONTENT_WIDTH * 0.26;
 
   const c1X = MARGIN;
   const c2X = c1X + col1W;
   const c3X = c2X + col2W;
   const c4X = c3X + col3W;
+  const c5X = c4X + col4W;
 
   const partText = data.dimensions
     ? `${data.partNumber || "—"}\n(Dimensions: ${data.dimensions})`
     : (data.partNumber || "—");
   const partLines = wrapCellText(partText, bold, 8.5, col1W - 16);
-  const rmUnit = data.rmUom || "NOS";
-  const fgUnit = data.fgUom || "NOS";
-  const rmDisplay = data.outwardWeight
-    ? `${data.rmQuantity || "—"} ${rmUnit} (${data.outwardWeight} KG)`
-    : `${data.rmQuantity || "—"} ${rmUnit}`;
-  const rmLines = wrapCellText(rmDisplay, bold, 8.5, col2W - 16);
-  const fgLines = wrapCellText(`${data.returnFgQuantity || "—"} ${fgUnit}`, bold, 8.5, col3W - 16);
-  const heatLines = wrapCellText(data.heatNumber || "—", bold, 8.5, col4W - 16);
+  const rmLines = wrapCellText(data.rmQuantity || "—", bold, 8.5, col2W - 16);
+  const fgLines = wrapCellText(data.returnFgQuantity || "—", bold, 8.5, col3W - 16);
+  const weightLines = wrapCellText(data.weightKg || "—", bold, 8.5, col4W - 16);
+  const heatLines = wrapCellText(data.heatNumber || "—", bold, 8.5, col5W - 16);
 
-  const maxLines = Math.max(1, partLines.length, rmLines.length, fgLines.length, heatLines.length);
+  const maxLines = Math.max(1, partLines.length, rmLines.length, fgLines.length, weightLines.length, heatLines.length);
   const lineHeight = 11;
   const dataRowHeight = Math.max(28, 14 + maxLines * lineHeight);
 
@@ -427,10 +424,11 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   currentPage.drawText("PART NUMBER", { x: c1X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
   currentPage.drawText("RM QTY (RAW MAT.)", { x: c2X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
   currentPage.drawText("RETURN FG QTY", { x: c3X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
-  currentPage.drawText("HEAT NUMBER", { x: c4X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
+  currentPage.drawText("WEIGHT (KG)", { x: c4X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
+  currentPage.drawText("HEAT NUMBER", { x: c5X + 8, y: tableHeaderY - 14, size: 8, font: bold, color: DARK });
 
   // Column Separators for Header
-  [c2X, c3X, c4X].forEach((colX) => {
+  [c2X, c3X, c4X, c5X].forEach((colX) => {
     currentPage.drawLine({
       start: { x: colX, y: tableHeaderY },
       end: { x: colX, y: tableHeaderY - tableHeaderHeight },
@@ -462,12 +460,15 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   fgLines.forEach((line, idx) => {
     currentPage.drawText(line, { x: c3X + 8, y: startTextY - idx * lineHeight, size: 8.5, font: bold, color: DARK });
   });
-  heatLines.forEach((line, idx) => {
+  weightLines.forEach((line, idx) => {
     currentPage.drawText(line, { x: c4X + 8, y: startTextY - idx * lineHeight, size: 8.5, font: bold, color: DARK });
+  });
+  heatLines.forEach((line, idx) => {
+    currentPage.drawText(line, { x: c5X + 8, y: startTextY - idx * lineHeight, size: 8.5, font: bold, color: DARK });
   });
 
   // Column Separators for Data Row
-  [c2X, c3X, c4X].forEach((colX) => {
+  [c2X, c3X, c4X, c5X].forEach((colX) => {
     currentPage.drawLine({
       start: { x: colX, y: dataRowY },
       end: { x: colX, y: dataRowY - dataRowHeight },
@@ -477,6 +478,33 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   });
 
   y = dataRowY - dataRowHeight - 12;
+
+  // ================= 3B. MATERIAL GRADE STRIP =================
+  // A single full-width label/value strip, directly under the material details
+  // table (Part Number / Heat Number), so Material Grade reads as part of the
+  // same material identification group without cramming a 6th narrow column
+  // into that table.
+  const gradeAvailW = CONTENT_WIDTH - 16;
+  const gradeLines = wrapCellText(data.materialGrade || "—", bold, 9, gradeAvailW);
+  const gradeBoxHeight = Math.max(26, 14 + gradeLines.length * 11);
+
+  ensureSpace(gradeBoxHeight + 12);
+
+  const gradeBoxTop = y;
+  currentPage.drawRectangle({
+    x: MARGIN,
+    y: gradeBoxTop - gradeBoxHeight,
+    width: CONTENT_WIDTH,
+    height: gradeBoxHeight,
+    borderColor: LINE,
+    borderWidth: 0.75,
+  });
+  currentPage.drawText("MATERIAL GRADE", { x: MARGIN + 8, y: gradeBoxTop - 10, size: 7, font: bold, color: LIGHT_GREY });
+  gradeLines.forEach((line, idx) => {
+    currentPage.drawText(line, { x: MARGIN + 8, y: gradeBoxTop - 21 - idx * 11, size: 9, font: bold, color: DARK });
+  });
+
+  y = gradeBoxTop - gradeBoxHeight - 12;
 
   // ================= 4. PRICING & COMMERCIAL TERMS BLOCK =================
   const pColW = CONTENT_WIDTH / 3;

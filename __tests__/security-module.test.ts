@@ -337,6 +337,7 @@ describe("Security Module Regression Suite", () => {
       woNumber: "WO-999",
       partNumber: "PN-888",
       outwardWeight: 10.5,
+      materialGrade: "SG 500/7",
       ratePerQuantity: 100,
       pricingBasis: "RW",
       outwardQtyRw: 50,

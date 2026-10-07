@@ -16,10 +16,11 @@ interface DcRowLike {
   partNumber: string | null;
   rmQuantity: unknown;
   returnFgQuantity: unknown;
-  rmUom?: string | null;
-  fgUom?: string | null;
-  outwardWeight?: unknown;
+  rmUom: string | null;
+  fgUom: string | null;
+  outwardWeight: unknown;
   heatNumber: string | null;
+  materialGrade: string | null;
   remarks: string | null;
   vehicleNumber: string | null;
   transporter: string | null;
@@ -67,11 +68,10 @@ export interface DcPdfData {
   partNumber: string;
   rmQuantity: string;
   returnFgQuantity: string;
-  rmUom?: string | null;
-  fgUom?: string | null;
-  outwardWeight?: string | null;
+  weightKg: string;
   dimensions?: string | null;
   heatNumber: string;
+  materialGrade: string;
   pricingBasis: string | null;
   ratePerQuantity: string | null;
   expectedAmount: string | null;
@@ -117,22 +117,24 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
     woNumber: dc.woNumber,
     status: dc.status.replace(/_/g, " "),
     vendorName: dc.vendor?.vendorName || dc.supplierNameSnapshot || "INTERNAL",
-    vendorAddress: dc.vendor?.address || dc.supplierAddressSnapshot || "",
+    // Snapshot takes precedence: historical DCs must retain their original vendor address
+    // even if Vendor Master is edited later. Live vendor address is only a fallback for
+    // legacy DCs created before the snapshot was captured.
+    vendorAddress: dc.supplierAddressSnapshot || dc.vendor?.address || "",
     vendorGst: dc.vendor?.gstNumber || dc.supplierGstSnapshot || "",
     vendorPan: dc.vendor?.panNumber || "",
     purpose: dc.purpose.replace(/_/g, " "),
     processName: dc.process?.name ?? "—",
     partNumber: dc.partNumber || "—",
-    rmQuantity: dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "—",
-    returnFgQuantity: dc.returnFgQuantity != null ? Number(dc.returnFgQuantity).toFixed(3) : "—",
-    rmUom: dc.rmUom || "NOS",
-    fgUom: dc.fgUom || "NOS",
-    outwardWeight: dc.outwardWeight != null ? Number(dc.outwardWeight).toFixed(3) : null,
+    rmQuantity: dc.rmQuantity != null ? `${Number(dc.rmQuantity).toFixed(3)} ${dc.rmUom || "NOS"}` : "—",
+    returnFgQuantity: dc.returnFgQuantity != null ? `${Number(dc.returnFgQuantity).toFixed(3)} ${dc.fgUom || "NOS"}` : "—",
+    weightKg: dc.outwardWeight != null ? `${Number(dc.outwardWeight).toFixed(3)} KG` : "—",
     dimensions:
       dc.length != null && dc.width != null && dc.height != null
         ? `${Number(dc.length)} × ${Number(dc.width)} × ${Number(dc.height)} MM`
         : null,
     heatNumber: dc.heatNumber || "—",
+    materialGrade: dc.materialGrade || "—",
     pricingBasis: dc.pricingBasis ? (dc.pricingBasis === "RM" ? "Price Based On: RM Quantity" : "Price Based On: FG Quantity") : "—",
     ratePerQuantity: dc.ratePerQuantity != null ? Number(dc.ratePerQuantity).toFixed(2) : "—",
     expectedAmount: dc.expectedAmount != null ? Number(dc.expectedAmount).toFixed(2) : "—",

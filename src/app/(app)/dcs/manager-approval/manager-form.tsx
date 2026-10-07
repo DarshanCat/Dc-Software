@@ -20,10 +20,11 @@ export interface DcOption {
   woNumber: string;
   partNumber: string;
   partDescription: string;
+  materialGrade: string;
   department: string;
   outwardQtyRw: number;
-  returningFgQuantity: number;
   rmUom: string;
+  returningFgQuantity: number;
   fgUom: string;
   outwardWeight: number;
   outwardGatingWeight: number;
@@ -185,7 +186,7 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
           <option value="">-- Select Pending DC --</option>
           {currentList.map((d) => (
             <option key={d.id} value={d.id}>
-              {d.dcNumber} — {d.vendorName} (WO: {d.woNumber}, Outward Qty: {d.outwardQtyRw} NOS, Amount: ₹{d.expectedAmount})
+              {d.dcNumber} — {d.vendorName} (WO: {d.woNumber}, Outward Qty: {d.outwardQtyRw} {d.rmUom}, Amount: ₹{d.expectedAmount})
             </option>
           ))}
         </select>
@@ -220,6 +221,10 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Part Number</span>
               <span className="font-mono font-bold text-slate-900">{selectedDc.partNumber}</span>
             </div>
+            <div>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Material Grade</span>
+              <span className="font-mono font-bold text-slate-900">{selectedDc.materialGrade}</span>
+            </div>
             <div className="col-span-2">
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Supplier Address</span>
               <span className="text-slate-700">{selectedDc.vendorAddress}</span>
@@ -244,7 +249,7 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
               <span className="font-mono font-bold text-blue-900 text-sm">{formatQuantity(selectedDc.returningFgQuantity, selectedDc.fgUom)}</span>
             </div>
             <div>
-              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Outward Gross Weight</span>
+              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Weight (KG)</span>
               <span className="font-mono text-slate-800">{selectedDc.outwardWeight} KG</span>
             </div>
             <div>

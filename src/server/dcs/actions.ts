@@ -11,6 +11,7 @@ import { generateQrToken } from "@/services/dispatch.service";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { notifyUsersWithPermission, createNotification } from "@/server/notifications/service";
+import { formatVendorFullAddress } from "@/lib/vendor-address";
 import {
   securityDispatchSchema,
   securityReturnSchema,
@@ -19,6 +20,7 @@ import {
   accountsPaymentEntrySchema,
   transportDetailsSchema,
   firstIssueMessage,
+  createDcSchema,
 } from "@/lib/validation/dc";
 
 // Helper to safely verify permissions without throwing unhandled exceptions into Next.js action boundary
@@ -53,94 +55,6 @@ export async function revalidateSecurityPaths(dcId?: string) {
     // Ignore invalidations during test runner or background executions
   }
 }
-
-// ================= SCHEMAS =================
-
-const createDcSchema = z.object({
-  movementType: z.enum(["MATERIAL", "TOOL", "COMPANY_PROPERTY"]).default("MATERIAL"),
-  isCommercialService: z.boolean().default(false),
-  destinationDepartment: z.string().optional(),
-  responsibleCustodian: z.string().optional(),
-  woNumber: z.string().max(60).optional(),
-  partNumber: z.string().trim().max(60).optional(),
-  rmQuantity: z.coerce.number().optional(),
-  returnFgQuantity: z.coerce.number().optional(),
-  outwardWeight: z.coerce.number({ invalid_type_error: "Material Weight (KG) must be a valid number." }).optional(),
-  length: z.coerce.number({ invalid_type_error: "Length (MM) must be a valid number." }).optional(),
-  width: z.coerce.number({ invalid_type_error: "Width (MM) must be a valid number." }).optional(),
-  height: z.coerce.number({ invalid_type_error: "Height (MM) must be a valid number." }).optional(),
-  dimensionUom: z.string().default("MM"),
-  heatNumber: z.string().trim().max(60).optional(),
-  vendorId: z.string().optional(),
-  processId: z.string().optional(),
-  purpose: z.enum([
-    "JOB_WORK", "MACHINING", "HEAT_TREATMENT", "SURFACE_TREATMENT",
-    "REPAIR", "SAMPLE", "TRIAL", "SUBCONTRACTING", "OTHER",
-  ]),
-  pricingBasis: z.enum(["RM", "FG"]).optional(),
-  ratePerQuantity: z.coerce.number().optional(),
-  preparedByName: z.string().trim().min(1, "Prepared By Name is required.").max(100, "Prepared By Name cannot exceed 100 characters."),
-  expectedReturnDate: z.string().optional(),
-  ewayBillNumber: z.string().max(60).optional(),
-  eSugamNumber: z.string().max(60).optional(),
-  remarks: z.string().max(500).optional(),
-  items: z.array(z.object({
-    itemCode: z.string().optional(),
-    itemDescription: z.string().min(1, "Item description is required"),
-    quantity: z.coerce.number().positive("Quantity must be > 0"),
-    weight: z.coerce.number({ invalid_type_error: "Weight (KG) must be a valid number." })
-      .finite("Weight (KG) must be a valid finite number.")
-      .gt(0, "Weight (KG) must be greater than 0.")
-      .optional(),
-    uom: z.string().default("NOS"),
-    conditionIn: z.string().optional(),
-    toolInstanceId: z.string().optional(),
-    assetMasterId: z.string().optional(),
-  })).optional(),
-}).superRefine((val, ctx) => {
-  if (val.movementType === "MATERIAL") {
-    if (!val.vendorId || !val.vendorId.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Supplier / Vendor is required for Material DCs.", path: ["vendorId"] });
-    }
-    if (!val.woNumber || !val.woNumber.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "WO ID is required for Material DCs.", path: ["woNumber"] });
-    }
-    if (!val.partNumber || !val.partNumber.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Part Number is required for Material DCs.", path: ["partNumber"] });
-    }
-    if (!val.rmQuantity || isNaN(val.rmQuantity) || !isFinite(val.rmQuantity) || val.rmQuantity <= 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "RM Qty must be > 0 for Material DCs.", path: ["rmQuantity"] });
-    }
-    if (!val.returnFgQuantity || isNaN(val.returnFgQuantity) || !isFinite(val.returnFgQuantity) || val.returnFgQuantity <= 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Expected Return FG Qty must be > 0 for Material DCs.", path: ["returnFgQuantity"] });
-    }
-    if (!val.outwardWeight || isNaN(val.outwardWeight) || !isFinite(val.outwardWeight) || val.outwardWeight <= 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Material Weight (KG) is required and must be greater than 0 for Material DCs.", path: ["outwardWeight"] });
-    }
-    if (!val.length || isNaN(val.length) || !isFinite(val.length) || val.length <= 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Length (MM) is required and must be greater than 0.", path: ["length"] });
-    }
-    if (!val.width || isNaN(val.width) || !isFinite(val.width) || val.width <= 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Width (MM) is required and must be greater than 0.", path: ["width"] });
-    }
-    if (!val.height || isNaN(val.height) || !isFinite(val.height) || val.height <= 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Height (MM) is required and must be greater than 0.", path: ["height"] });
-    }
-    if (!val.heatNumber || !val.heatNumber.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Heat Number is required for Material DCs.", path: ["heatNumber"] });
-    }
-    if (!val.pricingBasis) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Please select a pricing basis: RM Quantity or FG Quantity.", path: ["pricingBasis"] });
-    }
-    if (!val.ratePerQuantity || isNaN(val.ratePerQuantity) || !isFinite(val.ratePerQuantity) || val.ratePerQuantity <= 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Rate Per Quantity must be greater than zero.", path: ["ratePerQuantity"] });
-    }
-  } else if (val.isCommercialService) {
-    if (!val.vendorId || !val.vendorId.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Supplier / Vendor is required for Commercial Service DCs.", path: ["vendorId"] });
-    }
-  }
-});
 
 export type CreateDcInput = z.infer<typeof createDcSchema>;
 
@@ -213,12 +127,13 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         height: data.height ? new Prisma.Decimal(data.height) : null,
         dimensionUom: "MM",
         heatNumber: data.heatNumber ? data.heatNumber.trim() : null,
+        materialGrade: data.materialGrade ? data.materialGrade.trim() : null,
         pricingBasis: data.pricingBasis || null,
         ratePerQuantity: data.ratePerQuantity ? new Prisma.Decimal(data.ratePerQuantity) : null,
         expectedAmount: expectedAmount > 0 ? new Prisma.Decimal(expectedAmount) : null,
         vendorId: data.vendorId || null,
         supplierNameSnapshot: vendor ? vendor.vendorName : null,
-        supplierAddressSnapshot: vendor ? (vendor.address || `${vendor.city || ""}, ${vendor.state || ""}`) : null,
+        supplierAddressSnapshot: vendor ? (formatVendorFullAddress(vendor) || null) : null,
         supplierGstSnapshot: vendor ? (vendor.gstNumber || null) : null,
         purpose: data.purpose,
         processId: data.processId || null,

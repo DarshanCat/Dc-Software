@@ -11,8 +11,13 @@ export interface VendorRow {
   vendorCode: string;
   vendorName: string;
   gstNumber: string | null;
+  address: string | null;
+  addressLine2: string | null;
+  area: string | null;
   city: string | null;
   state: string | null;
+  pincode: string | null;
+  country: string | null;
   contactPerson: string | null;
   phone: string | null;
   email: string | null;
@@ -36,7 +41,9 @@ export function VendorMasterClient({
   const [editingVendor, setEditingVendor] = useState<VendorRow | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({
-    vendorCode: "", vendorName: "", gstNumber: "", city: "", state: "", contactPerson: "", phone: "", email: "", defaultReturnDays: 15,
+    vendorCode: "", vendorName: "", gstNumber: "",
+    address: "", addressLine2: "", area: "", city: "", state: "", pincode: "", country: "India",
+    contactPerson: "", phone: "", email: "", defaultReturnDays: 15,
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -54,8 +61,13 @@ export function VendorMasterClient({
       vendorCode: v.vendorCode,
       vendorName: v.vendorName,
       gstNumber: v.gstNumber || "",
+      address: v.address || "",
+      addressLine2: v.addressLine2 || "",
+      area: v.area || "",
       city: v.city || "",
       state: v.state || "",
+      pincode: v.pincode || "",
+      country: v.country || "India",
       contactPerson: v.contactPerson || "",
       phone: v.phone || "",
       email: v.email || "",
@@ -67,7 +79,11 @@ export function VendorMasterClient({
   const openAdd = () => {
     setShowAdd(true);
     setEditingVendor(null);
-    setForm({ vendorCode: "", vendorName: "", gstNumber: "", city: "", state: "", contactPerson: "", phone: "", email: "", defaultReturnDays: 15 });
+    setForm({
+      vendorCode: "", vendorName: "", gstNumber: "",
+      address: "", addressLine2: "", area: "", city: "", state: "", pincode: "", country: "India",
+      contactPerson: "", phone: "", email: "", defaultReturnDays: 15,
+    });
     setError(null);
   };
 
@@ -84,8 +100,13 @@ export function VendorMasterClient({
       vendorCode: form.vendorCode.trim(),
       vendorName: form.vendorName.trim(),
       gstNumber: form.gstNumber.trim() || undefined,
+      address: form.address.trim() || undefined,
+      addressLine2: form.addressLine2.trim() || undefined,
+      area: form.area.trim() || undefined,
       city: form.city.trim() || undefined,
       state: form.state.trim() || undefined,
+      pincode: form.pincode.trim() || undefined,
+      country: form.country.trim() || undefined,
       contactPerson: form.contactPerson.trim() || undefined,
       phone: form.phone.trim() || undefined,
       email: form.email.trim() || undefined,
@@ -170,12 +191,32 @@ export function VendorMasterClient({
               <Input value={form.gstNumber} onChange={(e) => setForm({ ...form, gstNumber: e.target.value })} />
             </div>
             <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Address Line 1</label>
+              <Input maxLength={200} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Building, street" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Address Line 2</label>
+              <Input maxLength={200} value={form.addressLine2} onChange={(e) => setForm({ ...form, addressLine2: e.target.value })} placeholder="Landmark, additional details" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Area / Locality</label>
+              <Input maxLength={120} value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} />
+            </div>
+            <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">City</label>
-              <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+              <Input maxLength={100} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">State</label>
-              <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+              <Input maxLength={100} value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Pincode</label>
+              <Input maxLength={20} value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Country</label>
+              <Input maxLength={100} value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Contact Person</label>

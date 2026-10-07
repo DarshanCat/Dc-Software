@@ -142,6 +142,7 @@ export const SECURITY_NAVIGATION: NavSection[] = [
     label: "SECURITY OPERATIONS",
     items: [
       { label: "Security Dashboard", href: "/security/dashboard" },
+      { label: "Inward DC", href: "/dcs/inward" },
       { label: "Gate Dispatch (Outgoing)", href: "/security/dispatch" },
       { label: "Gate Inward (Return)", href: "/security/material-inward" },
       { label: "Dispatched / At Vendor", href: "/security/dispatched" },
@@ -188,6 +189,7 @@ export const MANAGEMENT_NAVIGATION: NavSection[] = [
       { label: "Overview", href: "/management/dashboard" },
       { label: "Manager Approval", href: "/dcs/manager-approval" },
       { label: "Pending DC Approval", href: "/dcs?status=PENDING_APPROVAL" },
+      { label: "Approved DCs", href: "/dcs?status=APPROVED" },
       { label: "DCs Requiring Correction", href: "/dcs?status=DRAFT" },
       { label: "Store Verified / Final Approval", href: "/dcs?status=QUALITY_COMPLETED" },
       { label: "Discrepancies", href: "/dcs/close?stage=manager" },
@@ -221,6 +223,7 @@ export const ACCOUNTS_NAVIGATION: NavSection[] = [
     label: "ACCOUNTS",
     items: [
       { label: "Accounts Dashboard", href: "/accounts/dashboard" },
+      { label: "Quality Completed", href: "/dcs?status=QUALITY_COMPLETED" },
       { label: "Approved for Payment", href: "/dcs?status=APPROVED_FOR_PAYMENT" },
       { label: "Payment Entry", href: "/dcs/close?stage=payment" },
       { label: "Ready to Close", href: "/dcs/close" },

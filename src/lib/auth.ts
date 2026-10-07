@@ -6,7 +6,15 @@ import { resolveNextAuthSecret } from "./nextauth-secret";
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
-  secret: resolveNextAuthSecret(),
+  // A getter defers resolveNextAuthSecret() until NextAuth actually reads `.secret`
+  // at request time. A plain `secret: resolveNextAuthSecret()` property would run
+  // eagerly the moment this module is imported, which also happens during Next.js's
+  // build-time "Collecting page data" step (it statically imports every route module
+  // to inspect its exports) - failing the production-only guard even though no
+  // request is being served yet.
+  get secret() {
+    return resolveNextAuthSecret();
+  },
   pages: { signIn: "/login" },
   providers: [
     CredentialsProvider({

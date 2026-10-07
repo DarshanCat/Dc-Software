@@ -377,7 +377,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
             </div>
             <div className="col-span-2">
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Supplier Address</span>
-              <span className="text-slate-800">{dc.vendor?.address || dc.supplierAddressSnapshot || "N/A"}</span>
+              <span className="text-slate-800">{dc.supplierAddressSnapshot || dc.vendor?.address || "N/A"}</span>
             </div>
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Department</span>
@@ -444,6 +444,10 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
                 <span className="font-mono font-bold text-slate-900 text-sm">{dc.heatNumber || "N/A"}</span>
               </div>
               <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Material Grade</span>
+                <span className="font-mono font-bold text-slate-900 text-sm">{dc.materialGrade || "N/A"}</span>
+              </div>
+              <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Outward Qty RM</span>
                 <span className="font-mono font-bold text-blue-900 text-base">
                   {formatQuantity(dc.outwardQtyRw ?? dc.rmQuantity ?? 0, dc.rmUom)}
@@ -464,7 +468,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
             </h2>
             <div className="grid grid-cols-3 gap-3 text-xs">
               <div>
-                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Outward Weight</span>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Weight (KG)</span>
                 <span className="font-mono font-bold text-slate-900">{dc.outwardWeight != null ? `${Number(dc.outwardWeight)} KG` : "—"}</span>
               </div>
               <div>

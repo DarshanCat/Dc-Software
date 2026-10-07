@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { getSessionUser } from "@/server/session";
+import { hasPermission } from "@/server/authorize";
+import { PERMISSIONS } from "@/config/permissions";
+import { getVendorScope } from "@/server/dcs/vendor-scope";
+import { ROLE_ALLOWED_STATUSES } from "@/config/dc-visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +26,41 @@ export default async function WorkOrdersPage({
 }) {
   const { wo } = await searchParams;
 
+  const user = await getSessionUser();
+  const canView = user ? await hasPermission(user.id, PERMISSIONS.DC_VIEW) : false;
+  if (!canView) {
+    return (
+      <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        You do not have permission to view Work Orders.
+      </div>
+    );
+  }
+
+  const roleKeys = user?.roleKeys || [];
+  const isAdmin = roleKeys.includes("ADMIN");
+
+  const where: Record<string, unknown> = {
+    ...getVendorScope(user),
+  };
+
+  if (wo) {
+    where.woNumber = { contains: wo, mode: "insensitive" };
+  }
+
+  if (!isAdmin) {
+    let allowed: string[] = [];
+    for (const r of roleKeys) {
+      if (ROLE_ALLOWED_STATUSES[r]) {
+        allowed = [...allowed, ...ROLE_ALLOWED_STATUSES[r]];
+      }
+    }
+    if (allowed.length > 0) {
+      where.status = { in: [...new Set(allowed)] };
+    }
+  }
+
   const dcs = await prisma.deliveryChallan.findMany({
-    where: wo ? { woNumber: { contains: wo, mode: "insensitive" } } : undefined,
+    where,
     include: { vendor: true, process: true, receipts: { include: { items: true } } },
     orderBy: { createdAt: "desc" },
     take: 300,
