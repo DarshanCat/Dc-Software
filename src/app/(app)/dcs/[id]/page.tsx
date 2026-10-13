@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
@@ -18,7 +18,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const user = await getSessionUser();
 
-  const dcRaw = await prisma.deliveryChallan.findUnique({
+  let dcRaw = await prisma.deliveryChallan.findUnique({
     where: { id },
     include: {
       vendor: true,
@@ -27,6 +27,15 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
       statusHistory: { orderBy: { createdAt: "asc" } },
     },
   });
+
+  if (!dcRaw) {
+    const byToken = await prisma.deliveryChallan.findUnique({
+      where: { qrToken: id },
+    });
+    if (byToken) {
+      redirect(`/dcs/${byToken.id}`);
+    }
+  }
 
   if (!dcRaw || (user?.roleKeys?.includes("VENDOR") && (!user.vendorId || user.vendorId !== dcRaw.vendorId))) {
     return (
@@ -446,6 +455,18 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
               <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Material Grade</span>
                 <span className="font-mono font-bold text-slate-900 text-sm">{dc.materialGrade || "N/A"}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Material Category</span>
+                <span
+                  className={`inline-block mt-0.5 px-2 py-0.5 rounded text-[11px] font-bold ${
+                    dc.materialCategory === "CONVERSION"
+                      ? "bg-purple-100 text-purple-800 border border-purple-200"
+                      : "bg-blue-100 text-blue-800 border border-blue-200"
+                  }`}
+                >
+                  {dc.materialCategory === "CONVERSION" ? "Conversion Material" : "Production Material"}
+                </span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Outward Qty RM</span>

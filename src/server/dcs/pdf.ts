@@ -1,6 +1,6 @@
 import QRCode from "qrcode";
 import { prisma } from "@/lib/db";
-import { buildDcQrUrl } from "@/services/dispatch.service";
+import { buildDcPublicUrl } from "@/services/dispatch.service";
 import { getCompanyLogoDataUrl } from "@/services/company-branding";
 import { renderDcPdf } from "@/services/dc-pdf";
 
@@ -21,6 +21,7 @@ interface DcRowLike {
   outwardWeight: unknown;
   heatNumber: string | null;
   materialGrade: string | null;
+  materialCategory?: string | null;
   remarks: string | null;
   vehicleNumber: string | null;
   transporter: string | null;
@@ -72,6 +73,7 @@ export interface DcPdfData {
   dimensions?: string | null;
   heatNumber: string;
   materialGrade: string;
+  materialCategory: string;
   pricingBasis: string | null;
   ratePerQuantity: string | null;
   expectedAmount: string | null;
@@ -102,7 +104,7 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
   const [company, qrDataUrl, logo] = await Promise.all([
     fetchCompanySettings(),
     dc.qrToken
-      ? QRCode.toDataURL(buildDcQrUrl(dc.qrToken), { margin: 1, width: 200 })
+      ? QRCode.toDataURL(buildDcPublicUrl(dc.qrToken), { margin: 1, width: 200 })
       : Promise.resolve(null),
     getCompanyLogoDataUrl(),
   ]);
@@ -135,6 +137,7 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
         : null,
     heatNumber: dc.heatNumber || "—",
     materialGrade: dc.materialGrade || "—",
+    materialCategory: dc.materialCategory === "CONVERSION" ? "Conversion Material" : "Production Material",
     pricingBasis: dc.pricingBasis ? (dc.pricingBasis === "RM" ? "Price Based On: RM Quantity" : "Price Based On: FG Quantity") : "—",
     ratePerQuantity: dc.ratePerQuantity != null ? Number(dc.ratePerQuantity).toFixed(2) : "—",
     expectedAmount: dc.expectedAmount != null ? Number(dc.expectedAmount).toFixed(2) : "—",

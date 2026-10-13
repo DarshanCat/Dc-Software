@@ -39,6 +39,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
   const [partNumber, setPartNumber] = useState("");
   const [partDescription, setPartDescription] = useState("");
   const [materialGrade, setMaterialGrade] = useState("");
+  const [materialCategory, setMaterialCategory] = useState<"PRODUCTION" | "CONVERSION">("PRODUCTION");
   const [pricingBasis, setPricingBasis] = useState<"RW" | "FG">("RW");
   const [ratePerQuantity, setRatePerQuantity] = useState<string>("");
   const [outwardWeight, setOutwardWeight] = useState<string>("");
@@ -82,6 +83,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
       partNumber: partNumber.trim(),
       partDescription: partDescription.trim() || undefined,
       materialGrade: materialGrade.trim(),
+      materialCategory,
       pricingBasis,
       ratePerQuantity: ratePerQuantity ? parseFloat(ratePerQuantity) : undefined,
       outwardWeight: outwardWeight ? parseFloat(outwardWeight) : undefined,
@@ -177,8 +179,59 @@ export function OutwardDcForm({ vendors, processes }: Props) {
       </div>
 
       {/* SECTION: WO & PART MASTER */}
-      <div>
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-3 border-b pb-1">WO & Part Information</h2>
+      <div className="space-y-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 border-b pb-1">WO & Part Information</h2>
+
+        {/* Material Classification: Production vs Conversion */}
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-2">
+          <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+            Material Classification for Vendor *
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label
+              className={`flex items-center gap-3 p-3 rounded-md border-2 cursor-pointer transition-all ${
+                materialCategory === "PRODUCTION"
+                  ? "bg-blue-50 border-blue-600 text-blue-900 font-bold shadow-sm"
+                  : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              <input
+                type="radio"
+                name="materialCategory"
+                value="PRODUCTION"
+                checked={materialCategory === "PRODUCTION"}
+                onChange={() => setMaterialCategory("PRODUCTION")}
+                className="h-4 w-4 text-blue-600"
+              />
+              <div>
+                <span className="block text-xs font-bold">Production Material</span>
+                <span className="text-[11px] text-slate-500 block">Standard production material sent for processing</span>
+              </div>
+            </label>
+
+            <label
+              className={`flex items-center gap-3 p-3 rounded-md border-2 cursor-pointer transition-all ${
+                materialCategory === "CONVERSION"
+                  ? "bg-purple-50 border-purple-600 text-purple-900 font-bold shadow-sm"
+                  : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              <input
+                type="radio"
+                name="materialCategory"
+                value="CONVERSION"
+                checked={materialCategory === "CONVERSION"}
+                onChange={() => setMaterialCategory("CONVERSION")}
+                className="h-4 w-4 text-purple-600"
+              />
+              <div>
+                <span className="block text-xs font-bold">Conversion Material</span>
+                <span className="text-[11px] text-slate-500 block">Conversion material sent for vendor transformation</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Department *</label>

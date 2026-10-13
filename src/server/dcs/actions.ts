@@ -128,6 +128,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         dimensionUom: "MM",
         heatNumber: data.heatNumber ? data.heatNumber.trim() : null,
         materialGrade: data.materialGrade ? data.materialGrade.trim() : null,
+        materialCategory: data.materialCategory || "PRODUCTION",
         pricingBasis: data.pricingBasis || null,
         ratePerQuantity: data.ratePerQuantity ? new Prisma.Decimal(data.ratePerQuantity) : null,
         expectedAmount: expectedAmount > 0 ? new Prisma.Decimal(expectedAmount) : null,

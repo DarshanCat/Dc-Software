@@ -463,6 +463,7 @@ describe("Security Module Regression Suite", () => {
   // 19. PDF data loader includes dimensions formatted with MM
   it("19. formats dimensions clearly with MM in loadDcPdfData", async () => {
     vi.mocked(prisma.systemSetting.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.systemSetting.findUnique).mockResolvedValue(null as any);
     vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
       id: "dc-pdf-1",
       dcNumber: "DC-PDF-001",
@@ -539,5 +540,71 @@ describe("Security Module Regression Suite", () => {
       height: 25,
     });
     expect(resNeg.ok).toBe(false);
+  });
+
+  // 22. Supports Material Classification: PRODUCTION vs CONVERSION
+  it("22. persists materialCategory as CONVERSION or PRODUCTION in createOutwardDc", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(requirePermission).mockResolvedValue(mockStoreUser as any);
+    vi.mocked(prisma.vendor.findUnique).mockResolvedValue({ id: "v-conv-1", vendorName: "Vendor Conversion", active: true } as any);
+    vi.mocked(prisma.deliveryChallan.create).mockResolvedValue({ id: "dc-conv-1", dcNumber: "DC-CONV-001" } as any);
+
+    const { createOutwardDc } = await import("@/server/dcs/extended-actions");
+    const res = await createOutwardDc({
+      vendorId: "v-conv-1",
+      department: "PRODUCTION",
+      woNumber: "WO-CONV-1",
+      partNumber: "PN-CONV",
+      materialGrade: "SG 500/7",
+      materialCategory: "CONVERSION",
+      outwardWeight: 45.5,
+      length: 100,
+      width: 50,
+      height: 25,
+      pricingBasis: "RW",
+      ratePerQuantity: 25,
+      outwardQtyRw: 100,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(prisma.deliveryChallan.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          materialCategory: "CONVERSION",
+        }),
+      }),
+    );
+  });
+
+  // 23. Public QR URL builds absolute HTTPS URL pointing to /qr/[token]
+  it("23. generates absolute public QR softcopy URL pointing to /qr/[token]", async () => {
+    const { buildDcPublicUrl } = await import("@/services/dispatch.service");
+    const url = buildDcPublicUrl("test-token-xyz");
+    expect(url).toBe("https://dc.vijayspheroidals.in/qr/test-token-xyz");
+  });
+
+  // 24. PDF data loader maps materialCategory to human-readable text
+  it("24. formats materialCategory correctly in loadDcPdfData", async () => {
+    vi.mocked(prisma.systemSetting.findMany).mockResolvedValue([] as any);
+    vi.mocked(prisma.systemSetting.findUnique).mockResolvedValue(null as any);
+    vi.mocked(prisma.deliveryChallan.findUnique).mockResolvedValue({
+      id: "dc-cat-1",
+      dcNumber: "DC-CAT-001",
+      dcDate: new Date(),
+      status: "APPROVED",
+      purpose: "JOB_WORK",
+      woNumber: "WO-CAT-1",
+      partNumber: "PN-CAT-1",
+      rmQuantity: 50,
+      returnFgQuantity: 50,
+      outwardWeight: 20,
+      materialCategory: "CONVERSION",
+      vendor: { vendorName: "Vendor C", address: "Addr", gstNumber: "GST-C", panNumber: "PAN-C" },
+      process: { name: "Machining" },
+    } as any);
+
+    const { loadDcPdfData } = await import("@/server/dcs/pdf");
+    const pdfData = await loadDcPdfData("dc-cat-1");
+    expect(pdfData?.materialCategory).toBe("Conversion Material");
   });
 });

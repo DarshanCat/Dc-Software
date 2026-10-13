@@ -59,6 +59,7 @@ export interface CreateOutwardDcInput {
   partNumber?: string;
   partDescription?: string;
   materialGrade?: string;
+  materialCategory?: "PRODUCTION" | "CONVERSION";
   pricingBasis?: "RW" | "FG";
   ratePerQuantity?: number;
   outwardWeight?: number;
@@ -171,6 +172,7 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
         materialGrade: input.materialGrade ? input.materialGrade.trim() : null,
+        materialCategory: input.materialCategory || "PRODUCTION",
         length: input.length ? new Prisma.Decimal(input.length) : null,
         width: input.width ? new Prisma.Decimal(input.width) : null,
         height: input.height ? new Prisma.Decimal(input.height) : null,
@@ -324,6 +326,7 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
         materialGrade: input.materialGrade ? input.materialGrade.trim() : null,
+        materialCategory: input.materialCategory || existingDc.materialCategory || "PRODUCTION",
         vendorId: input.vendorId,
         department: input.department.trim(),
         purpose: input.purpose || "JOB_WORK",

@@ -24,6 +24,12 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Redirect legacy scanned QR codes formatted as /dcs/<qrToken> to /qr/<qrToken>
+  const qrMatch = pathname.match(/^\/dcs\/([A-Za-z0-9_-]{32})$/);
+  if (qrMatch) {
+    return NextResponse.redirect(new URL(`/qr/${qrMatch[1]}`, req.url));
+  }
+
   const token = await getToken({ req, secret: resolveNextAuthSecret() });
 
   // Unauthenticated users -> redirect to /login

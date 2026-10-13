@@ -27,6 +27,7 @@ export interface DcPdfData {
   dimensions?: string | null;
   heatNumber: string;
   materialGrade: string;
+  materialCategory?: string | null;
   pricingBasis?: string | null;
   ratePerQuantity?: string | null;
   expectedAmount?: string | null;
@@ -479,32 +480,48 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
 
   y = dataRowY - dataRowHeight - 12;
 
-  // ================= 3B. MATERIAL GRADE STRIP =================
-  // A single full-width label/value strip, directly under the material details
-  // table (Part Number / Heat Number), so Material Grade reads as part of the
-  // same material identification group without cramming a 6th narrow column
-  // into that table.
-  const gradeAvailW = CONTENT_WIDTH - 16;
+  // ================= 3B. MATERIAL GRADE & CATEGORY STRIP =================
+  const colGradeW = CONTENT_WIDTH * 0.55;
+  const colCatW = CONTENT_WIDTH * 0.45;
+  const gradeAvailW = colGradeW - 16;
+  const catAvailW = colCatW - 16;
   const gradeLines = wrapCellText(data.materialGrade || "—", bold, 9, gradeAvailW);
-  const gradeBoxHeight = Math.max(26, 14 + gradeLines.length * 11);
+  const catLines = wrapCellText(data.materialCategory || "Production Material", bold, 9, catAvailW);
+  const stripBoxHeight = Math.max(26, 14 + Math.max(gradeLines.length, catLines.length) * 11);
 
-  ensureSpace(gradeBoxHeight + 12);
+  ensureSpace(stripBoxHeight + 12);
 
-  const gradeBoxTop = y;
+  const stripBoxTop = y;
   currentPage.drawRectangle({
     x: MARGIN,
-    y: gradeBoxTop - gradeBoxHeight,
+    y: stripBoxTop - stripBoxHeight,
     width: CONTENT_WIDTH,
-    height: gradeBoxHeight,
+    height: stripBoxHeight,
     borderColor: LINE,
     borderWidth: 0.75,
   });
-  currentPage.drawText("MATERIAL GRADE", { x: MARGIN + 8, y: gradeBoxTop - 10, size: 7, font: bold, color: LIGHT_GREY });
+
+  // Left col: Material Grade
+  currentPage.drawText("MATERIAL GRADE", { x: MARGIN + 8, y: stripBoxTop - 10, size: 7, font: bold, color: LIGHT_GREY });
   gradeLines.forEach((line, idx) => {
-    currentPage.drawText(line, { x: MARGIN + 8, y: gradeBoxTop - 21 - idx * 11, size: 9, font: bold, color: DARK });
+    currentPage.drawText(line, { x: MARGIN + 8, y: stripBoxTop - 21 - idx * 11, size: 9, font: bold, color: DARK });
   });
 
-  y = gradeBoxTop - gradeBoxHeight - 12;
+  // Vertical divider
+  currentPage.drawLine({
+    start: { x: MARGIN + colGradeW, y: stripBoxTop },
+    end: { x: MARGIN + colGradeW, y: stripBoxTop - stripBoxHeight },
+    thickness: 0.75,
+    color: LINE,
+  });
+
+  // Right col: Material Category
+  currentPage.drawText("MATERIAL CATEGORY", { x: MARGIN + colGradeW + 8, y: stripBoxTop - 10, size: 7, font: bold, color: LIGHT_GREY });
+  catLines.forEach((line, idx) => {
+    currentPage.drawText(line, { x: MARGIN + colGradeW + 8, y: stripBoxTop - 21 - idx * 11, size: 9, font: bold, color: DARK });
+  });
+
+  y = stripBoxTop - stripBoxHeight - 12;
 
   // ================= 4. PRICING & COMMERCIAL TERMS BLOCK =================
   const pColW = CONTENT_WIDTH / 3;

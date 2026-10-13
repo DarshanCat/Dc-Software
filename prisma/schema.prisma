@@ -316,6 +316,7 @@ model DeliveryChallan {
   returnFgQuantity   Decimal?  @db.Decimal(12, 3)
   heatNumber         String?
   materialGrade      String?
+  materialCategory   String?   @default("PRODUCTION")
   expectedScrap      Decimal?  @db.Decimal(12, 3)
 
   // Master Snapshot Fields
@@ -474,6 +475,7 @@ model DeliveryChallan {
   @@index([movementType])
   @@index([expectedReturnDate])
   @@index([vendorId, status])
+  @@index([materialCategory])
 }
 
 model DeliveryChallanItem {

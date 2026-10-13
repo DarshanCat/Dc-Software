@@ -10,43 +10,43 @@ export function generateQrToken(): string {
   return randomBytes(24).toString("base64url");
 }
 
-function getValidBaseUrl(): string | null {
-  const base = process.env.APP_URL || process.env.NEXTAUTH_URL;
-  if (!base || base.includes("SENSITIVE") || base.includes("[") || base.includes("]")) {
-    return null;
+function getValidBaseUrl(): string {
+  const base =
+    process.env.APP_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null) ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    process.env.NEXTAUTH_URL ||
+    "https://dc.vijayspheroidals.in";
+  if (!base || base.includes("SENSITIVE") || base.includes("[") || base.includes("]") || base.includes("localhost")) {
+    return "https://dc.vijayspheroidals.in";
   }
-  return base;
+  return base.startsWith("http") ? base : `https://${base}`;
 }
 
 /**
  * Builds the absolute URL a scanned QR code should resolve to.
- * Falls back to a relative path if no base URL is configured, so this still
- * works before deployment env vars are set (dev / this sandbox).
  */
-export function buildDcQrUrl(dcId: string): string {
+export function buildDcQrUrl(dcIdOrToken: string): string {
   const base = getValidBaseUrl();
-  const path = `/dcs/${dcId}`;
-  if (!base) return path;
+  const path = `/qr/${encodeURIComponent(dcIdOrToken)}`;
   try {
-    return new URL(path, base.startsWith("http") ? base : `https://${base}`).toString();
+    return new URL(path, base).toString();
   } catch {
-    return path;
+    return `${base}${path}`;
   }
 }
 
 /**
  * Public, unauthenticated URL the printed QR code should encode (spec §21).
  * Keyed by the opaque qrToken, not the internal DC id — anyone who scans it
- * gets a PDF view/download with no login required. Never put business data
- * in the QR itself, only this token-secured link.
+ * gets the digital DC softcopy on mobile with full details and instant PDF download.
  */
 export function buildDcPublicUrl(qrToken: string): string {
   const base = getValidBaseUrl();
-  const path = `/public/dc/${qrToken}`;
-  if (!base) return path;
+  const path = `/qr/${encodeURIComponent(qrToken)}`;
   try {
-    return new URL(path, base.startsWith("http") ? base : `https://${base}`).toString();
+    return new URL(path, base).toString();
   } catch {
-    return path;
+    return `${base}${path}`;
   }
 }

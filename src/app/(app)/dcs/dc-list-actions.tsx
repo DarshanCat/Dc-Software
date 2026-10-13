@@ -29,6 +29,15 @@ export function DcListRowActions({ dcId, dcNumber, status, canEdit }: Props) {
       >
         View
       </Link>
+      <a
+        href={`/dcs/${dcId}/pdf`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-xs font-semibold text-emerald-700 hover:underline inline-flex items-center gap-0.5"
+        title="Download DC Softcopy PDF"
+      >
+        PDF
+      </a>
 
       {isDraft && canEdit && (
         <>
