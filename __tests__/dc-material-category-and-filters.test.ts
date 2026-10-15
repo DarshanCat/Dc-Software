@@ -96,6 +96,8 @@ describe("Material Category (Production vs Conversion) and Flow Filter Suite", (
     const { createDc } = await import("@/server/dcs/actions");
     const res = await createDc({
       movementType: "MATERIAL",
+      isCommercialService: false,
+      dimensionUom: "MM",
       vendorId: "vendor-1",
       woNumber: "WO-2026-CONV-10",
       partNumber: "PART-CONV-01",
@@ -115,7 +117,7 @@ describe("Material Category (Production vs Conversion) and Flow Filter Suite", (
     });
 
     expect(res.ok).toBe(true);
-    if (!res.ok) return;
+    if (!res.ok || !res.dcId) return;
 
     const stored = dcStore.get(res.dcId);
     expect(stored.materialCategory).toBe("CONVERSION");
@@ -126,6 +128,8 @@ describe("Material Category (Production vs Conversion) and Flow Filter Suite", (
     const { createDc } = await import("@/server/dcs/actions");
     const res = await createDc({
       movementType: "MATERIAL",
+      isCommercialService: false,
+      dimensionUom: "MM",
       vendorId: "vendor-1",
       woNumber: "WO-2026-PROD-20",
       partNumber: "PART-PROD-01",
@@ -144,7 +148,7 @@ describe("Material Category (Production vs Conversion) and Flow Filter Suite", (
     });
 
     expect(res.ok).toBe(true);
-    if (!res.ok) return;
+    if (!res.ok || !res.dcId) return;
 
     const stored = dcStore.get(res.dcId);
     expect(stored.materialCategory).toBe("PRODUCTION");
@@ -170,7 +174,7 @@ describe("Material Category (Production vs Conversion) and Flow Filter Suite", (
     });
 
     expect(res.ok).toBe(true);
-    if (!res.ok) return;
+    if (!res.ok || !res.dcId) return;
 
     const stored = dcStore.get(res.dcId);
     expect(stored.materialCategory).toBe("CONVERSION");
@@ -196,7 +200,7 @@ describe("Material Category (Production vs Conversion) and Flow Filter Suite", (
     });
 
     expect(created.ok).toBe(true);
-    if (!created.ok) return;
+    if (!created.ok || !created.dcId) return;
 
     // Update to CONVERSION
     const updated = await updateOutwardDc({

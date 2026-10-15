@@ -4,8 +4,19 @@ import { QualityInspectionForm } from "./quality-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function QualityInspectionPage() {
+interface PageProps {
+  searchParams?: Promise<{
+    q?: string;
+    wo?: string;
+    dcId?: string;
+  }>;
+}
+
+export default async function QualityInspectionPage({ searchParams }: PageProps) {
   await requireUser();
+  const params = searchParams ? await searchParams : {};
+  const initialSearch = params.q || params.wo || "";
+  const initialDcId = params.dcId || "";
 
   const dcs = await prisma.deliveryChallan.findMany({
     where: {
@@ -24,7 +35,7 @@ export default async function QualityInspectionPage() {
     partNumber: dc.partNumber || "N/A",
     department: dc.department || "PRODUCTION",
     actualInwardQty: Number(dc.actualInwardQty ?? dc.storeReceivedQty ?? dc.securityFgQuantity ?? 0),
-    storeReceivedQty: Number(dc.storeReceivedQty ?? dc.actualInwardQty ?? 0),
+    storeReceivedQty: Number(dc.storeReceivedQty ?? dc.actualInwardQty ?? dc.securityFgQuantity ?? 0),
     status: dc.status,
   }));
 
@@ -37,7 +48,11 @@ export default async function QualityInspectionPage() {
         </p>
       </div>
 
-      <QualityInspectionForm dcs={dcsFormatted} />
+      <QualityInspectionForm
+        dcs={dcsFormatted}
+        initialSelectedDcId={initialDcId}
+        initialSearchQuery={initialSearch}
+      />
     </div>
   );
 }

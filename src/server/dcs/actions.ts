@@ -22,6 +22,8 @@ import {
   firstIssueMessage,
   createDcSchema,
 } from "@/lib/validation/dc";
+import { storage } from "@/services/storage";
+import { validateUpload } from "@/lib/validation/document";
 
 // Helper to safely verify permissions without throwing unhandled exceptions into Next.js action boundary
 async function checkPermission(
@@ -637,6 +639,70 @@ export async function submitSecurityReturn(
 
   await revalidateSecurityPaths(dcId);
   return { ok: true };
+}
+
+export async function uploadInwardInvoice(
+  dcId: string,
+  formData: FormData
+): Promise<{ ok: boolean; documentId?: string; fileName?: string; error?: string }> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, error: "Not signed in." };
+
+  const roleKeys = user.roleKeys || [];
+  const isAllowed = roleKeys.some((r) =>
+    ["SECURITY", "STORES", "ACCOUNTS", "ADMIN", "MANAGEMENT"].includes(r)
+  );
+  if (!isAllowed) {
+    return { ok: false, error: "Permission denied to attach vendor invoice." };
+  }
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "No valid file selected." };
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const validated = validateUpload(buffer, file.name);
+  if (!validated.ok) return { ok: false, error: validated.error };
+
+  const invoiceNumber = (formData.get("invoiceNumber") as string) || "";
+  const prefix = invoiceNumber ? `Invoice_${invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, "_")}_` : "Vendor_Invoice_";
+  const cleanName = prefix + validated.sanitizedName;
+
+  const storageKey = await storage.save(buffer, cleanName);
+
+  const doc = await prisma.document.create({
+    data: {
+      entityType: "DeliveryChallan",
+      entityId: dcId,
+      fileName: cleanName,
+      fileType: validated.type,
+      fileSize: buffer.length,
+      storageKey,
+      uploadedBy: user.id,
+    },
+  });
+
+  if (invoiceNumber) {
+    await prisma.deliveryChallan.update({
+      where: { id: dcId },
+      data: { invoiceNumber },
+    });
+  }
+
+  await writeAudit(prisma, {
+    userId: user.id,
+    action: "VENDOR_INVOICE_ATTACHED",
+    module: "Documents",
+    entityType: "DeliveryChallan",
+    entityId: dcId,
+    newValue: { documentId: doc.id, fileName: cleanName, fileSize: buffer.length, invoiceNumber },
+    reason: `Vendor invoice attached for DC (Invoice No: ${invoiceNumber || "N/A"})`,
+  });
+
+  await revalidateSecurityPaths(dcId);
+  revalidatePath("/accounts/dashboard");
+  return { ok: true, documentId: doc.id, fileName: cleanName };
 }
 
 // ================= 8. STORE VERIFICATION (SECURITY_RETURNED -> STORE_VERIFIED) =================

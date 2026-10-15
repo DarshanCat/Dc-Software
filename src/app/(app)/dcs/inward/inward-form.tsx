@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { submitSecurityReturn } from "@/server/dcs/actions";
+import { submitSecurityReturn, uploadInwardInvoice } from "@/server/dcs/actions";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
 
@@ -29,6 +29,7 @@ export function InwardDcForm({ dcs }: Props) {
   const [inwardDate, setInwardDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [inwardDocumentNo, setInwardDocumentNo] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [transporter, setTransporter] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -49,6 +50,20 @@ export function InwardDcForm({ dcs }: Props) {
     if (isNaN(numQty) || numQty <= 0) return setError("Actual Inward Quantity must be > 0.");
 
     setLoading(true);
+
+    if (invoiceFile) {
+      const fd = new FormData();
+      fd.append("file", invoiceFile);
+      if (invoiceNumber.trim()) {
+        fd.append("invoiceNumber", invoiceNumber.trim());
+      }
+      const upRes = await uploadInwardInvoice(selectedDcId, fd);
+      if (!upRes.ok) {
+        setError(upRes.error || "Failed to upload invoice document.");
+        setLoading(false);
+        return;
+      }
+    }
 
     const res = await submitSecurityReturn(selectedDcId, {
       actualInwardQty: numQty,
@@ -182,6 +197,21 @@ export function InwardDcForm({ dcs }: Props) {
                 placeholder="INV-12345"
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Attach Vendor Invoice (PDF/Image)</label>
+              <input
+                type="file"
+                accept=".pdf,image/png,image/jpeg,image/webp"
+                onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
+                className="w-full text-xs text-slate-700 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-300 rounded p-1"
+              />
+              {invoiceFile && (
+                <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+                  Attached: {invoiceFile.name} ({(invoiceFile.size / 1024).toFixed(1)} KB)
+                </p>
+              )}
             </div>
 
             <div>

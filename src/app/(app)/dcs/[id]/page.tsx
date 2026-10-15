@@ -87,6 +87,13 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
     orderBy: { uploadedAt: "desc" },
   });
 
+  const invoiceDoc = documents.find(
+    (d) =>
+      d.fileName.toLowerCase().includes("invoice") ||
+      d.fileName.startsWith("Invoice_") ||
+      d.fileName.startsWith("Vendor_Invoice_")
+  );
+
   const auditUserIds = [
     ...new Set(
       [
@@ -306,6 +313,8 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
           pricingBasis: dc.pricingBasis || "FG",
           securityDispatchQuantity: dc.outwardWeight ? Number(dc.outwardWeight) : null,
           invoiceNumber: dc.invoiceNumber,
+          invoiceDocId: invoiceDoc?.id || null,
+          invoiceDocName: invoiceDoc?.fileName || null,
           invoiceDate: dc.invoiceDate ? dc.invoiceDate.toISOString().split("T")[0] : null,
           invoiceAmount: dc.invoiceAmount != null ? Number(dc.invoiceAmount) : (dc.pricingSnapshot ? Number(dc.pricingSnapshot) : 0),
           paymentReferenceNumber: dc.paymentReferenceNumber || dc.paymentReference,
@@ -519,7 +528,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
           3. Security Physical Gate Inward Receipt
         </h2>
         {dc.actualInwardQty ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold">Actual Inward Qty</span>
               <span className="font-mono font-bold text-blue-900 text-base">{Number(dc.actualInwardQty)} NOS</span>
@@ -529,8 +538,28 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
               <span className="font-semibold text-slate-900">{dc.inwardDate ? dc.inwardDate.toLocaleDateString() : "—"}</span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Inward Doc / Reference</span>
-              <span className="font-mono text-slate-800">{dc.inwardDocumentNo || dc.invoiceNumber || "N/A"}</span>
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Inward Doc / Gate Pass</span>
+              <span className="font-mono text-slate-800">{dc.inwardDocumentNo || "N/A"}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold">Vendor Invoice</span>
+              {dc.invoiceNumber || invoiceDoc ? (
+                <div>
+                  <span className="font-mono font-bold text-slate-900 block">{dc.invoiceNumber || "Attached"}</span>
+                  {invoiceDoc && (
+                    <a
+                      href={`/api/documents/${invoiceDoc.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:text-blue-900 hover:underline mt-0.5"
+                    >
+                      📄 View Invoice File
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <span className="text-slate-400 italic">None</span>
+              )}
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold">Remarks</span>

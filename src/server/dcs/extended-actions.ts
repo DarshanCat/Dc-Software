@@ -785,8 +785,9 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
-  if (dc.status !== "STORE_VERIFIED" && dc.status !== "QUALITY_PENDING") {
-    return { ok: false, error: `DC must be in STORE_VERIFIED status for Quality Inspection. Current: ${dc.status}` };
+  const allowedStatuses = ["STORE_VERIFIED", "QUALITY_PENDING", "SECURITY_RETURNED", "STORE_CONFIRMED"];
+  if (!allowedStatuses.includes(dc.status)) {
+    return { ok: false, error: `DC must be in STORE_VERIFIED or returned status for Quality Inspection. Current: ${dc.status}` };
   }
 
   const storeReceived = dc.storeReceivedQty !== null ? Number(dc.storeReceivedQty) : null;
@@ -798,7 +799,7 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
   if (sum !== targetQty) {
     return {
       ok: false,
-      error: "Good + Rejection + Scrap must equal the Store Received Qty.",
+      error: `Good + Rejection + Scrap (${sum}) must equal the Store Received Qty (${targetQty}).`,
     };
   }
 
@@ -809,6 +810,10 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
       where: { id: input.dcId },
       data: {
         status: "QUALITY_COMPLETED",
+        ...(dc.storeReceivedQty === null ? {
+          storeReceivedQty: new Prisma.Decimal(targetQty),
+          storeReceivedDate: dc.storeReceivedDate || now,
+        } : {}),
         goodQty: new Prisma.Decimal(input.goodQty),
         rejectionQty: new Prisma.Decimal(input.rejectionQty),
         scrapQty: new Prisma.Decimal(input.scrapQty),

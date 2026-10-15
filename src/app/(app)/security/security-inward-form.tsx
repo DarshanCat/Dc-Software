@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { submitSecurityReturn } from "@/server/dcs/actions";
+import { submitSecurityReturn, uploadInwardInvoice } from "@/server/dcs/actions";
 import { formatQuantity } from "@/lib/quantity-format";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
@@ -35,6 +35,7 @@ export function SecurityInwardForm({ dc, onSuccess }: SecurityInwardFormProps) {
   );
   const [inwardDocNo, setInwardDocNo] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [transporter, setTransporter] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -57,6 +58,20 @@ export function SecurityInwardForm({ dc, onSuccess }: SecurityInwardFormProps) {
     setLoading(true);
 
     try {
+      if (invoiceFile) {
+        const fd = new FormData();
+        fd.append("file", invoiceFile);
+        if (invoiceNumber.trim()) {
+          fd.append("invoiceNumber", invoiceNumber.trim());
+        }
+        const uploadRes = await uploadInwardInvoice(dc.id, fd);
+        if (!uploadRes.ok) {
+          setError(uploadRes.error || "Failed to upload invoice document.");
+          setLoading(false);
+          return;
+        }
+      }
+
       const res = await submitSecurityReturn(dc.id, {
         actualInwardQty: numQty,
         inwardDate,
@@ -187,6 +202,23 @@ export function SecurityInwardForm({ dc, onSuccess }: SecurityInwardFormProps) {
                       className="w-full rounded border border-slate-300 p-2 text-xs font-mono"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Attach Vendor Invoice (PDF or Image)
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg,image/webp"
+                    onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
+                    className="w-full text-xs text-slate-700 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-300 rounded p-1"
+                  />
+                  {invoiceFile && (
+                    <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+                      Attached: {invoiceFile.name} ({(invoiceFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

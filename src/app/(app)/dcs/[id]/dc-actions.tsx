@@ -9,6 +9,7 @@ import {
   submitSecurityDispatch,
   confirmDcAtVendor,
   submitSecurityReturn,
+  uploadInwardInvoice,
   submitStoreVerification,
   submitCustodianVerification,
   submitManagerFinalApproval,
@@ -64,6 +65,8 @@ export function DcActions({
     pricingBasis?: string | null;
     securityDispatchQuantity?: number | null;
     invoiceNumber?: string | null;
+    invoiceDocId?: string | null;
+    invoiceDocName?: string | null;
     invoiceDate?: string | null;
     invoiceAmount?: number | null;
     paymentReferenceNumber?: string | null;
@@ -107,6 +110,7 @@ export function DcActions({
   const [secInwardDate, setSecInwardDate] = useState(new Date().toISOString().split("T")[0]);
   const [secDocNo, setSecDocNo] = useState("");
   const [secInvoiceNo, setSecInvoiceNo] = useState(dcData.invoiceNumber || "");
+  const [secInvoiceFile, setSecInvoiceFile] = useState<File | null>(null);
   const [secVehicle, setSecVehicle] = useState("");
   const [secRemarks, setSecRemarks] = useState("");
 
@@ -124,6 +128,7 @@ export function DcActions({
   const [invNum, setInvNum] = useState(dcData.invoiceNumber || "");
   const [invDate, setInvDate] = useState(dcData.invoiceDate || new Date().toISOString().split("T")[0]);
   const [invAmount, setInvAmount] = useState(dcData.invoiceAmount ? String(dcData.invoiceAmount) : "");
+  const [accInvoiceFile, setAccInvoiceFile] = useState<File | null>(null);
   const [payRef, setPayRef] = useState(dcData.paymentReferenceNumber || "");
   const [payDate, setPayDate] = useState(dcData.paymentDate || new Date().toISOString().split("T")[0]);
   const [payRemarks, setPayRemarks] = useState("");
@@ -483,6 +488,20 @@ export function DcActions({
                 <Input value={secInvoiceNo} onChange={(e) => setSecInvoiceNo(e.target.value)} placeholder="e.g. INV-12345" />
               </div>
               <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Attach Vendor Invoice (PDF/Image)</label>
+                <input
+                  type="file"
+                  accept=".pdf,image/png,image/jpeg,image/webp"
+                  onChange={(e) => setSecInvoiceFile(e.target.files?.[0] || null)}
+                  className="w-full text-xs text-slate-700 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-300 rounded p-1"
+                />
+                {secInvoiceFile && (
+                  <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+                    Attached: {secInvoiceFile.name} ({(secInvoiceFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </div>
+              <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Vehicle Number</label>
                 <Input value={secVehicle} onChange={(e) => setSecVehicle(e.target.value)} placeholder="e.g. KA-02-CD-5678" />
               </div>
@@ -495,16 +514,26 @@ export function DcActions({
               <Button variant="secondary" onClick={() => setModal(null)} disabled={busy}>Cancel</Button>
               <Button
                 onClick={() =>
-                  handleAction(() =>
-                    submitSecurityReturn(dcId, {
+                  handleAction(async () => {
+                    if (secInvoiceFile) {
+                      const fd = new FormData();
+                      fd.append("file", secInvoiceFile);
+                      if (secInvoiceNo.trim()) fd.append("invoiceNumber", secInvoiceNo.trim());
+                      const upRes = await uploadInwardInvoice(dcId, fd);
+                      if (!upRes.ok) {
+                        return { ok: false, error: upRes.error || "Failed to upload invoice document." };
+                      }
+                    }
+
+                    return submitSecurityReturn(dcId, {
                       actualInwardQty: Number(secActualInwardQty),
                       inwardDate: secInwardDate,
                       inwardDocumentNo: secDocNo,
                       invoiceNumber: secInvoiceNo,
                       vehicleNumber: secVehicle,
                       remarks: secRemarks,
-                    }),
-                  )
+                    });
+                  })
                 }
                 disabled={busy || !secActualInwardQty || Number(secActualInwardQty) <= 0}
                 className="bg-amber-600 text-white"
@@ -703,6 +732,23 @@ export function DcActions({
               </div>
             )}
 
+            {dcData.invoiceDocId && (
+              <div className="rounded-md bg-blue-50 border border-blue-200 p-3 flex items-center justify-between text-xs">
+                <div>
+                  <span className="font-bold text-blue-950 block">Vendor Invoice Attached by Security</span>
+                  <span className="text-[11px] text-blue-800 font-mono">{dcData.invoiceDocName || "Invoice File"}</span>
+                </div>
+                <a
+                  href={`/api/documents/${dcData.invoiceDocId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded bg-blue-600 px-2.5 py-1 text-white font-semibold hover:bg-blue-700 text-xs shadow-sm"
+                >
+                  View Invoice
+                </a>
+              </div>
+            )}
+
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -741,6 +787,23 @@ export function DcActions({
                 />
                 {accountsFieldErrors.invoiceDate && (
                   <p className="text-red-600 text-xs font-semibold mt-1">{accountsFieldErrors.invoiceDate}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {dcData.invoiceDocId ? "Replace / Update Attached Invoice (PDF/Image)" : "Attach Vendor Invoice (PDF/Image)"}
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,image/png,image/jpeg,image/webp"
+                  onChange={(e) => setAccInvoiceFile(e.target.files?.[0] || null)}
+                  className="w-full text-xs text-slate-700 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-300 rounded p-1"
+                />
+                {accInvoiceFile && (
+                  <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+                    Selected: {accInvoiceFile.name} ({(accInvoiceFile.size / 1024).toFixed(1)} KB)
+                  </p>
                 )}
               </div>
 
@@ -827,6 +890,16 @@ export function DcActions({
                   if (Object.keys(errors).length > 0) return;
 
                   handleAction(async () => {
+                    if (accInvoiceFile) {
+                      const fd = new FormData();
+                      fd.append("file", accInvoiceFile);
+                      if (invNum.trim()) fd.append("invoiceNumber", invNum.trim());
+                      const upRes = await uploadInwardInvoice(dcId, fd);
+                      if (!upRes.ok) {
+                        return { ok: false, error: upRes.error || "Failed to upload invoice document." };
+                      }
+                    }
+
                     const res = await submitAccountsPaymentEntry(dcId, {
                       invoiceNumber: invNum,
                       invoiceDate: invDate,

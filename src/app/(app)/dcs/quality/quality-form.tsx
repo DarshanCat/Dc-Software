@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { submitQualityInspection, SubmitQualityInspectionInput } from "@/server/dcs/extended-actions";
 import { stageResultBalance } from "@/analytics/math-engine";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, AlertCircle, Check, XCircle } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Check, XCircle, Search, X, ChevronRight } from "lucide-react";
 
 interface DcOption {
   id: string;
@@ -21,12 +21,15 @@ interface DcOption {
 
 interface Props {
   dcs: DcOption[];
+  initialSelectedDcId?: string;
+  initialSearchQuery?: string;
 }
 
-export function QualityInspectionForm({ dcs }: Props) {
+export function QualityInspectionForm({ dcs, initialSelectedDcId = "", initialSearchQuery = "" }: Props) {
   const router = useRouter();
 
-  const [selectedDcId, setSelectedDcId] = useState("");
+  const [selectedDcId, setSelectedDcId] = useState(initialSelectedDcId);
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [goodQty, setGoodQty] = useState<string>("");
   const [rejectionQty, setRejectionQty] = useState<string>("");
   const [scrapQty, setScrapQty] = useState<string>("");
@@ -36,6 +39,19 @@ export function QualityInspectionForm({ dcs }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const filteredDcs = useMemo(() => {
+    if (!searchQuery.trim()) return dcs;
+    const q = searchQuery.toLowerCase().trim();
+    return dcs.filter(
+      (d) =>
+        d.woNumber.toLowerCase().includes(q) ||
+        d.dcNumber.toLowerCase().includes(q) ||
+        d.partNumber.toLowerCase().includes(q) ||
+        d.vendorName.toLowerCase().includes(q) ||
+        d.department.toLowerCase().includes(q)
+    );
+  }, [dcs, searchQuery]);
 
   const selectedDc = dcs.find((d) => d.id === selectedDcId);
   const actualInward = selectedDc ? selectedDc.actualInwardQty : 0;
@@ -47,6 +63,14 @@ export function QualityInspectionForm({ dcs }: Props) {
 
   const reconciliation = stageResultBalance(numGood, numReject, numScrap, storeReceived);
 
+  function handleSelectDc(dcId: string) {
+    setSelectedDcId(dcId);
+    setGoodQty("");
+    setRejectionQty("");
+    setScrapQty("");
+    setError(null);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -54,7 +78,7 @@ export function QualityInspectionForm({ dcs }: Props) {
 
     if (!selectedDcId) return setError("Please select a Delivery Challan.");
     if (!reconciliation.isValid || (numGood + numReject + numScrap) !== storeReceived) {
-      return setError("Good + Rejection + Scrap must equal the Store Received Qty.");
+      return setError(`Good + Rejection + Scrap (${numGood + numReject + numScrap}) must equal the Store Received Qty (${storeReceived}).`);
     }
 
     setLoading(true);
@@ -81,48 +105,150 @@ export function QualityInspectionForm({ dcs }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* DC SELECTOR & LIFECYCLE REVIEW */}
+      {/* DC SEARCH & SELECTION SECTION */}
       <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700">Select Pending DC for Quality Inspection</label>
-        <select
-          value={selectedDcId}
-          onChange={(e) => {
-            setSelectedDcId(e.target.value);
-            setGoodQty("");
-            setRejectionQty("");
-            setScrapQty("");
-          }}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-        >
-          <option value="">-- Select Pending DC --</option>
-          {dcs.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.dcNumber} — {d.vendorName} (WO: {d.woNumber}, Store Rec: {d.storeReceivedQty ?? d.actualInwardQty} NOS)
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center justify-between border-b pb-3">
+          <div>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800">
+              Select Pending DC for Quality Inspection
+            </h2>
+            <p className="text-xs text-slate-500">
+              Search by Work Order ID (WO ID), DC Number, Part Number, or Supplier.
+            </p>
+          </div>
+          {selectedDc && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => handleSelectDc("")}
+              className="text-xs border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              ✕ Change DC / Search Another
+            </Button>
+          )}
+        </div>
 
+        {/* SEARCH BAR */}
+        <div className="relative">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Type WO ID (e.g. WO-2026), DC Number, Part Number, or Vendor to search..."
+            className="w-full rounded-md border border-slate-300 pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* SEARCH QUICK SELECTOR DROPDOWN */}
+        <div>
+          <select
+            value={selectedDcId}
+            onChange={(e) => handleSelectDc(e.target.value)}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+          >
+            <option value="">
+              -- Select Pending DC ({filteredDcs.length} found) --
+            </option>
+            {filteredDcs.map((d) => (
+              <option key={d.id} value={d.id}>
+                WO: {d.woNumber} | DC: {d.dcNumber} — {d.vendorName} (Part: {d.partNumber}, Rec: {d.storeReceivedQty ?? d.actualInwardQty} NOS)
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* SEARCH MATCHES CARDS LIST (WHEN NO DC SELECTED OR SEARCHING) */}
+        {!selectedDc && (
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+              <span>Pending DCs Queue ({filteredDcs.length} available)</span>
+              {searchQuery && <span className="text-blue-600">Filtered by &quot;{searchQuery}&quot;</span>}
+            </div>
+
+            {filteredDcs.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-400 italic bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                No pending DCs found matching &quot;{searchQuery}&quot;. Please check the Work Order ID or DC Number.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                {filteredDcs.map((d) => (
+                  <div
+                    key={d.id}
+                    onClick={() => handleSelectDc(d.id)}
+                    className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50/60 p-3 hover:bg-blue-50/50 hover:border-blue-300 transition-all text-xs space-y-1.5 group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-slate-900 group-hover:text-blue-900 text-sm">
+                        {d.dcNumber}
+                      </span>
+                      <span className="rounded bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 text-[11px] border border-indigo-200">
+                        WO: {d.woNumber}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span className="font-semibold text-slate-800 truncate max-w-[180px]">{d.vendorName}</span>
+                      <span className="font-mono text-slate-700 font-medium">Part: {d.partNumber}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200/80 text-[11px]">
+                      <span className="text-slate-500">
+                        Inward Qty: <strong className="text-blue-800">{d.storeReceivedQty ?? d.actualInwardQty} NOS</strong>
+                      </span>
+                      <span className="inline-flex items-center font-bold text-blue-700 group-hover:translate-x-0.5 transition-transform">
+                        Select for Inspection <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SELECTED DC DETAIL BANNER */}
         {selectedDc && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 rounded-md bg-slate-50 p-4 border border-slate-200 text-xs">
-            <div>
-              <span className="text-slate-500 block">Supplier</span>
-              <span className="font-semibold text-slate-900">{selectedDc.vendorName}</span>
+          <div className="rounded-lg bg-blue-50/70 p-4 border border-blue-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-900">
+                Selected DC for Inspection
+              </span>
+              <span className="rounded bg-emerald-100 text-emerald-900 font-bold px-2.5 py-0.5 text-xs border border-emerald-300">
+                Ready for Quality Inspection
+              </span>
             </div>
-            <div>
-              <span className="text-slate-500 block">Work Order / Part</span>
-              <span className="font-semibold text-slate-900">{selectedDc.woNumber} / {selectedDc.partNumber}</span>
-            </div>
-            <div>
-              <span className="text-slate-500 block">Department</span>
-              <span className="font-semibold text-slate-900">{selectedDc.department}</span>
-            </div>
-            <div>
-              <span className="text-slate-500 block">Security Inward Qty</span>
-              <span className="font-bold text-slate-700 text-sm">{selectedDc.actualInwardQty} NOS</span>
-            </div>
-            <div>
-              <span className="text-slate-500 block">Store Received Qty</span>
-              <span className="font-bold text-blue-700 text-sm">{selectedDc.storeReceivedQty ?? selectedDc.actualInwardQty} NOS</span>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+              <div>
+                <span className="text-slate-500 block">DC Number</span>
+                <span className="font-mono font-bold text-slate-900 text-sm">{selectedDc.dcNumber}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Work Order ID (WO)</span>
+                <span className="font-mono font-bold text-indigo-900 text-sm">{selectedDc.woNumber}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Supplier / Part</span>
+                <span className="font-semibold text-slate-900 block truncate">{selectedDc.vendorName}</span>
+                <span className="font-mono text-slate-600 text-[11px]">{selectedDc.partNumber}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Department</span>
+                <span className="font-semibold text-slate-900">{selectedDc.department}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Store Received Qty</span>
+                <span className="font-mono font-bold text-blue-800 text-base">
+                  {selectedDc.storeReceivedQty ?? selectedDc.actualInwardQty} NOS
+                </span>
+              </div>
             </div>
           </div>
         )}
