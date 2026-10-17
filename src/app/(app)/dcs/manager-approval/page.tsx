@@ -18,7 +18,7 @@ export default async function ManagerApprovalPage({
   // showing an unfiltered queue - never fail open on a bad date filter.
   const dcDateCondition = dateRange.error ? { gte: new Date(8640000000000000) } : dateRange.where;
 
-  const [preOutwardDcsRaw, paymentDcsRaw] = await Promise.all([
+  const [preOutwardDcsRaw, paymentDcsRaw, draftReturnedDcsRaw] = await Promise.all([
     prisma.deliveryChallan.findMany({
       where: {
         status: "PENDING_APPROVAL",
@@ -35,6 +35,15 @@ export default async function ManagerApprovalPage({
       },
       include: { vendor: true },
       orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    prisma.deliveryChallan.findMany({
+      where: {
+        status: { in: ["DRAFT", "SENT_BACK"] },
+        ...(dcDateCondition ? { dcDate: dcDateCondition } : {}),
+      },
+      include: { vendor: true },
+      orderBy: { updatedAt: "desc" },
       take: 100,
     }),
   ]);
@@ -72,10 +81,12 @@ export default async function ManagerApprovalPage({
     qualityDecision: dc.qualityDecision || "PASSED",
     inspectionRemarks: dc.inspectionRemarks || "None",
     status: dc.status,
+    approvalRemarks: dc.approvalRemarks || null,
   });
 
   const preOutwardDcs = preOutwardDcsRaw.map(mapDc);
   const paymentDcs = paymentDcsRaw.map(mapDc);
+  const draftReturnedDcs = draftReturnedDcsRaw.map(mapDc);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -116,7 +127,11 @@ export default async function ManagerApprovalPage({
         )}
       </form>
 
-      <ManagerApprovalForm preOutwardDcs={preOutwardDcs} paymentDcs={paymentDcs} />
+      <ManagerApprovalForm
+        preOutwardDcs={preOutwardDcs}
+        paymentDcs={paymentDcs}
+        draftReturnedDcs={draftReturnedDcs}
+      />
     </div>
   );
 }

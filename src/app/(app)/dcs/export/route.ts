@@ -56,7 +56,13 @@ export async function GET(req: NextRequest) {
   };
 
   // Status & Role Visibility Filters
-  if (!isAdmin) {
+  if (statusParam) {
+    if (statusParam === "DRAFT" || statusParam === "SENT_BACK") {
+      where.status = { in: ["DRAFT", "SENT_BACK"] };
+    } else {
+      where.status = statusParam;
+    }
+  } else if (!isAdmin) {
     let allowed: string[] = [];
     for (const r of roleKeys) {
       if (ROLE_ALLOWED_STATUSES[r]) {
@@ -65,14 +71,8 @@ export async function GET(req: NextRequest) {
     }
     const uniqueAllowed = [...new Set(allowed)];
     if (uniqueAllowed.length > 0) {
-      if (statusParam && uniqueAllowed.includes(statusParam)) {
-        where.status = statusParam;
-      } else {
-        where.status = { in: uniqueAllowed };
-      }
+      where.status = { in: uniqueAllowed };
     }
-  } else if (statusParam) {
-    where.status = statusParam;
   }
 
   // Material Flow Filter (OUT vs INWARD)

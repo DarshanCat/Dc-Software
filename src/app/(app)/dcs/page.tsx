@@ -78,7 +78,13 @@ export default async function DcsPage({
   };
 
   // Base role permission status filtering
-  if (!isAdmin) {
+  if (status) {
+    if (status === "DRAFT" || status === "SENT_BACK") {
+      where.status = { in: ["DRAFT", "SENT_BACK"] };
+    } else {
+      where.status = status;
+    }
+  } else if (!isAdmin) {
     let allowed: string[] = [];
     for (const r of roleKeys) {
       if (ROLE_ALLOWED_STATUSES[r]) {
@@ -87,14 +93,8 @@ export default async function DcsPage({
     }
     const uniqueAllowed = [...new Set(allowed)];
     if (uniqueAllowed.length > 0) {
-      if (status && uniqueAllowed.includes(status)) {
-        where.status = status;
-      } else {
-        where.status = { in: uniqueAllowed };
-      }
+      where.status = { in: uniqueAllowed };
     }
-  } else if (status) {
-    where.status = status;
   }
 
   // Material Flow Filter: OUT vs INWARD

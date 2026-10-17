@@ -176,7 +176,8 @@ describe("Quantity Ownership & Responsibilities (Security / Store / Quality)", (
 
       expect(res.ok).toBe(false);
       if (!res.ok) {
-        expect(res.error).toBe("Good + Rejection + Scrap must equal the Store Received Qty.");
+        expect(res.error).toContain("Good + Rejection + Scrap");
+        expect(res.error).toContain("must equal the Store Received Qty");
       }
     });
 

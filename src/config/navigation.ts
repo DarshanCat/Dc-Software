@@ -201,6 +201,7 @@ export const MANAGEMENT_NAVIGATION: NavSection[] = [
     label: "DELIVERY CHALLANS",
     items: [
       { label: "All DCs", href: "/dcs" },
+      { label: "Draft / Sent Back DCs", href: "/dcs?status=DRAFT" },
       { label: "Pending Approval", href: "/dcs?status=PENDING_APPROVAL" },
       { label: "Close DC", href: "/dcs/close" },
     ],
