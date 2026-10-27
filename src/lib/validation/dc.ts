@@ -136,7 +136,7 @@ export const outwardDcSchema = z.object({
   partNumber: optionalText("Part number is invalid.", 100),
   partDescription: optionalText("Part description is invalid."),
   materialGrade: optionalText("Material Grade is invalid.", 60),
-  materialCategory: z.enum(["PRODUCTION", "CONVERSION"]).default("PRODUCTION").optional(),
+  materialCategory: z.enum(["PRODUCTION", "CONVERSION", "CONTINUOUS_CASTING"]).default("PRODUCTION").optional(),
   pricingBasis: z.enum(["RW", "FG"]).nullable().optional(),
   ratePerQuantity: optionalFiniteNumber("Rate Per Quantity must be a valid number.").refine(
     (n) => n === undefined || n === null || n > 0,
@@ -227,7 +227,7 @@ export const createDcSchema = z.object({
   dimensionUom: z.string().default("MM"),
   heatNumber: z.string().trim().max(60).optional(),
   materialGrade: z.string().trim().max(MAX_MATERIAL_GRADE_LENGTH, `Material Grade cannot exceed ${MAX_MATERIAL_GRADE_LENGTH} characters.`).optional(),
-  materialCategory: z.enum(["PRODUCTION", "CONVERSION"]).default("PRODUCTION").optional(),
+  materialCategory: z.enum(["PRODUCTION", "CONVERSION", "CONTINUOUS_CASTING"]).default("PRODUCTION").optional(),
   vendorId: z.string().optional(),
   processId: z.string().optional(),
   purpose: z.enum([

@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Material Category Filter (PRODUCTION vs CONVERSION)
-  if (materialCategoryParam === "PRODUCTION" || materialCategoryParam === "CONVERSION") {
+  if (materialCategoryParam === "PRODUCTION" || materialCategoryParam === "CONVERSION" || materialCategoryParam === "CONTINUOUS_CASTING") {
     where.materialCategory = materialCategoryParam;
   }
 
@@ -170,7 +170,7 @@ export async function GET(req: NextRequest) {
     const isOut = OUT_STATUSES.includes(dc.status);
     const isInward = INWARD_STATUSES.includes(dc.status);
     const flowText = isOut ? "Material Out" : isInward ? "Material Inward" : dc.status;
-    const catText = dc.materialCategory === "CONVERSION" ? "Conversion Material" : "Production Material";
+    const catText = dc.materialCategory === "CONTINUOUS_CASTING" ? "Continuous Casting" : dc.materialCategory === "CONVERSION" ? "Conversion Material" : "Production Material";
     const dimText =
       dc.length != null && dc.width != null && dc.height != null
         ? `${Number(dc.length)} × ${Number(dc.width)} × ${Number(dc.height)} MM`

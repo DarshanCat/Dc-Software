@@ -58,6 +58,10 @@ const prismaMock = {
       return results;
     }),
   },
+  systemSetting: {
+    findMany: vi.fn().mockResolvedValue([]),
+    findUnique: vi.fn().mockResolvedValue(null),
+  },
   deliveryChallanItem: { create: vi.fn().mockResolvedValue({}) },
   statusHistory: { create: vi.fn().mockResolvedValue({}) },
   auditLog: { create: vi.fn().mockResolvedValue({}) },
@@ -228,5 +232,110 @@ describe("Material Category (Production vs Conversion) and Flow Filter Suite", (
     const url = buildDcPublicUrl("secure-qr-token-abc");
     expect(url).toBe("https://dc.vijayspheroidals.in/qr/secure-qr-token-abc");
     expect(url).not.toContain("localhost");
+  });
+
+  it("6. creates DC with materialCategory = 'CONTINUOUS_CASTING'", async () => {
+    const { createDc } = await import("@/server/dcs/actions");
+    const res = await createDc({
+      movementType: "MATERIAL",
+      isCommercialService: false,
+      dimensionUom: "MM",
+      vendorId: "vendor-1",
+      woNumber: "WO-2026-CC-99",
+      partNumber: "PART-CC-01",
+      heatNumber: "HEAT-CC-1",
+      materialGrade: "EN-GJL-250",
+      materialCategory: "CONTINUOUS_CASTING",
+      rmQuantity: 300,
+      returnFgQuantity: 290,
+      outwardWeight: 120.5,
+      length: 250,
+      width: 180,
+      height: 120,
+      pricingBasis: "RM",
+      ratePerQuantity: 55,
+      preparedByName: "Stores Manager",
+      purpose: "JOB_WORK",
+    });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok || !res.dcId) return;
+
+    const stored = dcStore.get(res.dcId);
+    expect(stored.materialCategory).toBe("CONTINUOUS_CASTING");
+    expect(stored.woNumber).toBe("WO-2026-CC-99");
+  });
+
+  it("7. creates and updates Outward DC with materialCategory = 'CONTINUOUS_CASTING'", async () => {
+    const { createOutwardDc, updateOutwardDc } = await import("@/server/dcs/extended-actions");
+    const created = await createOutwardDc({
+      vendorId: "vendor-1",
+      department: "PRODUCTION",
+      woNumber: "WO-CC-02",
+      partNumber: "PN-CC-02",
+      materialGrade: "SG 400/15",
+      materialCategory: "CONTINUOUS_CASTING",
+      pricingBasis: "RW",
+      ratePerQuantity: 45,
+      outwardWeight: 75.2,
+      outwardQtyRw: 120,
+      returningFgQuantity: 118,
+      length: 150,
+      width: 100,
+      height: 60,
+    });
+
+    expect(created.ok).toBe(true);
+    if (!created.ok || !created.dcId) return;
+
+    const stored = dcStore.get(created.dcId);
+    expect(stored.materialCategory).toBe("CONTINUOUS_CASTING");
+
+    // Update to verify persistence
+    const updated = await updateOutwardDc({
+      dcId: created.dcId,
+      vendorId: "vendor-1",
+      department: "PRODUCTION",
+      woNumber: "WO-CC-02",
+      partNumber: "PN-CC-02",
+      materialGrade: "SG 400/15",
+      materialCategory: "CONTINUOUS_CASTING",
+      pricingBasis: "RW",
+      ratePerQuantity: 48,
+      outwardWeight: 75.2,
+      outwardQtyRw: 120,
+      returningFgQuantity: 118,
+    });
+
+    expect(updated.ok).toBe(true);
+    const updatedStored = dcStore.get(created.dcId);
+    expect(updatedStored.materialCategory).toBe("CONTINUOUS_CASTING");
+  });
+
+  it("8. formats CONTINUOUS_CASTING correctly in loadDcPdfData", async () => {
+    const { loadDcPdfData } = await import("@/server/dcs/pdf");
+    const { createOutwardDc } = await import("@/server/dcs/extended-actions");
+    const created = await createOutwardDc({
+      vendorId: "vendor-1",
+      department: "PRODUCTION",
+      woNumber: "WO-PDF-CC",
+      partNumber: "PART-PDF-CC",
+      materialGrade: "EN-GJS-500-7",
+      materialCategory: "CONTINUOUS_CASTING",
+      pricingBasis: "RW",
+      ratePerQuantity: 50,
+      outwardWeight: 100,
+      outwardQtyRw: 100,
+      returningFgQuantity: 100,
+      length: 100,
+      width: 100,
+      height: 100,
+    });
+
+    expect(created.ok).toBe(true);
+    if (!created.ok || !created.dcId) return;
+
+    const pdfData = await loadDcPdfData(created.dcId);
+    expect(pdfData?.materialCategory).toBe("Continuous Casting");
   });
 });

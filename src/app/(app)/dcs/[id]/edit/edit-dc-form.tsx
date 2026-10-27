@@ -83,8 +83,8 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
   const [customPartNumber, setCustomPartNumber] = useState(dc.partNumber || "");
   const [partDescription, setPartDescription] = useState(dc.partDescriptionSnapshot || "");
   const [materialGrade, setMaterialGrade] = useState(dc.materialGrade || "");
-  const [materialCategory, setMaterialCategory] = useState<"PRODUCTION" | "CONVERSION">(
-    dc.materialCategory === "CONVERSION" ? "CONVERSION" : "PRODUCTION"
+  const [materialCategory, setMaterialCategory] = useState<"PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING">(
+    dc.materialCategory === "CONVERSION" ? "CONVERSION" : dc.materialCategory === "CONTINUOUS_CASTING" ? "CONTINUOUS_CASTING" : "PRODUCTION"
   );
 
   const [outwardQtyRw, setOutwardQtyRw] = useState(dc.outwardQtyRw ? String(dc.outwardQtyRw) : "");
@@ -297,12 +297,12 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
             Section 2: Work Order &amp; Part Information
           </h2>
 
-          {/* Material Classification: Production vs Conversion */}
+          {/* Material Classification: Production vs Conversion vs Continuous Casting */}
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-2">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
               Material Classification for Vendor *
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <label
                 className={`flex items-center gap-3 p-3 rounded-md border-2 cursor-pointer transition-all ${
                   materialCategory === "PRODUCTION"
@@ -344,6 +344,27 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
                   <span className="text-[11px] text-slate-500 block">Conversion material sent for vendor transformation</span>
                 </div>
               </label>
+
+                <label
+                  className={`flex items-center gap-3 p-3 rounded-md border-2 cursor-pointer transition-all ${
+                    materialCategory === "CONTINUOUS_CASTING"
+                      ? "bg-amber-50 border-amber-600 text-amber-900 font-bold shadow-sm"
+                      : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="materialCategory"
+                    value="CONTINUOUS_CASTING"
+                    checked={materialCategory === "CONTINUOUS_CASTING"}
+                    onChange={() => setMaterialCategory("CONTINUOUS_CASTING")}
+                    className="h-4 w-4 text-amber-600"
+                  />
+                  <div>
+                    <span className="block text-xs font-bold">Continuous Casting</span>
+                    <span className="text-[11px] text-slate-500 block">Continuous casting material sent for vendor transformation</span>
+                  </div>
+                </label>
             </div>
           </div>
 

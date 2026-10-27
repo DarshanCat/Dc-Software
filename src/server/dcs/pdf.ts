@@ -137,7 +137,7 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
         : null,
     heatNumber: dc.heatNumber || "—",
     materialGrade: dc.materialGrade || "—",
-    materialCategory: dc.materialCategory === "CONVERSION" ? "Conversion Material" : "Production Material",
+    materialCategory: dc.materialCategory === "CONTINUOUS_CASTING" ? "Continuous Casting" : dc.materialCategory === "CONVERSION" ? "Conversion Material" : "Production Material",
     pricingBasis: dc.pricingBasis ? (dc.pricingBasis === "RM" ? "Price Based On: RM Quantity" : "Price Based On: FG Quantity") : "—",
     ratePerQuantity: dc.ratePerQuantity != null ? Number(dc.ratePerQuantity).toFixed(2) : "—",
     expectedAmount: dc.expectedAmount != null ? Number(dc.expectedAmount).toFixed(2) : "—",

@@ -59,7 +59,7 @@ export interface CreateOutwardDcInput {
   partNumber?: string;
   partDescription?: string;
   materialGrade?: string;
-  materialCategory?: "PRODUCTION" | "CONVERSION";
+  materialCategory?: "PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING";
   pricingBasis?: "RW" | "FG";
   ratePerQuantity?: number;
   outwardWeight?: number;

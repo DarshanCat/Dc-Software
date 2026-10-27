@@ -39,7 +39,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
   const [partNumber, setPartNumber] = useState("");
   const [partDescription, setPartDescription] = useState("");
   const [materialGrade, setMaterialGrade] = useState("");
-  const [materialCategory, setMaterialCategory] = useState<"PRODUCTION" | "CONVERSION">("PRODUCTION");
+  const [materialCategory, setMaterialCategory] = useState<"PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING">("PRODUCTION");
   const [pricingBasis, setPricingBasis] = useState<"RW" | "FG">("RW");
   const [ratePerQuantity, setRatePerQuantity] = useState<string>("");
   const [outwardWeight, setOutwardWeight] = useState<string>("");
@@ -187,7 +187,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
             Material Classification for Vendor *
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label
               className={`flex items-center gap-3 p-3 rounded-md border-2 cursor-pointer transition-all ${
                 materialCategory === "PRODUCTION"
@@ -227,6 +227,27 @@ export function OutwardDcForm({ vendors, processes }: Props) {
               <div>
                 <span className="block text-xs font-bold">Conversion Material</span>
                 <span className="text-[11px] text-slate-500 block">Conversion material sent for vendor transformation</span>
+              </div>
+            </label>
+
+            <label
+              className={`flex items-center gap-3 p-3 rounded-md border-2 cursor-pointer transition-all ${
+                materialCategory === "CONTINUOUS_CASTING"
+                  ? "bg-amber-50 border-amber-600 text-amber-900 font-bold shadow-sm"
+                  : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              <input
+                type="radio"
+                name="materialCategory"
+                value="CONTINUOUS_CASTING"
+                checked={materialCategory === "CONTINUOUS_CASTING"}
+                onChange={() => setMaterialCategory("CONTINUOUS_CASTING")}
+                className="h-4 w-4 text-amber-600"
+              />
+              <div>
+                <span className="block text-xs font-bold">Continuous Casting</span>
+                <span className="text-[11px] text-slate-500 block">Continuous casting material sent for vendor transformation</span>
               </div>
             </label>
           </div>

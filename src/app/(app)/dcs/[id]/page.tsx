@@ -469,12 +469,18 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Material Category</span>
                 <span
                   className={`inline-block mt-0.5 px-2 py-0.5 rounded text-[11px] font-bold ${
-                    dc.materialCategory === "CONVERSION"
+                    dc.materialCategory === "CONTINUOUS_CASTING"
+                      ? "bg-amber-100 text-amber-800 border border-amber-200"
+                      : dc.materialCategory === "CONVERSION"
                       ? "bg-purple-100 text-purple-800 border border-purple-200"
                       : "bg-blue-100 text-blue-800 border border-blue-200"
                   }`}
                 >
-                  {dc.materialCategory === "CONVERSION" ? "Conversion Material" : "Production Material"}
+                  {dc.materialCategory === "CONTINUOUS_CASTING"
+                    ? "Continuous Casting"
+                    : dc.materialCategory === "CONVERSION"
+                    ? "Conversion Material"
+                    : "Production Material"}
                 </span>
               </div>
               <div>

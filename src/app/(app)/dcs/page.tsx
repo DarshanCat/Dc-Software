@@ -121,9 +121,9 @@ export default async function DcsPage({
     }
   }
 
-  // Material Category Filter (PRODUCTION vs CONVERSION)
+  // Material Category Filter (PRODUCTION vs CONVERSION vs CONTINUOUS_CASTING)
   const upperCategory = (materialCategory || "ALL").toUpperCase();
-  if (upperCategory === "PRODUCTION" || upperCategory === "CONVERSION") {
+  if (upperCategory === "PRODUCTION" || upperCategory === "CONVERSION" || upperCategory === "CONTINUOUS_CASTING") {
     where.materialCategory = upperCategory;
   }
 
@@ -175,8 +175,9 @@ export default async function DcsPage({
   const totalCount = dcs.length;
   const outCount = dcs.filter((d) => OUT_STATUSES.includes(d.status)).length;
   const inwardCount = dcs.filter((d) => INWARD_STATUSES.includes(d.status)).length;
-  const productionCount = dcs.filter((d) => d.materialCategory !== "CONVERSION").length;
+  const productionCount = dcs.filter((d) => !d.materialCategory || d.materialCategory === "PRODUCTION").length;
   const conversionCount = dcs.filter((d) => d.materialCategory === "CONVERSION").length;
+  const continuousCastingCount = dcs.filter((d) => d.materialCategory === "CONTINUOUS_CASTING").length;
 
   // Construct Export query string
   const exportParams = new URLSearchParams();
@@ -222,7 +223,7 @@ export default async function DcsPage({
       </div>
 
       {/* KPI Metric Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total Filtered</p>
           <p className="text-2xl font-bold text-slate-900 mt-1">{totalCount}</p>
@@ -263,6 +264,15 @@ export default async function DcsPage({
           </div>
           <p className="text-2xl font-bold text-purple-900 mt-1">{conversionCount}</p>
           <span className="text-[10px] text-purple-600 font-medium">Conversion Material</span>
+        </div>
+
+        <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Cont. Casting</p>
+            <span className="h-2 w-2 rounded-full bg-amber-500" />
+          </div>
+          <p className="text-2xl font-bold text-amber-900 mt-1">{continuousCastingCount}</p>
+          <span className="text-[10px] text-amber-600 font-medium">Continuous Casting</span>
         </div>
       </div>
 
@@ -322,6 +332,7 @@ export default async function DcsPage({
               <option value="ALL">All Categories</option>
               <option value="PRODUCTION">Production Material</option>
               <option value="CONVERSION">Conversion Material</option>
+              <option value="CONTINUOUS_CASTING">Continuous Casting</option>
             </select>
           </div>
 
@@ -416,6 +427,7 @@ export default async function DcsPage({
                   const isOut = OUT_STATUSES.includes(dc.status);
                   const isInward = INWARD_STATUSES.includes(dc.status);
                   const isConversion = dc.materialCategory === "CONVERSION";
+                  const isContinuousCasting = dc.materialCategory === "CONTINUOUS_CASTING";
                   const dimensionsText =
                     dc.length != null && dc.width != null && dc.height != null
                       ? `${Number(dc.length)} × ${Number(dc.width)} × ${Number(dc.height)} MM`
@@ -439,12 +451,14 @@ export default async function DcsPage({
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         <span
                           className={`inline-block rounded px-2 py-0.5 text-[10px] font-bold ${
-                            isConversion
+                            isContinuousCasting
+                              ? "bg-amber-100 text-amber-800 border border-amber-200"
+                              : isConversion
                               ? "bg-purple-100 text-purple-800 border border-purple-200"
                               : "bg-blue-100 text-blue-800 border border-blue-200"
                           }`}
                         >
-                          {isConversion ? "Conversion" : "Production"}
+                          {isContinuousCasting ? "Cont. Casting" : isConversion ? "Conversion" : "Production"}
                         </span>
                       </td>
 
