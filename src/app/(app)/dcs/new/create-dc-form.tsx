@@ -309,6 +309,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       purpose: movementType === "MATERIAL" ? "JOB_WORK" : (purpose || "OTHER"),
       expectedReturnDate: (movementType !== "MATERIAL" && returnRequired && expectedReturnDate) ? expectedReturnDate : undefined,
       remarks: remarks.trim() || undefined,
+      submitForApproval,
       items: payloadItems,
     };
 
@@ -319,8 +320,12 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       const fieldErrMsg = res.fieldErrors ? Object.entries(res.fieldErrors).map(([k, v]) => `${k}: ${v}`).join("; ") : "";
       setError(res.error ? (fieldErrMsg ? `${res.error} (${fieldErrMsg})` : res.error) : "An error occurred while creating Delivery Challan.");
     } else {
-      setSuccess(`DC ${res.dcNumber} created as DRAFT (${movementType}) successfully.`);
-      setTimeout(() => router.push(`/dcs/${res.dcId}`), 1000);
+      if (submitForApproval && movementType === "MATERIAL") {
+        setSuccess(`DC ${res.dcNumber} created and submitted for Manager Approval successfully.`);
+      } else {
+        setSuccess(`DC ${res.dcNumber} created as DRAFT (${movementType}) successfully.`);
+      }
+      setTimeout(() => router.push(`/dcs/${res.dcId}`), 600);
     }
   }
 
@@ -345,7 +350,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
         onKeyDown={handleKeyDown}
         onSubmit={(e) => {
           e.preventDefault();
-          handleSubmit(false);
+          handleSubmit(true);
         }}
         className="space-y-6"
       >
@@ -1136,18 +1141,31 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
 
           <Button
             type="button"
+            variant="secondary"
             disabled={loading}
             data-tally-id="saveDraftBtn"
             onClick={() => handleSubmit(false)}
-            className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-semibold px-6"
+            className="w-full sm:w-auto border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold px-5"
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "SAVE AS DRAFT"}
+          </Button>
+
+          <Button
+            type="button"
+            disabled={loading}
+            data-tally-id="submitApprovalBtn"
+            onClick={() => handleSubmit(true)}
+            className="w-full sm:w-auto bg-blue-700 hover:bg-blue-800 text-white font-bold px-6 shadow-sm"
           >
             {loading ? (
               <span className="flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Saving DC...
+                Submitting DC...
               </span>
             ) : (
-              `CREATE ${movementType} DC`
+              movementType === "MATERIAL"
+                ? "CREATE & SUBMIT FOR APPROVAL"
+                : `CREATE ${movementType} DC`
             )}
           </Button>
         </div>

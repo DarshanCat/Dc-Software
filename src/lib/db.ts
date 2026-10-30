@@ -1,8 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 
 /**
- * Prisma client singleton. In dev, Next.js hot-reload would otherwise create a
- * new client on every reload and exhaust DB connections.
+ * Prisma client singleton.
+ * Persisted on globalThis across hot-reloads in dev and warm containers in serverless production
+ * to prevent exhausting DB connections and avoid SSL connection setup overhead on every request.
  */
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
@@ -12,4 +13,4 @@ export const prisma =
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+globalForPrisma.prisma = prisma;

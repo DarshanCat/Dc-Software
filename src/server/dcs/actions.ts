@@ -145,7 +145,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         eSugamNumber: data.eSugamNumber || null,
         remarks: data.remarks || null,
         preparedByName: data.preparedByName.trim(),
-        status: "DRAFT",
+        status: data.submitForApproval && data.movementType === "MATERIAL" ? "PENDING_APPROVAL" : "DRAFT",
         createdBy: user!.id,
         qrToken,
       },
@@ -169,12 +169,13 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
       }
     }
 
+    const isSubmitted = data.submitForApproval && data.movementType === "MATERIAL";
     await tx.statusHistory.create({
       data: {
         dcId: dc.id,
-        toStatus: "DRAFT",
+        toStatus: isSubmitted ? "PENDING_APPROVAL" : "DRAFT",
         changedBy: user!.id,
-        reason: `DC Created (${data.movementType})`,
+        reason: isSubmitted ? "DC Created and submitted for Manager Approval" : `DC Created (${data.movementType})`,
       },
     });
 
@@ -183,12 +184,29 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
 
   await writeAudit(prisma, {
     userId: user!.id,
-    action: "DC_CREATED",
+    action: data.submitForApproval && data.movementType === "MATERIAL" ? "DC_CREATED_AND_SUBMITTED" : "DC_CREATED",
     module: "DeliveryChallan",
     entityType: "DeliveryChallan",
     entityId: result.id,
-    reason: `DC ${result.dcNumber} created (${data.movementType})`,
+    reason: `DC ${result.dcNumber} created${data.submitForApproval && data.movementType === "MATERIAL" ? " & submitted for approval" : ` (${data.movementType})`}`,
   });
+
+  if (data.submitForApproval && data.movementType === "MATERIAL") {
+    await notifyUsersWithPermission(
+      prisma,
+      PERMISSIONS.DC_APPROVE,
+      {
+        type: "DC_STATUS",
+        title: `DC ${result.dcNumber} Pending Approval`,
+        body: `DC ${result.dcNumber} was created and submitted for approval by ${user!.email}.`,
+        entityType: "DeliveryChallan",
+        entityId: result.id,
+        targetUrl: `/dcs/${result.id}`,
+      },
+      user!.id,
+    );
+    revalidatePath("/dcs/manager-approval");
+  }
 
   revalidatePath("/dcs");
   return { ok: true, dcId: result.id, dcNumber: result.dcNumber };

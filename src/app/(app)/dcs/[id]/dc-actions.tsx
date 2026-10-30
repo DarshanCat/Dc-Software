@@ -149,15 +149,19 @@ export function DcActions({
     ? closeEligibility.missingFields.join(", ")
     : "Complete required Invoice and Payment details";
 
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
   async function handleAction(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setBusy(true);
     setError(null);
+    setSuccessMsg(null);
     const res = await fn();
     setBusy(false);
     if (!res.ok) {
       setError(res.error ?? "Action failed.");
     } else {
       setModal(null);
+      setSuccessMsg("Action completed successfully! Updating view...");
       router.refresh();
     }
   }
@@ -182,6 +186,11 @@ export function DcActions({
         </span>
       </div>
 
+      {successMsg && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-md text-xs font-medium">
+          {successMsg}
+        </div>
+      )}
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-md text-xs font-medium">
           {error}

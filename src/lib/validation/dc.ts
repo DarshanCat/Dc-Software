@@ -228,6 +228,7 @@ export const createDcSchema = z.object({
   heatNumber: z.string().trim().max(60).optional(),
   materialGrade: z.string().trim().max(MAX_MATERIAL_GRADE_LENGTH, `Material Grade cannot exceed ${MAX_MATERIAL_GRADE_LENGTH} characters.`).optional(),
   materialCategory: z.enum(["PRODUCTION", "CONVERSION", "CONTINUOUS_CASTING"]).default("PRODUCTION").optional(),
+  submitForApproval: z.boolean().default(false).optional(),
   vendorId: z.string().optional(),
   processId: z.string().optional(),
   purpose: z.enum([

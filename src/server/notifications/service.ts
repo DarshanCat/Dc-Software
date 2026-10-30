@@ -98,9 +98,28 @@ export async function notifyUsersWithPermission(
     select: { id: true },
   });
 
-  for (const user of users) {
-    await createNotification(tx, { ...notification, userId: user.id });
-  }
+  if (!users.length) return;
+
+  const derivedTargetUrl =
+    notification.targetUrl ??
+    getNotificationTargetUrl({
+      entityType: notification.entityType,
+      entityId: notification.entityId,
+      targetUrl: notification.targetUrl,
+    }) ??
+    null;
+
+  await tx.notification.createMany({
+    data: users.map((u) => ({
+      userId: u.id,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body ?? null,
+      entityType: notification.entityType ?? null,
+      entityId: notification.entityId ?? null,
+      targetUrl: derivedTargetUrl,
+    })),
+  });
 }
 
 export async function getUnreadCount(userId: string): Promise<number> {

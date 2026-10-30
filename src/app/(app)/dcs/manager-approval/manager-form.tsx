@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   reviewPreOutwardManagerApproval,
@@ -60,16 +60,26 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs, draftReturnedDc
   const [selectedDcId, setSelectedDcId] = useState("");
   const [remarks, setRemarks] = useState("");
 
+  const [preOutwardList, setPreOutwardList] = useState<DcOption[]>(preOutwardDcs);
+  const [paymentList, setPaymentList] = useState<DcOption[]>(paymentDcs);
+  const [draftList, setDraftList] = useState<DcOption[]>(draftReturnedDcs);
+
+  useEffect(() => {
+    setPreOutwardList(preOutwardDcs);
+    setPaymentList(paymentDcs);
+    setDraftList(draftReturnedDcs);
+  }, [preOutwardDcs, paymentDcs, draftReturnedDcs]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const currentList =
     activeTab === "PRE_OUTWARD"
-      ? preOutwardDcs
+      ? preOutwardList
       : activeTab === "PAYMENT"
-      ? paymentDcs
-      : draftReturnedDcs;
+      ? paymentList
+      : draftList;
   const selectedDc = currentList.find((d) => d.id === selectedDcId);
 
   function handleTabSwitch(tab: "PRE_OUTWARD" | "PAYMENT" | "DRAFT_RETURNED") {
@@ -90,10 +100,12 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs, draftReturnedDc
       return setError(`Remarks / reason are required for action '${action}'.`);
     }
 
+    const handledId = selectedDcId;
+    const dcNumber = selectedDc?.dcNumber;
     setLoading(true);
 
     const res = await reviewPreOutwardManagerApproval({
-      dcId: selectedDcId,
+      dcId: handledId,
       action,
       approvalRemarks: remarks.trim() || undefined,
     });
@@ -102,8 +114,12 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs, draftReturnedDc
     if (!res.ok) {
       setError(res.error || "An error occurred while completing Pre-Outward review.");
     } else {
-      setSuccess(`Pre-Outward action '${action}' completed for DC ${selectedDc?.dcNumber}.`);
-      setTimeout(() => router.refresh(), 1200);
+      // Optimistic instant UI update: remove row from queue immediately
+      setPreOutwardList((prev) => prev.filter((d) => d.id !== handledId));
+      setSelectedDcId("");
+      setRemarks("");
+      setSuccess(`Pre-Outward action '${action}' completed for DC ${dcNumber}.`);
+      router.refresh();
     }
   }
 
@@ -117,10 +133,12 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs, draftReturnedDc
       return setError(`Remarks / reason are required for action '${action}'.`);
     }
 
+    const handledId = selectedDcId;
+    const dcNumber = selectedDc?.dcNumber;
     setLoading(true);
 
     const res = await reviewManagerApproval({
-      dcId: selectedDcId,
+      dcId: handledId,
       action,
       approvalRemarks: remarks.trim() || undefined,
     });
@@ -129,8 +147,12 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs, draftReturnedDc
     if (!res.ok) {
       setError(res.error || "An error occurred while completing Payment Approval review.");
     } else {
-      setSuccess(`Payment action '${action}' completed for DC ${selectedDc?.dcNumber}.`);
-      setTimeout(() => router.refresh(), 1200);
+      // Optimistic instant UI update: remove row from queue immediately
+      setPaymentList((prev) => prev.filter((d) => d.id !== handledId));
+      setSelectedDcId("");
+      setRemarks("");
+      setSuccess(`Payment action '${action}' completed for DC ${dcNumber}.`);
+      router.refresh();
     }
   }
 
