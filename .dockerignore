@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.gitignore
+backups
+scratch
+*.log
+.env*
+.vscode
+.agents

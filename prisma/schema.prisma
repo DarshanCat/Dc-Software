@@ -437,6 +437,7 @@ model DeliveryChallan {
   vendor             Vendor?   @relation(fields: [vendorId], references: [id])
   movementType       DcMovementType @default(MATERIAL)
   materialType       DcMaterialType?
+  materialCategory   String?   @default("PRODUCTION")
   isCommercialService Boolean       @default(false)
   destinationDepartment String?
   responsibleCustodian String?
