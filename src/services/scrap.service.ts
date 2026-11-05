@@ -1,3 +1,5 @@
+import { D, sub, mul, div, lt, gt, lte, percentageOf, toNum } from "../lib/decimal";
+
 export type ScrapStatus = "NOT_APPLICABLE" | "SCRAP_SHORT" | "WITHIN_TOLERANCE" | "EXCESS_SCRAP";
 
 export interface ScrapEvaluation {
@@ -13,25 +15,35 @@ export function evaluateScrap(
   receivedScrapWeight: number,
   tolerancePercentage: number,
 ): ScrapEvaluation {
-  if (expectedScrapWeight <= 0) {
+  if (lte(expectedScrapWeight, 0)) {
     return {
       status: "NOT_APPLICABLE",
       recoveryPercent: null,
       lowerBound: 0,
       upperBound: 0,
-      outstanding: -receivedScrapWeight,
+      outstanding: toNum(D(0).minus(receivedScrapWeight)),
     };
   }
 
-  const tol = tolerancePercentage / 100;
-  const lowerBound = expectedScrapWeight * (1 - tol);
-  const upperBound = expectedScrapWeight * (1 + tol);
-  const recoveryPercent = (receivedScrapWeight / expectedScrapWeight) * 100;
+  // Decimal-based, like reconciliation/classification's parallel tolerance
+  // math - plain JS float arithmetic on fractional kg weights can land a
+  // mathematically-exact boundary sum a few ULPs on the wrong side, flipping
+  // the DC's scrap status incorrectly.
+  const tol = div(tolerancePercentage, 100);
+  const lowerBound = mul(expectedScrapWeight, sub(1, tol));
+  const upperBound = mul(expectedScrapWeight, D(1).plus(tol));
+  const recoveryPercent = percentageOf(receivedScrapWeight, expectedScrapWeight);
 
   let status: ScrapStatus;
-  if (receivedScrapWeight < lowerBound) status = "SCRAP_SHORT";
-  else if (receivedScrapWeight > upperBound) status = "EXCESS_SCRAP";
+  if (lt(receivedScrapWeight, lowerBound)) status = "SCRAP_SHORT";
+  else if (gt(receivedScrapWeight, upperBound)) status = "EXCESS_SCRAP";
   else status = "WITHIN_TOLERANCE";
 
-  return { status, recoveryPercent, lowerBound, upperBound, outstanding: expectedScrapWeight - receivedScrapWeight };
+  return {
+    status,
+    recoveryPercent: recoveryPercent === null ? null : toNum(recoveryPercent),
+    lowerBound: toNum(lowerBound),
+    upperBound: toNum(upperBound),
+    outstanding: toNum(sub(expectedScrapWeight, receivedScrapWeight)),
+  };
 }

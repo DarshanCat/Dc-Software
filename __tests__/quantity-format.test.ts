@@ -53,4 +53,15 @@ describe("Quantity vs Weight display (RM QTY / EXP FG QTY must never show as KG)
     expect(formatWeightKg(null)).toBe("—");
     expect(formatWeightKg(undefined)).toBe("—");
   });
+
+  it("treats a whitespace-only value as missing, not as 0 (JS Number(\"   \") coercion quirk)", () => {
+    expect(formatQuantity("   ", "KG")).toBe("—");
+    expect(formatWeightKg("   ")).toBe("—");
+  });
+
+  it("falls back to the placeholder for non-finite numbers (Infinity/-Infinity), not literal text", () => {
+    expect(formatQuantity(Infinity, "KG")).toBe("—");
+    expect(formatQuantity(-Infinity, "KG")).toBe("—");
+    expect(formatWeightKg(Infinity)).toBe("—");
+  });
 });

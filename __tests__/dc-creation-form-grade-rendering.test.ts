@@ -44,4 +44,16 @@ describe("Material DC creation UI — Material Grade field is rendered (Section 
     const gradeInput = findTag(html, 'data-tally-id="materialGrade"');
     expect(gradeInput).toContain("required");
   });
+
+  it("OutwardDcForm (/dcs/outward) renders Pricing Basis and Rate Per Quantity - without these the form could never submit successfully", async () => {
+    // Regression test: the form used to track pricingBasis/ratePerQuantity in
+    // state and send them in the payload, but never rendered an input for
+    // either - createOutwardDc always requires ratePerQuantity > 0, so every
+    // submission failed with "Rate Per Quantity must be greater than zero."
+    const { OutwardDcForm } = await import("../src/app/(app)/dcs/outward/outward-form");
+    const html = renderToStaticMarkup(React.createElement(OutwardDcForm, { vendors: [], processes: [] }));
+
+    expect(findTag(html, 'data-tally-id="pricingBasis"')).toContain("required");
+    expect(findTag(html, 'data-tally-id="ratePerQuantity"')).toContain("required");
+  });
 });

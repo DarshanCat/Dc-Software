@@ -110,10 +110,13 @@ export async function getVendorPerformanceRows(weights: VendorPerformanceWeights
     if (scrapRecoveryScore !== null) parts.push({ score: scrapRecoveryScore, weight: wScrap });
     if (qualityScore !== null) parts.push({ score: qualityScore, weight: wQuality });
 
-    const overallScore =
-      parts.length > 0
-        ? parts.reduce((sum, p) => sum + p.score * p.weight, 0) / parts.reduce((sum, p) => sum + p.weight, 0)
-        : null;
+    const totalWeight = parts.reduce((sum, p) => sum + p.weight, 0);
+    // Guards against 0/0 = NaN when every applicable weight is explicitly set
+    // to 0 (e.g. ?wReturn=0&wRecon=0&wScrap=0&wQuality=0) - parseWeight() only
+    // rejects negative/non-finite values, so 0 is accepted as a valid weight.
+    const overallScore = parts.length > 0 && totalWeight > 0
+      ? parts.reduce((sum, p) => sum + p.score * p.weight, 0) / totalWeight
+      : null;
 
     return {
       vendorId: vendor.id,

@@ -79,13 +79,36 @@ export async function renderReportPdf(options: ReportPdfOptions): Promise<Buffer
     y -= headerRowHeight;
   };
 
+  const MIN_Y = 50;
   const ensureSpace = (needed: number) => {
-    const MIN_Y = 50;
     if (y - needed < MIN_Y) {
       currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
       y = PAGE_HEIGHT - MARGIN;
       drawTableHeader();
     }
+  };
+
+  // The tallest row block a single fresh page can ever hold (page height minus
+  // the top margin, the table header, and the bottom reserve). A row taller
+  // than this (e.g. a cell that char-wraps a very long unbroken string into
+  // dozens of lines) must have its lines split across several page-sized
+  // chunks instead of being drawn as one atomic block - otherwise ensureSpace
+  // adds a single new page and the oversized row still runs off the bottom,
+  // silently cutting off its later lines.
+  const MAX_ROW_HEIGHT = PAGE_HEIGHT - MARGIN - headerRowHeight - MIN_Y;
+
+  const drawRowChunk = (cellLineChunks: string[][], chunkHeight: number) => {
+    ensureSpace(chunkHeight);
+    currentPage.drawRectangle({ x: MARGIN, y: y - chunkHeight, width: CONTENT_WIDTH, height: chunkHeight, borderColor: LINE, borderWidth: 0.5 });
+    cellLineChunks.forEach((lines, idx) => {
+      lines.forEach((line, lIdx) => {
+        currentPage.drawText(line, { x: colX[idx] + 6, y: y - 11 - lIdx * lineHeight, size: 7.5, font, color: DARK });
+      });
+    });
+    for (let i = 1; i < colX.length; i++) {
+      currentPage.drawLine({ start: { x: colX[i], y }, end: { x: colX[i], y: y - chunkHeight }, thickness: 0.5, color: LINE });
+    }
+    y -= chunkHeight;
   };
 
   drawTitle();
@@ -96,18 +119,19 @@ export async function renderReportPdf(options: ReportPdfOptions): Promise<Buffer
     const rowLineCount = Math.max(1, ...cellLines.map((l) => l.length));
     const rowHeight = Math.max(16, 6 + rowLineCount * lineHeight);
 
-    ensureSpace(rowHeight);
-
-    currentPage.drawRectangle({ x: MARGIN, y: y - rowHeight, width: CONTENT_WIDTH, height: rowHeight, borderColor: LINE, borderWidth: 0.5 });
-    cellLines.forEach((lines, idx) => {
-      lines.forEach((line, lIdx) => {
-        currentPage.drawText(line, { x: colX[idx] + 6, y: y - 11 - lIdx * lineHeight, size: 7.5, font, color: DARK });
-      });
-    });
-    for (let i = 1; i < colX.length; i++) {
-      currentPage.drawLine({ start: { x: colX[i], y }, end: { x: colX[i], y: y - rowHeight }, thickness: 0.5, color: LINE });
+    if (rowHeight <= MAX_ROW_HEIGHT) {
+      ensureSpace(rowHeight);
+      drawRowChunk(cellLines, rowHeight);
+      continue;
     }
-    y -= rowHeight;
+
+    const linesPerChunk = Math.max(1, Math.floor((MAX_ROW_HEIGHT - 6) / lineHeight));
+    for (let offset = 0; offset < rowLineCount; offset += linesPerChunk) {
+      const chunkLineCount = Math.min(linesPerChunk, rowLineCount - offset);
+      const chunkHeight = Math.max(16, 6 + chunkLineCount * lineHeight);
+      const chunkCellLines = cellLines.map((lines) => lines.slice(offset, offset + chunkLineCount));
+      drawRowChunk(chunkCellLines, chunkHeight);
+    }
   }
 
   if (rows.length === 0) {

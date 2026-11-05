@@ -3,10 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
-
-function csvEscape(v: string): string {
-  return `"${v.replace(/"/g, '""')}"`;
-}
+import { sanitizeCsvCell } from "@/lib/csv";
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
@@ -33,14 +30,14 @@ export async function GET(request: NextRequest) {
   const lines = [header.join(",")];
   for (const r of reconciliations) {
     lines.push([
-      csvEscape(r.dc.dcNumber),
-      csvEscape(r.dc.vendor?.vendorName || r.dc.supplierNameSnapshot || "N/A"),
+      sanitizeCsvCell(r.dc.dcNumber),
+      sanitizeCsvCell(r.dc.vendor?.vendorName || r.dc.supplierNameSnapshot || "N/A"),
       Number(r.totalInputWeight).toFixed(3),
       Number(r.accountedWeight).toFixed(3),
       Number(r.unaccountedWeight).toFixed(3),
-      csvEscape(r.status),
+      sanitizeCsvCell(r.status),
       String(openExceptionCount(r.dc.exceptions)),
-      r.calculatedAt ? csvEscape(r.calculatedAt.toISOString()) : "",
+      r.calculatedAt ? sanitizeCsvCell(r.calculatedAt.toISOString()) : '""',
     ].join(","));
   }
 

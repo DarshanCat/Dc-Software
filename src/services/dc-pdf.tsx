@@ -622,37 +622,50 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
     });
 
     const toolTableHeaderHeight = 20;
-    const totalRowsHeight = preparedItemRows.reduce((acc, r) => acc + r.rowHeight, 0);
+    // Mirrors ensureSpace()'s own MIN_Y reservation for the bottom signature
+    // block - duplicated here because a multi-row table needs a per-row space
+    // check (and a redrawn header after each page break), not the single
+    // whole-block check ensureSpace() provides.
+    const TOOL_TABLE_MIN_Y = 110;
 
-    ensureSpace(toolTableHeaderHeight + totalRowsHeight + 12);
-
-    const toolTableHeaderY = y;
-    currentPage.drawRectangle({
-      x: MARGIN,
-      y: toolTableHeaderY - toolTableHeaderHeight,
-      width: CONTENT_WIDTH,
-      height: toolTableHeaderHeight,
-      color: TABLE_BG,
-      borderColor: LINE,
-      borderWidth: 0.75,
-    });
-    currentPage.drawText(isToolDc ? "TOOL CODE" : "ASSET TAG", { x: tC1X + 8, y: toolTableHeaderY - 14, size: 8, font: bold, color: DARK });
-    currentPage.drawText("DESCRIPTION", { x: tC2X + 8, y: toolTableHeaderY - 14, size: 8, font: bold, color: DARK });
-    currentPage.drawText("SERIAL / INSTANCE", { x: tC3X + 8, y: toolTableHeaderY - 14, size: 8, font: bold, color: DARK });
-    currentPage.drawText("QTY", { x: tC4X + 8, y: toolTableHeaderY - 14, size: 8, font: bold, color: DARK });
-    currentPage.drawText("CONDITION", { x: tC5X + 8, y: toolTableHeaderY - 14, size: 8, font: bold, color: DARK });
-
-    [tC2X, tC3X, tC4X, tC5X].forEach((colX) => {
-      currentPage.drawLine({
-        start: { x: colX, y: toolTableHeaderY },
-        end: { x: colX, y: toolTableHeaderY - toolTableHeaderHeight },
-        thickness: 0.75,
-        color: LINE,
+    const drawToolTableHeader = () => {
+      const headerTop = y;
+      currentPage.drawRectangle({
+        x: MARGIN,
+        y: headerTop - toolTableHeaderHeight,
+        width: CONTENT_WIDTH,
+        height: toolTableHeaderHeight,
+        color: TABLE_BG,
+        borderColor: LINE,
+        borderWidth: 0.75,
       });
-    });
+      currentPage.drawText(isToolDc ? "TOOL CODE" : "ASSET TAG", { x: tC1X + 8, y: headerTop - 14, size: 8, font: bold, color: DARK });
+      currentPage.drawText("DESCRIPTION", { x: tC2X + 8, y: headerTop - 14, size: 8, font: bold, color: DARK });
+      currentPage.drawText("SERIAL / INSTANCE", { x: tC3X + 8, y: headerTop - 14, size: 8, font: bold, color: DARK });
+      currentPage.drawText("QTY", { x: tC4X + 8, y: headerTop - 14, size: 8, font: bold, color: DARK });
+      currentPage.drawText("CONDITION", { x: tC5X + 8, y: headerTop - 14, size: 8, font: bold, color: DARK });
+      [tC2X, tC3X, tC4X, tC5X].forEach((colX) => {
+        currentPage.drawLine({
+          start: { x: colX, y: headerTop },
+          end: { x: colX, y: headerTop - toolTableHeaderHeight },
+          thickness: 0.75,
+          color: LINE,
+        });
+      });
+      y = headerTop - toolTableHeaderHeight;
+    };
 
-    let rowTop = toolTableHeaderY - toolTableHeaderHeight;
+    ensureSpace(toolTableHeaderHeight + Math.min(preparedItemRows[0]?.rowHeight ?? 24, 60) + 12);
+    drawToolTableHeader();
+
     preparedItemRows.forEach((row) => {
+      if (y - row.rowHeight < TOOL_TABLE_MIN_Y) {
+        currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+        y = PAGE_HEIGHT - MARGIN;
+        drawToolTableHeader();
+      }
+
+      const rowTop = y;
       currentPage.drawRectangle({
         x: MARGIN,
         y: rowTop - row.rowHeight,
@@ -675,10 +688,10 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
           color: LINE,
         });
       });
-      rowTop -= row.rowHeight;
+      y = rowTop - row.rowHeight;
     });
 
-    y = rowTop - 12;
+    y -= 12;
 
     // ================= 3B-TOOL. CUSTODY STRIP =================
     const custodyText = `Destination Department: ${data.destinationDepartment || "—"}    |    Responsible Custodian: ${data.responsibleCustodian || "—"}`;

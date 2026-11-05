@@ -45,7 +45,7 @@ export async function getVendorOutstandingRows(): Promise<VendorOutstandingRow[]
     dcsByVendor.set(dc.vendorId, list);
   }
 
-  return vendors.map((vendor) => {
+  const rows = vendors.map((vendor) => {
     const vendorDcs = dcsByVendor.get(vendor.id) ?? [];
 
     let openDcCount = 0;
@@ -111,6 +111,10 @@ export async function getVendorOutstandingRows(): Promise<VendorOutstandingRow[]
       scrapRecoveryPercent,
     };
   });
+
+  // Single source of truth for ordering too, so the on-screen report and its
+  // CSV export can never show vendors in a different order for the same data.
+  return rows.sort((a, b) => b.materialOutsideKg - a.materialOutsideKg);
 }
 
 import { sanitizeCsvCell } from "@/lib/csv";

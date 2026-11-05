@@ -3,8 +3,7 @@ import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { getVendorPerformanceRows, parseWeight } from "@/server/reports/vendor-performance";
-
-function csvEscape(v: string): string { return `"${v.replace(/"/g, '""')}"`; }
+import { sanitizeCsvCell } from "@/lib/csv";
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
@@ -25,7 +24,7 @@ export async function GET(request: NextRequest) {
   const lines = [header.join(",")];
   for (const r of rows) {
     lines.push([
-      csvEscape(r.vendorCode), csvEscape(r.vendorName),
+      sanitizeCsvCell(r.vendorCode), sanitizeCsvCell(r.vendorName),
       fmt(r.returnTimelinessScore), fmt(r.reconciliationScore), fmt(r.scrapRecoveryScore), fmt(r.qualityScore), fmt(r.overallScore),
     ].join(","));
   }

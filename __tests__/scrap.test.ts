@@ -44,4 +44,16 @@ describe("evaluateScrap — spec §25-26 scenarios", () => {
     expect(evaluateScrap(90, 90, 0).status).toBe("WITHIN_TOLERANCE");
     expect(evaluateScrap(90, 90.01, 0).status).toBe("EXCESS_SCRAP");
   });
+
+  it("a tolerance band computed from fractional (repeating-binary) inputs still lands precisely on its own boundary", () => {
+    // 100 * (1 - 0.015) in plain JS float math is 98.5 with no visible error
+    // here, but tolerance fractions in general are prone to binary rounding;
+    // evaluateScrap computes lowerBound/upperBound via Decimal specifically
+    // so a receivedScrapWeight equal to the true mathematical boundary always
+    // compares as WITHIN_TOLERANCE, never SCRAP_SHORT/EXCESS_SCRAP from a few
+    // ULPs of float noise in the bound itself.
+    const r = evaluateScrap(100, 98.5, 1.5);
+    expect(r.lowerBound).toBeCloseTo(98.5, 10);
+    expect(r.status).toBe("WITHIN_TOLERANCE");
+  });
 });

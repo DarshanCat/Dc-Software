@@ -55,7 +55,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
   const canSubmit = user ? await hasPermission(user.id, PERMISSIONS.DC_CREATE) : false;
   const canApprove = user ? await hasPermission(user.id, PERMISSIONS.DC_APPROVE) : false;
   const canSecurityDispatch = user ? await hasPermission(user.id, PERMISSIONS.SECURITY_DISPATCH) : false;
-  const canConfirmVendor = user ? await hasPermission(user.id, PERMISSIONS.DC_VIEW) : false;
+  const canConfirmVendor = user ? await hasPermission(user.id, PERMISSIONS.DC_DISPATCH) : false;
   const canSecurityReturn = user ? await hasPermission(user.id, PERMISSIONS.SECURITY_RETURN) : false;
   const canStoreVerify = user ? await hasPermission(user.id, PERMISSIONS.STORE_VERIFY) : false;
   const canManagerFinalApprove = user ? await hasPermission(user.id, PERMISSIONS.MANAGER_FINAL_APPROVE) : false;

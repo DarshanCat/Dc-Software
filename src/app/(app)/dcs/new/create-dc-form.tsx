@@ -97,7 +97,6 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
 
   // Document Info
   const [selectedVendorId, setSelectedVendorId] = useState("");
-  const [documentDate, setDocumentDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [department, setDepartment] = useState("PRODUCTION");
   const [preparedByName, setPreparedByName] = useState("");
 
@@ -306,6 +305,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       materialType: movementType === "MATERIAL" ? (materialType || undefined) : undefined,
       pricingBasis: movementType === "MATERIAL" ? pricingBasis : undefined,
       ratePerQuantity: (movementType === "MATERIAL" || isCommercialService) && ratePerQuantity ? parseFloat(ratePerQuantity) : undefined,
+      department: department.trim(),
       preparedByName: preparedByName.trim(),
       purpose: movementType === "MATERIAL" ? "JOB_WORK" : (purpose || "OTHER"),
       expectedReturnDate: (movementType !== "MATERIAL" && returnRequired && expectedReturnDate) ? expectedReturnDate : undefined,
@@ -449,18 +449,6 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Date of Creating DC *</label>
-              <input
-                type="date"
-                data-tally-id="dcDate"
-                value={documentDate}
-                onChange={(e) => setDocumentDate(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Origin Department *</label>
               <select

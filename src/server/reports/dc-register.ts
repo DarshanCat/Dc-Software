@@ -123,7 +123,7 @@ export function rowsToCsv(rows: DcRegisterRow[]): string {
         sanitizeCsvCell(r.ewayBillNumber),
         sanitizeCsvCell(r.eSugamNumber),
         r.expectedReturnDate ? sanitizeCsvCell(r.expectedReturnDate.toISOString().slice(0, 10)) : '""',
-        String(r.receivedQuantity),
+        r.receivedQuantity.toFixed(3),
         r.scrapWeight.toFixed(3),
         r.balance.toFixed(3),
         sanitizeCsvCell(r.status),

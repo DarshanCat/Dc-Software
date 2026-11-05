@@ -77,8 +77,8 @@ export async function submitRegistrationRequest(
       return { ok: true, message: GENERIC_SUCCESS };
     }
 
-    await prisma.$transaction(async (tx) => {
-      const req = await tx.registrationRequest.create({
+    const req = await prisma.$transaction(async (tx) => {
+      const created = await tx.registrationRequest.create({
         data: {
           fullName: data.fullName,
           email: normalizedEmail,
@@ -90,21 +90,12 @@ export async function submitRegistrationRequest(
         },
       });
 
-      await notifyUsersWithPermission(tx, PERMISSIONS.USER_MANAGE, {
-        type: "REGISTRATION_REQUEST",
-        title: "New Account Registration",
-        body: `${data.fullName} has requested access to DC & Vendor Material Management.`,
-        entityType: "RegistrationRequest",
-        entityId: req.id,
-        targetUrl: "/admin/users/requests",
-      });
-
       await writeAudit(tx, {
         userId: null,
         action: "REGISTRATION_REQUEST_CREATED",
         module: "Users",
         entityType: "RegistrationRequest",
-        entityId: req.id,
+        entityId: created.id,
         newValue: {
           fullName: data.fullName,
           email: normalizedEmail,
@@ -112,7 +103,27 @@ export async function submitRegistrationRequest(
         },
         reason: "User requested self-registration",
       });
+
+      return created;
     });
+
+    // Deliberately outside the transaction: the registration request is
+    // already durably persisted above, so a transient notification failure
+    // (DB hiccup, lock timeout) must never roll back a legitimate
+    // registration. Best-effort only - an Admin still sees the request via
+    // /admin/users/requests even if this notification never sends.
+    try {
+      await notifyUsersWithPermission(prisma, PERMISSIONS.USER_MANAGE, {
+        type: "REGISTRATION_REQUEST",
+        title: "New Account Registration",
+        body: `${data.fullName} has requested access to DC & Vendor Material Management.`,
+        entityType: "RegistrationRequest",
+        entityId: req.id,
+        targetUrl: "/admin/users/requests",
+      });
+    } catch (notifyErr) {
+      console.error("Registration request notification failed (request itself was saved):", notifyErr);
+    }
 
     return { ok: true, message: GENERIC_SUCCESS };
   } catch (err) {

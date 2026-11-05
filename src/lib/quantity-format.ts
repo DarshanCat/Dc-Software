@@ -9,16 +9,16 @@ export function formatQuantity(
   uom: string | null | undefined,
   fallbackUom = "NOS",
 ): string {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || String(value).trim() === "") return "—";
   const num = Number(value);
-  if (Number.isNaN(num)) return "—";
+  if (!Number.isFinite(num)) return "—";
   return `${num.toFixed(3)} ${uom || fallbackUom}`;
 }
 
 /** Canonical formatter for weight-in-KG fields (always KG, never a quantity UOM). */
 export function formatWeightKg(value: number | string | { toString(): string } | null | undefined): string {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || String(value).trim() === "") return "—";
   const num = Number(value);
-  if (Number.isNaN(num)) return "—";
+  if (!Number.isFinite(num)) return "—";
   return `${num} KG`;
 }

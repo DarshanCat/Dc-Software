@@ -115,6 +115,7 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         dcDate: now,
         movementType: data.movementType,
         isCommercialService: data.isCommercialService,
+        department: data.department ? data.department.trim() : null,
         destinationDepartment: data.destinationDepartment || null,
         responsibleCustodian: data.responsibleCustodian || null,
         woNumber: data.woNumber || "N/A",
@@ -509,7 +510,7 @@ export async function submitSecurityDispatch(
 
 export async function confirmDcAtVendor(dcId: string): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  const permCheck = await checkPermission(user, PERMISSIONS.DC_VIEW);
+  const permCheck = await checkPermission(user, PERMISSIONS.DC_DISPATCH);
   if (!permCheck.ok) return permCheck;
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: dcId } });
@@ -741,7 +742,7 @@ export async function submitCustodianVerification(
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getSessionUser();
-  const permCheck = await checkPermission(user, PERMISSIONS.DC_VIEW);
+  const permCheck = await checkPermission(user, PERMISSIONS.STORE_VERIFY);
   if (!permCheck.ok) return permCheck;
 
   const custodianError = firstIssueMessage(custodianVerificationSchema, input);
@@ -840,7 +841,11 @@ export async function submitPaymentApproval(
   const rate = Number(dc.ratePerQuantity ?? 0);
   let finalPayable = 0;
 
-  if (dc.pricingBasis === "RM") {
+  if (dc.pricingBasis === "RM" || dc.pricingBasis === "RW") {
+    // RM (createDc flow) and RW (createOutwardDc flow) both mean "price by the
+    // raw/outward material quantity dispatched", not by Quality's inspected
+    // Good Qty - the two creation paths just use different PricingBasis labels
+    // for the same concept (see prisma/schema.prisma PricingBasis: RM/FG/RW).
     const rmQty = Number(dc.rmQuantity ?? dc.outwardQtyRw ?? 0);
     finalPayable = Number((rmQty * rate).toFixed(2));
   } else {

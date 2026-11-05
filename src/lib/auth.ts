@@ -79,7 +79,13 @@ export const authOptions: NextAuthOptions = {
       } else if (token.id) {
         const u = await prisma.user.findUnique({
           where: { id: String(token.id) },
-          select: { active: true, mustChangePassword: true, passwordChangedAt: true },
+          select: {
+            active: true,
+            mustChangePassword: true,
+            passwordChangedAt: true,
+            vendorId: true,
+            roles: { select: { role: { select: { key: true } } } },
+          },
         });
         if (!u || !u.active) {
           return {};
@@ -89,8 +95,16 @@ export const authOptions: NextAuthOptions = {
         if (token.passwordChangedAt && dbPwdChangedIso && token.passwordChangedAt !== dbPwdChangedIso) {
           return {};
         }
-        (token as Record<string, unknown>).mustChangePassword = u.mustChangePassword;
-        (token as Record<string, unknown>).passwordChangedAt = dbPwdChangedIso;
+        const t = token as Record<string, unknown>;
+        t.mustChangePassword = u.mustChangePassword;
+        t.passwordChangedAt = dbPwdChangedIso;
+        // Re-fetch roleKeys/vendorId on every request rather than carrying
+        // them over unchanged from sign-in - otherwise a role change or
+        // vendor reassignment made via the admin UI has no effect on an
+        // already-logged-in user's session until they log out and back in,
+        // silently keeping a revoked permission or a stale vendor scope live.
+        t.roleKeys = u.roles.map((ur) => ur.role.key);
+        t.vendorId = u.vendorId ?? null;
       }
       return token;
     },

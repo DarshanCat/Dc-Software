@@ -249,7 +249,7 @@ export function DcActions({
           </Button>
         )}
 
-        {status === "SECURITY_RETURNED" && dcData.movementType !== "MATERIAL" && (
+        {status === "SECURITY_RETURNED" && dcData.movementType !== "MATERIAL" && permissions.canStoreVerify && (
           <Button disabled={busy} onClick={() => setModal("CUSTODIAN_VERIFY")} className="bg-sky-700 hover:bg-sky-800 text-white">
             Custodian Return Verification
           </Button>

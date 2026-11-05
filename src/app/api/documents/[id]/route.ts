@@ -57,7 +57,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "You do not have permission to view this document." }, { status: 403 });
   }
 
-  if (user.roleKeys.includes("VENDOR") && entityVendorId && user.vendorId !== entityVendorId) {
+  // Fail closed: a VENDOR-role user may only ever see a document whose entity
+  // is positively confirmed to belong to their own vendor. A null
+  // entityVendorId (e.g. a TOOL/COMPANY_PROPERTY DC with no vendor, or a
+  // lookup that found no related record) must deny access, not skip the
+  // check - it is never legitimately "this vendor's" document.
+  if (user.roleKeys.includes("VENDOR") && (!entityVendorId || user.vendorId !== entityVendorId)) {
     return NextResponse.json({ error: "Access denied: vendor scope mismatch." }, { status: 403 });
   }
 

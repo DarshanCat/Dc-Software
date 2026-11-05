@@ -3,10 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
-
-function csvEscape(v: string): string {
-  return `"${v.replace(/"/g, '""')}"`;
-}
+import { sanitizeCsvCell } from "@/lib/csv";
 
 export async function GET() {
   const user = await getSessionUser();
@@ -38,7 +35,7 @@ export async function GET() {
   const lines = [header.join(",")];
   for (const r of rows) {
     const outstanding = Math.max(r.sentWeight - r.returnedWeight, 0);
-    lines.push([csvEscape(r.name), String(r.dcCount), r.sentWeight.toFixed(3), r.returnedWeight.toFixed(3), outstanding.toFixed(3)].join(","));
+    lines.push([sanitizeCsvCell(r.name), String(r.dcCount), r.sentWeight.toFixed(3), r.returnedWeight.toFixed(3), outstanding.toFixed(3)].join(","));
   }
 
   return new NextResponse(lines.join("\n"), {

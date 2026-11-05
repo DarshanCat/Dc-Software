@@ -127,9 +127,15 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
   const rate = input.ratePerQuantity ?? 0;
   let pricingQty = 0;
   if (input.pricingBasis === "RW") {
-    pricingQty = input.outwardQtyRw || 0;
+    if (!input.outwardQtyRw || input.outwardQtyRw <= 0) {
+      return { ok: false, error: "Outward Qty RW must be greater than zero when Price Based On is RW Quantity." };
+    }
+    pricingQty = input.outwardQtyRw;
   } else if (input.pricingBasis === "FG") {
-    pricingQty = input.returningFgQuantity || 0;
+    if (!input.returningFgQuantity || input.returningFgQuantity <= 0) {
+      return { ok: false, error: "Returning FG Qty must be greater than zero when Price Based On is Returning FG Quantity." };
+    }
+    pricingQty = input.returningFgQuantity;
   }
 
   const expectedAmount = Number((rate * pricingQty).toFixed(2));
@@ -610,6 +616,10 @@ export async function recordInwardReceipt(input: RecordInwardReceiptInput) {
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
 
+  if (!["DISPATCHED", "AT_VENDOR"].includes(dc.status)) {
+    return { ok: false, error: `DC must be DISPATCHED or AT_VENDOR for Inward Receipt. Current: ${dc.status}` };
+  }
+
   const now = new Date();
   const inwardDate = input.inwardDate ? new Date(input.inwardDate) : now;
 
@@ -688,6 +698,10 @@ export async function confirmStoreReceipt(input: ConfirmStoreReceiptInput) {
 
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
+
+  if (dc.status !== "SECURITY_RETURNED") {
+    return { ok: false, error: `DC must be in SECURITY_RETURNED status for Store Receipt Confirmation. Current: ${dc.status}` };
+  }
 
   const actualInward = Number(dc.actualInwardQty ?? dc.securityFgQuantity ?? 0);
   if (input.storeReceivedQty <= 0) {
@@ -798,9 +812,12 @@ export async function submitQualityInspection(input: SubmitQualityInspectionInpu
   const actualInward = dc.actualInwardQty !== null ? Number(dc.actualInwardQty) : (dc.securityFgQuantity !== null ? Number(dc.securityFgQuantity) : 0);
   const targetQty = storeReceived !== null ? storeReceived : actualInward;
 
-  // Mandatory Quantity Reconciliation Validation: Good + Rejection + Scrap == Store Received Qty
+  // Mandatory Quantity Reconciliation Validation: Good + Rejection + Scrap == Store Received Qty.
+  // Compared with a small epsilon, not strict equality - these are plain JS
+  // numbers (fractional kg weights), so e.g. 10.1 + 0.2 !== 10.3 due to binary
+  // floating-point rounding even when the business values are exactly equal.
   const sum = input.goodQty + input.rejectionQty + input.scrapQty;
-  if (sum !== targetQty) {
+  if (Math.abs(sum - targetQty) > 0.001) {
     return {
       ok: false,
       error: "Good + Rejection + Scrap must equal the Store Received Qty.",
@@ -887,8 +904,12 @@ export async function reviewPreOutwardManagerApproval(input: ReviewPreOutwardMan
   const dc = await prisma.deliveryChallan.findUnique({ where: { id: input.dcId } });
   if (!dc) return { ok: false, error: "DC not found." };
 
-  if (dc.status !== "PENDING_APPROVAL" && dc.status !== "DRAFT") {
+  if (dc.status !== "PENDING_APPROVAL") {
     return { ok: false, error: `Only PENDING_APPROVAL DCs can undergo Pre-Outward Approval. Current status: ${dc.status}` };
+  }
+
+  if (dc.createdBy === user!.id && !user!.roleKeys.includes("ADMIN")) {
+    return { ok: false, error: "You cannot approve a Delivery Challan that you created." };
   }
 
   const remarks = (input.approvalRemarks || "").trim();

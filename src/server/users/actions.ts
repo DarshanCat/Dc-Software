@@ -136,7 +136,10 @@ export async function setUserActive(userId: string, active: boolean): Promise<Ac
     return { ok: false, error: "You cannot deactivate your own account." };
   }
 
-  const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+  const targetUser = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { roles: { include: { role: true } } },
+  });
   if (!targetUser) return { ok: false, error: "User not found." };
 
   if (
@@ -146,6 +149,16 @@ export async function setUserActive(userId: string, active: boolean): Promise<Ac
     )
   ) {
     return { ok: false, error: "Protected administrator accounts cannot be deactivated." };
+  }
+
+  const isTargetActiveAdmin = !active && targetUser.active && targetUser.roles.some((r) => r.role.key === "ADMIN");
+  if (isTargetActiveAdmin) {
+    const activeAdminCount = await prisma.user.count({
+      where: { active: true, roles: { some: { role: { key: "ADMIN" } } } },
+    });
+    if (activeAdminCount <= 1) {
+      return { ok: false, error: "Cannot deactivate the last active Administrator account." };
+    }
   }
 
   const action = active ? "USER_ENABLED" : "USER_DISABLED";
@@ -208,6 +221,16 @@ export async function updateUserRoles(userId: string, roleKeys: string[]): Promi
   const involvesAdminRole = roleKeys.includes("ADMIN") || oldRoles.includes("ADMIN");
   if (involvesAdminRole && !user?.roleKeys?.includes("ADMIN")) {
     return { ok: false, error: "Only existing Administrators can assign or modify the ADMIN role." };
+  }
+
+  const isRemovingAdminRole = oldRoles.includes("ADMIN") && !roleKeys.includes("ADMIN");
+  if (isRemovingAdminRole && existingUser.active) {
+    const activeAdminCount = await prisma.user.count({
+      where: { active: true, roles: { some: { role: { key: "ADMIN" } } } },
+    });
+    if (activeAdminCount <= 1) {
+      return { ok: false, error: "Cannot remove the ADMIN role from the last active Administrator account." };
+    }
   }
 
   await prisma.$transaction(async (tx) => {

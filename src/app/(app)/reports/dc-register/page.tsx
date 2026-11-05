@@ -188,7 +188,7 @@ export default async function DcRegisterReportPage({
                   <td className="px-3 py-2 text-slate-900">{r.vendorName}</td>
                   <td className="px-3 py-2 text-slate-600">{r.processName}</td>
                   <td className="px-3 py-2 text-slate-600">{r.expectedReturnDate ? r.expectedReturnDate.toLocaleDateString() : "—"}</td>
-                  <td className="px-3 py-2 text-right font-mono">{r.receivedQuantity}</td>
+                  <td className="px-3 py-2 text-right font-mono">{r.receivedQuantity.toFixed(3)}</td>
                   <td className="px-3 py-2 text-right font-mono">{r.scrapWeight.toFixed(3)}</td>
                   <td className="px-3 py-2">
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">

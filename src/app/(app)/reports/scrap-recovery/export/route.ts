@@ -4,10 +4,7 @@ import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
 import { evaluateScrap } from "@/services/scrap.service";
-
-function csvEscape(v: string): string {
-  return `"${v.replace(/"/g, '""')}"`;
-}
+import { sanitizeCsvCell } from "@/lib/csv";
 
 export async function GET() {
   const user = await getSessionUser();
@@ -37,7 +34,7 @@ export async function GET() {
   const lines = [header.join(",")];
   for (const r of byVendor.values()) {
     const evalResult = evaluateScrap(r.expected, r.received, 0);
-    lines.push([csvEscape(r.name), String(r.dcCount), r.expected.toFixed(3), r.received.toFixed(3), evalResult.recoveryPercent === null ? "N/A" : evalResult.recoveryPercent.toFixed(1)].join(","));
+    lines.push([sanitizeCsvCell(r.name), String(r.dcCount), r.expected.toFixed(3), r.received.toFixed(3), evalResult.recoveryPercent === null ? "N/A" : evalResult.recoveryPercent.toFixed(1)].join(","));
   }
 
   return new NextResponse(lines.join("\n"), {

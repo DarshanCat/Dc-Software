@@ -74,6 +74,16 @@ export function OutwardDcForm({ vendors, processes }: Props) {
     if (!length || Number(length) <= 0 || isNaN(Number(length)) || !isFinite(Number(length))) return setError("Length (MM) is mandatory and must be greater than 0.");
     if (!width || Number(width) <= 0 || isNaN(Number(width)) || !isFinite(Number(width))) return setError("Width (MM) is mandatory and must be greater than 0.");
     if (!height || Number(height) <= 0 || isNaN(Number(height)) || !isFinite(Number(height))) return setError("Height (MM) is mandatory and must be greater than 0.");
+    if (!pricingBasis) return setError("Please select a pricing basis: RW Quantity or Returning FG Quantity.");
+    const rateVal = parseFloat(ratePerQuantity);
+    if (isNaN(rateVal) || rateVal <= 0) return setError("Rate Per Quantity must be greater than zero.");
+    if (pricingBasis === "RW") {
+      const rwVal = parseFloat(outwardQtyRw);
+      if (isNaN(rwVal) || rwVal <= 0) return setError("Outward Qty RW must be greater than zero when Price Based On is RW Quantity.");
+    } else if (pricingBasis === "FG") {
+      const fgVal = parseFloat(returningFgQuantity);
+      if (isNaN(fgVal) || fgVal <= 0) return setError("Returning FG Qty must be greater than zero when Price Based On is Returning FG Quantity.");
+    }
 
     setLoading(true);
 
@@ -313,6 +323,35 @@ export function OutwardDcForm({ vendors, processes }: Props) {
               onChange={(e) => setOutwardWeight(e.target.value)}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="0.000"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Price Based On *</label>
+            <select
+              data-tally-id="pricingBasis"
+              value={pricingBasis}
+              onChange={(e) => setPricingBasis(e.target.value as "RW" | "FG")}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="RW">RW Quantity</option>
+              <option value="FG">Returning FG Quantity</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Rate Per Quantity *</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              data-tally-id="ratePerQuantity"
+              value={ratePerQuantity}
+              onChange={(e) => setRatePerQuantity(e.target.value)}
+              placeholder="e.g. 45.50"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
           </div>

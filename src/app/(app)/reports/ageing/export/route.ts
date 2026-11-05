@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/server/session";
 import { hasPermission } from "@/server/authorize";
 import { PERMISSIONS } from "@/config/permissions";
+import { sanitizeCsvCell } from "@/lib/csv";
 import type { DcStatus } from "@prisma/client";
 
 const TERMINAL_STATUSES: DcStatus[] = ["CLOSED", "CANCELLED"];
@@ -14,8 +15,6 @@ function ageingBucket(days: number): string {
   if (days <= 60) return "31-60 Days";
   return "60+ Days";
 }
-function csvEscape(v: string): string { return `"${v.replace(/"/g, '""')}"`; }
-
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
@@ -49,7 +48,7 @@ export async function GET(request: NextRequest) {
   const header = ["DC No", "Vendor", basis === "dispatch" ? "Dispatched On" : "Expected Return", "Days", "Bucket", "Status"];
   const lines = [header.join(",")];
   for (const r of rows) {
-    lines.push([csvEscape(r.dcNumber), csvEscape(r.vendorName), csvEscape(r.referenceDate.toISOString().slice(0, 10)), String(r.days), csvEscape(r.bucket), csvEscape(r.status)].join(","));
+    lines.push([sanitizeCsvCell(r.dcNumber), sanitizeCsvCell(r.vendorName), sanitizeCsvCell(r.referenceDate.toISOString().slice(0, 10)), String(r.days), sanitizeCsvCell(r.bucket), sanitizeCsvCell(r.status)].join(","));
   }
 
   return new NextResponse(lines.join("\n"), {

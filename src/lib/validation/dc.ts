@@ -229,6 +229,7 @@ export function validateMaterialType(
 export const createDcSchema = z.object({
   movementType: z.enum(["MATERIAL", "TOOL", "COMPANY_PROPERTY"]).default("MATERIAL"),
   isCommercialService: z.boolean().default(false),
+  department: z.string().optional(),
   destinationDepartment: z.string().optional(),
   responsibleCustodian: z.string().optional(),
   woNumber: z.string().max(60).optional(),

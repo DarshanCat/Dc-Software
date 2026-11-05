@@ -19,7 +19,12 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname === "/favicon.ico" ||
     pathname === "/icon.png" ||
-    /\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/i.test(pathname)
+    // Anchored to a single root-level path segment (e.g. "/company-logo.png")
+    // so it only ever matches the flat static files Next serves straight out
+    // of public/ (needed unauthenticated for the login/register pages' logo)
+    // - NOT any arbitrarily-nested future route that happens to end in one of
+    // these extensions, which would otherwise bypass auth entirely.
+    /^\/[^/]+\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/i.test(pathname)
   ) {
     return NextResponse.next();
   }
