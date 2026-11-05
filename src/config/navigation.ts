@@ -121,6 +121,7 @@ export const ADMIN_NAVIGATION: NavSection[] = [
       { label: "Reconciliation", href: "/reports/reconciliation", permission: P.REPORT_VIEW },
       { label: "Ageing", href: "/reports/ageing", permission: P.REPORT_VIEW },
       { label: "Vendor Performance", href: "/reports/vendor-performance", permission: P.REPORT_VIEW },
+      { label: "Tools With Vendor", href: "/reports/tool-tracking", permission: P.REPORT_VIEW },
     ],
   },
   {

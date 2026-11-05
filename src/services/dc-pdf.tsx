@@ -14,6 +14,10 @@ export interface DcPdfData {
   dcDate: string;
   woNumber: string;
   status: string;
+  movementType?: string;
+  destinationDepartment?: string | null;
+  responsibleCustodian?: string | null;
+  items?: Array<{ label: string; description: string; serial: string; quantity: string; condition: string }>;
   vendorName: string;
   vendorAddress: string;
   vendorGst: string;
@@ -377,6 +381,9 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
 
   y = boxTopY - headerBoxHeight - 14;
 
+  const isMaterialDc = (data.movementType || "MATERIAL") === "MATERIAL";
+
+  if (isMaterialDc) {
   // ================= 3. MATERIAL DETAILS SECTION =================
   const tableHeaderHeight = 20;
 
@@ -581,6 +588,120 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   });
 
   y = priceBoxTop - priceBoxHeight - 12;
+  } else {
+    // ================= 3-TOOL. TOOL / ASSET DETAILS SECTION =================
+    // TOOL and COMPANY_PROPERTY DCs carry no RM/FG quantity, weight, heat
+    // number, material grade or pricing - they move discrete, identifiable
+    // items (tools/assets) out on loan, so this renders the line items
+    // (one row per DeliveryChallanItem) plus custodian/department instead.
+    const lineHeight = 11;
+    const items = data.items && data.items.length > 0 ? data.items : [{ label: "—", description: "—", serial: "—", quantity: "—", condition: "—" }];
+    const isToolDc = data.movementType === "TOOL";
+
+    const tCol1W = CONTENT_WIDTH * 0.2;
+    const tCol2W = CONTENT_WIDTH * 0.3;
+    const tCol3W = CONTENT_WIDTH * 0.2;
+    const tCol4W = CONTENT_WIDTH * 0.12;
+    const tCol5W = CONTENT_WIDTH * 0.18;
+
+    const tC1X = MARGIN;
+    const tC2X = tC1X + tCol1W;
+    const tC3X = tC2X + tCol2W;
+    const tC4X = tC3X + tCol3W;
+    const tC5X = tC4X + tCol4W;
+
+    const preparedItemRows = items.map((it) => {
+      const codeLines = wrapCellText(it.label || "—", bold, 8.5, tCol1W - 16);
+      const descLines = wrapCellText(it.description || "—", font, 8.5, tCol2W - 16);
+      const serialLines = wrapCellText(it.serial || "—", font, 8.5, tCol3W - 16);
+      const qtyLines = wrapCellText(it.quantity || "—", bold, 8.5, tCol4W - 16);
+      const condLines = wrapCellText(it.condition || "—", font, 8.5, tCol5W - 16);
+      const rowLineCount = Math.max(1, codeLines.length, descLines.length, serialLines.length, qtyLines.length, condLines.length);
+      const rowHeight = Math.max(24, 12 + rowLineCount * lineHeight);
+      return { codeLines, descLines, serialLines, qtyLines, condLines, rowHeight };
+    });
+
+    const toolTableHeaderHeight = 20;
+    const totalRowsHeight = preparedItemRows.reduce((acc, r) => acc + r.rowHeight, 0);
+
+    ensureSpace(toolTableHeaderHeight + totalRowsHeight + 12);
+
+    const toolTableHeaderY = y;
+    currentPage.drawRectangle({
+      x: MARGIN,
+      y: toolTableHeaderY - toolTableHeaderHeight,
+      width: CONTENT_WIDTH,
+      height: toolTableHeaderHeight,
+      color: TABLE_BG,
+      borderColor: LINE,
+      borderWidth: 0.75,
+    });
+    currentPage.drawText(isToolDc ? "TOOL CODE" : "ASSET TAG", { x: tC1X + 8, y: toolTableHeaderY - 14, size: 8, font: bold, color: DARK });
+    currentPage.drawText("DESCRIPTION", { x: tC2X + 8, y: toolTableHeaderY - 14, size: 8, font: bold, color: DARK });
+    currentPage.drawText("SERIAL / INSTANCE", { x: tC3X + 8, y: toolTableHeaderY - 14, size: 8, font: bold, color: DARK });
+    currentPage.drawText("QTY", { x: tC4X + 8, y: toolTableHeaderY - 14, size: 8, font: bold, color: DARK });
+    currentPage.drawText("CONDITION", { x: tC5X + 8, y: toolTableHeaderY - 14, size: 8, font: bold, color: DARK });
+
+    [tC2X, tC3X, tC4X, tC5X].forEach((colX) => {
+      currentPage.drawLine({
+        start: { x: colX, y: toolTableHeaderY },
+        end: { x: colX, y: toolTableHeaderY - toolTableHeaderHeight },
+        thickness: 0.75,
+        color: LINE,
+      });
+    });
+
+    let rowTop = toolTableHeaderY - toolTableHeaderHeight;
+    preparedItemRows.forEach((row) => {
+      currentPage.drawRectangle({
+        x: MARGIN,
+        y: rowTop - row.rowHeight,
+        width: CONTENT_WIDTH,
+        height: row.rowHeight,
+        borderColor: LINE,
+        borderWidth: 0.75,
+      });
+      const rowTextY = rowTop - 13;
+      row.codeLines.forEach((line, idx) => currentPage.drawText(line, { x: tC1X + 8, y: rowTextY - idx * lineHeight, size: 8.5, font: bold, color: DARK }));
+      row.descLines.forEach((line, idx) => currentPage.drawText(line, { x: tC2X + 8, y: rowTextY - idx * lineHeight, size: 8.5, font, color: DARK }));
+      row.serialLines.forEach((line, idx) => currentPage.drawText(line, { x: tC3X + 8, y: rowTextY - idx * lineHeight, size: 8.5, font, color: DARK }));
+      row.qtyLines.forEach((line, idx) => currentPage.drawText(line, { x: tC4X + 8, y: rowTextY - idx * lineHeight, size: 8.5, font: bold, color: DARK }));
+      row.condLines.forEach((line, idx) => currentPage.drawText(line, { x: tC5X + 8, y: rowTextY - idx * lineHeight, size: 8.5, font, color: DARK }));
+      [tC2X, tC3X, tC4X, tC5X].forEach((colX) => {
+        currentPage.drawLine({
+          start: { x: colX, y: rowTop },
+          end: { x: colX, y: rowTop - row.rowHeight },
+          thickness: 0.75,
+          color: LINE,
+        });
+      });
+      rowTop -= row.rowHeight;
+    });
+
+    y = rowTop - 12;
+
+    // ================= 3B-TOOL. CUSTODY STRIP =================
+    const custodyText = `Destination Department: ${data.destinationDepartment || "—"}    |    Responsible Custodian: ${data.responsibleCustodian || "—"}`;
+    const custodyLines = wrapCellText(custodyText, bold, 9, CONTENT_WIDTH - 16);
+    const custodyBoxHeight = Math.max(26, 14 + custodyLines.length * 11);
+
+    ensureSpace(custodyBoxHeight + 12);
+
+    const custodyBoxTop = y;
+    currentPage.drawRectangle({
+      x: MARGIN,
+      y: custodyBoxTop - custodyBoxHeight,
+      width: CONTENT_WIDTH,
+      height: custodyBoxHeight,
+      borderColor: LINE,
+      borderWidth: 0.75,
+    });
+    custodyLines.forEach((line, idx) => {
+      currentPage.drawText(line, { x: MARGIN + 8, y: custodyBoxTop - 16 - idx * 11, size: 9, font: bold, color: DARK });
+    });
+
+    y = custodyBoxTop - custodyBoxHeight - 12;
+  }
 
   // ================= 5. TRANSPORT & COMPLIANCE DETAILS =================
   const tColW = CONTENT_WIDTH / 4;
@@ -666,10 +787,13 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   y = remarksBoxTop - remarksBoxHeight - 14;
 
   // ================= 7. TERMS & CONDITIONS =================
-  const termsText =
-    "TERMS & CONDITIONS: Material listed above is dispatched for job work processing only and remains the sole property of " +
-    data.company.name +
-    ". The consignee/receiving party is responsible for safe custody and return of the processed material along with any finished goods / scrap generated as per agreed terms.";
+  const termsText = isMaterialDc
+    ? "TERMS & CONDITIONS: Material listed above is dispatched for job work processing only and remains the sole property of " +
+      data.company.name +
+      ". The consignee/receiving party is responsible for safe custody and return of the processed material along with any finished goods / scrap generated as per agreed terms."
+    : "TERMS & CONDITIONS: Tool(s)/Asset(s) listed above remain the sole property of " +
+      data.company.name +
+      ". The receiving custodian is responsible for safe custody, proper use, and timely return of the item(s) listed above in the condition recorded at dispatch.";
 
   const termsLines = wrapCellText(termsText, font, 7, CONTENT_WIDTH);
   const termsTotalHeight = termsLines.length * 9;

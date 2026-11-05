@@ -4,7 +4,7 @@ import { buildDcQrUrl } from "@/services/dispatch.service";
 import { getCompanyLogoDataUrl } from "@/services/company-branding";
 import { renderDcPdf } from "@/services/dc-pdf";
 
-const dcInclude = { vendor: true, process: true } as const;
+const dcInclude = { vendor: true, process: true, items: true } as const;
 
 /** Structural view of a DC row (with relations) needed to render its PDF. */
 interface DcRowLike {
@@ -12,6 +12,9 @@ interface DcRowLike {
   dcDate: Date;
   status: string;
   purpose: string;
+  movementType: string;
+  destinationDepartment: string | null;
+  responsibleCustodian: string | null;
   woNumber: string;
   partNumber: string | null;
   rmQuantity: unknown;
@@ -43,6 +46,15 @@ interface DcRowLike {
   dimensionUom?: string | null;
   vendor: { vendorName: string; address: string | null; gstNumber: string | null; panNumber: string | null } | null;
   process: { name: string } | null;
+  items: Array<{
+    itemCode: string | null;
+    itemDescription: string;
+    quantity: unknown;
+    uom: string;
+    conditionIn: string | null;
+    toolInstanceId: string | null;
+    assetMasterId: string | null;
+  }>;
 }
 
 /** Everything the PDF renderer needs, flattened to plain scalars. */
@@ -60,6 +72,10 @@ export interface DcPdfData {
   dcDate: string;
   woNumber: string;
   status: string;
+  movementType: string;
+  destinationDepartment: string | null;
+  responsibleCustodian: string | null;
+  items: Array<{ label: string; description: string; serial: string; quantity: string; condition: string }>;
   vendorName: string;
   vendorAddress: string;
   vendorGst: string;
@@ -100,13 +116,43 @@ async function fetchCompanySettings() {
   };
 }
 
+async function resolveItemsForPdf(
+  items: DcRowLike["items"],
+): Promise<DcPdfData["items"]> {
+  if (items.length === 0) return [];
+
+  const toolInstanceIds = [...new Set(items.map((i) => i.toolInstanceId).filter((v): v is string => !!v))];
+  const assetMasterIds = [...new Set(items.map((i) => i.assetMasterId).filter((v): v is string => !!v))];
+
+  const [toolInstances, assetMasters] = await Promise.all([
+    prisma.toolInstance.findMany({ where: { id: { in: toolInstanceIds } }, include: { toolMaster: true } }),
+    prisma.assetMaster.findMany({ where: { id: { in: assetMasterIds } } }),
+  ]);
+
+  const toolInstanceMap = new Map(toolInstances.map((ti) => [ti.id, ti]));
+  const assetMasterMap = new Map(assetMasters.map((am) => [am.id, am]));
+
+  return items.map((item) => {
+    const toolInstance = item.toolInstanceId ? toolInstanceMap.get(item.toolInstanceId) : undefined;
+    const assetMaster = item.assetMasterId ? assetMasterMap.get(item.assetMasterId) : undefined;
+    return {
+      label: toolInstance?.toolMaster?.toolCode || assetMaster?.assetTag || item.itemCode || "—",
+      description: item.itemDescription || "—",
+      serial: toolInstance?.serialNumber || assetMaster?.serialNumber || "—",
+      quantity: `${Number(item.quantity).toFixed(3)} ${item.uom || "NOS"}`,
+      condition: item.conditionIn || "—",
+    };
+  });
+}
+
 async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; ratePerQuantity?: unknown; expectedAmount?: unknown }): Promise<DcPdfData> {
-  const [company, qrDataUrl, logo] = await Promise.all([
+  const [company, qrDataUrl, logo, items] = await Promise.all([
     fetchCompanySettings(),
     dc.qrToken
       ? QRCode.toDataURL(buildDcQrUrl(dc.qrToken), { margin: 1, width: 200 })
       : Promise.resolve(null),
     getCompanyLogoDataUrl(),
+    resolveItemsForPdf(dc.items ?? []),
   ]);
 
   return {
@@ -118,6 +164,10 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
     dcDate: dc.dcDate.toLocaleDateString(),
     woNumber: dc.woNumber,
     status: dc.status.replace(/_/g, " "),
+    movementType: dc.movementType,
+    destinationDepartment: dc.destinationDepartment || null,
+    responsibleCustodian: dc.responsibleCustodian || null,
+    items,
     vendorName: dc.vendor?.vendorName || dc.supplierNameSnapshot || "INTERNAL",
     // Snapshot takes precedence: historical DCs must retain their original vendor address
     // even if Vendor Master is edited later. Live vendor address is only a fallback for
