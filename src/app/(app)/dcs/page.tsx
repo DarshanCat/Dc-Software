@@ -29,30 +29,67 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: "bg-red-100 text-red-700 border-red-300",
 };
 
+const OUT_STATUSES = ["APPROVED", "DISPATCHED", "AT_VENDOR", "OUTWARD_CREATED", "MATERIAL_OUT"];
+const INWARD_STATUSES = [
+  "SECURITY_RETURNED",
+  "INWARD_RECEIVED",
+  "STORE_VERIFIED",
+  "CUSTODIAN_VERIFIED",
+  "QUALITY_COMPLETED",
+  "FINAL_APPROVED",
+  "APPROVED_FOR_PAYMENT",
+  "CLOSED",
+];
+
+interface SearchParamsProps {
+  status?: string;
+  overdue?: string;
+  flow?: string;
+  materialType?: string;
+  materialCategory?: string;
+  woNumber?: string;
+  dcDateFrom?: string;
+  dcDateTo?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
+}
+
 export default async function DcsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; overdue?: string; dcDateFrom?: string; dcDateTo?: string; materialType?: string }>;
+  searchParams: Promise<SearchParamsProps>;
 }) {
-  const { status, overdue, dcDateFrom, dcDateTo, materialType } = await searchParams;
+  const params = await searchParams;
+  const {
+    status,
+    overdue,
+    flow = "ALL",
+    materialType,
+    materialCategory,
+    woNumber,
+    q,
+  } = params;
+
+  const dateFrom = params.dcDateFrom || params.dateFrom;
+  const dateTo = params.dcDateTo || params.dateTo;
+  const rawMaterialType = (materialType || materialCategory || "ALL").toUpperCase();
+
   const user = await getSessionUser();
   const canCreate = user ? await hasPermission(user.id, PERMISSIONS.DC_CREATE) : false;
   const userRole = user?.roleKeys?.[0] || "GUEST";
   const roleKeys = user?.roleKeys || [];
   const isAdmin = roleKeys.includes("ADMIN");
 
-  const dateRange = buildDcDateRange(dcDateFrom, dcDateTo);
-  // An invalid range (or From > To) must return no rows rather than silently
-  // showing an unfiltered list - never fail open on a bad date filter.
+  const dateRange = buildDcDateRange(dateFrom, dateTo);
   const dcDateCondition = dateRange.error ? { gte: new Date(8640000000000000) } : dateRange.where;
-  const materialTypeFilter = materialType === "PRODUCTION" || materialType === "CONVERSION" ? materialType : undefined;
 
-  const where: Record<string, unknown> = {
+  const where: Record<string, any> = {
     ...getVendorScope(user),
     ...(dcDateCondition ? { dcDate: dcDateCondition } : {}),
-    ...(materialTypeFilter ? { materialType: materialTypeFilter } : {}),
   };
 
+  // Base role permission status filtering
   if (!isAdmin) {
     let allowed: string[] = [];
     for (const r of roleKeys) {
@@ -72,6 +109,63 @@ export default async function DcsPage({
     where.status = status;
   }
 
+  // Material Flow Filter: OUT vs INWARD
+  const upperFlow = (flow || "ALL").toUpperCase();
+  if (upperFlow === "OUT") {
+    if (where.status && typeof where.status === "object" && Array.isArray(where.status.in)) {
+      where.status.in = where.status.in.filter((s: string) => OUT_STATUSES.includes(s));
+    } else if (typeof where.status === "string") {
+      if (!OUT_STATUSES.includes(where.status)) {
+        where.status = "__NO_MATCH__";
+      }
+    } else {
+      where.status = { in: OUT_STATUSES };
+    }
+  } else if (upperFlow === "INWARD") {
+    if (where.status && typeof where.status === "object" && Array.isArray(where.status.in)) {
+      where.status.in = where.status.in.filter((s: string) => INWARD_STATUSES.includes(s));
+    } else if (typeof where.status === "string") {
+      if (!INWARD_STATUSES.includes(where.status)) {
+        where.status = "__NO_MATCH__";
+      }
+    } else {
+      where.status = { in: INWARD_STATUSES };
+    }
+  }
+
+  // Material Type / Category Filter
+  if (rawMaterialType === "PRODUCTION" || rawMaterialType === "CONVERSION") {
+    where.OR = [
+      { materialType: rawMaterialType },
+      { materialCategory: rawMaterialType },
+    ];
+  } else if (rawMaterialType === "CONTINUOUS_CASTING") {
+    where.materialCategory = rawMaterialType;
+  }
+
+  // WO Number Filter
+  if (woNumber && woNumber.trim()) {
+    where.woNumber = { contains: woNumber.trim(), mode: "insensitive" };
+  }
+
+  // General Search Filter
+  if (q && q.trim()) {
+    const term = q.trim();
+    const searchConditions = [
+      { dcNumber: { contains: term, mode: "insensitive" } },
+      { woNumber: { contains: term, mode: "insensitive" } },
+      { partNumber: { contains: term, mode: "insensitive" } },
+      { supplierNameSnapshot: { contains: term, mode: "insensitive" } },
+      { vendor: { vendorName: { contains: term, mode: "insensitive" } } },
+    ];
+    if (where.OR) {
+      where.AND = [{ OR: where.OR }, { OR: searchConditions }];
+      delete where.OR;
+    } else {
+      where.OR = searchConditions;
+    }
+  }
+
   if (overdue === "1") {
     where.expectedReturnDate = { lt: new Date() };
     where.status = { notIn: ["CLOSED", "CANCELLED", "RECONCILED"] };
@@ -81,71 +175,257 @@ export default async function DcsPage({
     where,
     orderBy: { createdAt: "desc" },
     include: { vendor: true, process: true },
-    take: 100,
+    take: 200,
   });
 
-  // Apply server-side payload sanitization based on role
+  // Role sanitized DCs
   const dcs = rawDcs.map((dc) => filterDcDataForRole(dc, userRole));
+
+  // Compute summary KPI counts over currently retrieved records
+  const totalCount = dcs.length;
+  const outCount = dcs.filter((d) => OUT_STATUSES.includes(d.status)).length;
+  const inwardCount = dcs.filter((d) => INWARD_STATUSES.includes(d.status)).length;
+  const productionCount = dcs.filter((d) => d.materialType === "PRODUCTION" || (!d.materialType && (!d.materialCategory || d.materialCategory === "PRODUCTION"))).length;
+  const conversionCount = dcs.filter((d) => d.materialType === "CONVERSION" || d.materialCategory === "CONVERSION").length;
+  const continuousCastingCount = dcs.filter((d) => d.materialCategory === "CONTINUOUS_CASTING").length;
+
+  // Construct Export query string
+  const exportParams = new URLSearchParams();
+  if (dateFrom) exportParams.set("dcDateFrom", dateFrom);
+  if (dateTo) exportParams.set("dcDateTo", dateTo);
+  if (woNumber) exportParams.set("woNumber", woNumber);
+  if (rawMaterialType !== "ALL") exportParams.set("materialType", rawMaterialType);
+  if (upperFlow !== "ALL") exportParams.set("flow", upperFlow);
+  if (q) exportParams.set("q", q);
+  if (status) exportParams.set("status", status);
+  const exportUrl = `/dcs/export?${exportParams.toString()}`;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">Delivery Challans</h1>
-          <p className="text-xs text-slate-500">
-            {dcs.length} Delivery Challan(s) found {status ? `[Filtered: ${status.replace(/_/g, " ")}]` : ""}
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Delivery Challans</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Real-time material movement tracking, vendor work orders &amp; digital softcopy generation
           </p>
         </div>
-        {canCreate && (
-          <Link href="/dcs/new">
-            <Button className="bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs">Create DC</Button>
-          </Link>
-        )}
+        <div className="flex items-center gap-2.5">
+          <a
+            href={exportUrl}
+            download
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900 transition-colors"
+            title="Download CSV report of currently filtered Delivery Challans"
+          >
+            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export Filtered CSV
+          </a>
+          {canCreate && (
+            <Link href="/dcs/new">
+              <Button className="bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs shadow-sm">
+                + Create DC
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4" action="/dcs">
-        {status && <input type="hidden" name="status" value={status} />}
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-700">DC Date From</label>
-          <input
-            type="date"
-            name="dcDateFrom"
-            defaultValue={dcDateFrom ?? ""}
-            className="h-9 rounded-md border border-slate-300 px-2 text-sm"
-          />
+      {/* KPI Metric Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total Filtered</p>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{totalCount}</p>
+          <span className="text-[10px] text-slate-400">Matching records</span>
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-700">DC Date To</label>
-          <input
-            type="date"
-            name="dcDateTo"
-            defaultValue={dcDateTo ?? ""}
-            className="h-9 rounded-md border border-slate-300 px-2 text-sm"
-          />
+
+        <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-700">Material Out</p>
+            <span className="h-2 w-2 rounded-full bg-indigo-500" />
+          </div>
+          <p className="text-2xl font-bold text-indigo-900 mt-1">{outCount}</p>
+          <span className="text-[10px] text-indigo-600 font-medium">Dispatched / At Vendor</span>
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-700">Material Type</label>
-          <select
-            name="materialType"
-            defaultValue={materialType ?? ""}
-            className="h-9 rounded-md border border-slate-300 px-2 text-sm"
-          >
-            <option value="">All</option>
-            <option value="PRODUCTION">Production</option>
-            <option value="CONVERSION">Conversion</option>
-          </select>
+
+        <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">Material Inward</p>
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          </div>
+          <p className="text-2xl font-bold text-emerald-900 mt-1">{inwardCount}</p>
+          <span className="text-[10px] text-emerald-600 font-medium">Returned / Inwarded</span>
         </div>
-        <button type="submit" className="h-9 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white">
-          Search
-        </button>
-        <a href="/dcs" className="h-9 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 flex items-center">
-          Clear
-        </a>
-        {dateRange.error && (
-          <p className="w-full text-xs font-medium text-red-600">{dateRange.error} No results are shown below.</p>
-        )}
+
+        <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-700">Production</p>
+            <span className="h-2 w-2 rounded-full bg-blue-500" />
+          </div>
+          <p className="text-2xl font-bold text-blue-900 mt-1">{productionCount}</p>
+          <span className="text-[10px] text-blue-600 font-medium">Standard Material</span>
+        </div>
+
+        <div className="rounded-lg border border-purple-100 bg-purple-50/50 p-3.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-purple-700">Conversion</p>
+            <span className="h-2 w-2 rounded-full bg-purple-500" />
+          </div>
+          <p className="text-2xl font-bold text-purple-900 mt-1">{conversionCount}</p>
+          <span className="text-[10px] text-purple-600 font-medium">Conversion Material</span>
+        </div>
+
+        <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Cont. Casting</p>
+            <span className="h-2 w-2 rounded-full bg-amber-500" />
+          </div>
+          <p className="text-2xl font-bold text-amber-900 mt-1">{continuousCastingCount}</p>
+          <span className="text-[10px] text-amber-600 font-medium">Continuous Casting</span>
+        </div>
+      </div>
+
+      {/* Filter and Search Panel */}
+      <form method="GET" action="/dcs" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+          {/* 1. Date From */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+              DC Date From
+            </label>
+            <input
+              type="date"
+              name="dcDateFrom"
+              defaultValue={dateFrom || ""}
+              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* 2. Date To */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+              DC Date To
+            </label>
+            <input
+              type="date"
+              name="dcDateTo"
+              defaultValue={dateTo || ""}
+              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* 3. Work Order ID */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+              WO ID (Work Order)
+            </label>
+            <input
+              type="text"
+              name="woNumber"
+              defaultValue={woNumber || ""}
+              placeholder="e.g. WO-17789"
+              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+            />
+          </div>
+
+          {/* 4. Material Type / Category */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+              Material Type
+            </label>
+            <select
+              name="materialType"
+              defaultValue={rawMaterialType}
+              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+            >
+              <option value="ALL">All Types</option>
+              <option value="PRODUCTION">Production Material</option>
+              <option value="CONVERSION">Conversion Material</option>
+              <option value="CONTINUOUS_CASTING">Continuous Casting</option>
+            </select>
+          </div>
+
+          {/* 5. Material Movement Flow */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+              Movement Flow
+            </label>
+            <select
+              name="flow"
+              defaultValue={upperFlow}
+              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+            >
+              <option value="ALL">All Movements</option>
+              <option value="OUT">Material Out (At Vendor)</option>
+              <option value="INWARD">Material Inward (Returned)</option>
+            </select>
+          </div>
+
+          {/* 6. Status */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+              Status
+            </label>
+            <select
+              name="status"
+              defaultValue={status || ""}
+              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+            >
+              <option value="">All Statuses</option>
+              <option value="DRAFT">Draft</option>
+              <option value="PENDING_APPROVAL">Pending Approval</option>
+              <option value="APPROVED">Approved</option>
+              <option value="DISPATCHED">Dispatched</option>
+              <option value="AT_VENDOR">At Vendor</option>
+              <option value="SECURITY_RETURNED">Security Returned</option>
+              <option value="STORE_VERIFIED">Store Verified</option>
+              <option value="QUALITY_COMPLETED">Quality Completed</option>
+              <option value="CLOSED">Closed</option>
+            </select>
+          </div>
+
+          {/* 7. Keyword Search */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+              Search DC / Vendor
+            </label>
+            <input
+              type="text"
+              name="q"
+              defaultValue={q || ""}
+              placeholder="DC No, Vendor, Part..."
+              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span>Showing <strong>{dcs.length}</strong> matching Delivery Challan(s)</span>
+            {dateRange.error && (
+              <span className="text-xs font-semibold text-red-600">({dateRange.error})</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/dcs"
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Reset
+            </Link>
+            <button
+              type="submit"
+              className="rounded-md bg-slate-900 px-4 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-slate-800 transition-colors"
+            >
+              Apply Filters
+            </button>
+          </div>
+        </div>
       </form>
 
+      {/* DC Table List */}
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-600 border-b border-slate-200">
@@ -171,14 +451,22 @@ export default async function DcsPage({
               </tr>
             ) : (
               dcs.map((dc) => {
-                // RM Qty / Exp FG Qty are item quantities (pieces/units), shown with their
-                // own UOM (NOS/PCS/SET/...) - never KG. Weight (KG) is a separate figure,
-                // captured once at Material DC creation (DeliveryChallan.outwardWeight).
                 const rmQty = Number(dc.rmQuantity ?? 0);
                 const expFg = Number(dc.returnFgQuantity ?? 0);
                 const rmUom = dc.rmUom || "NOS";
                 const fgUom = dc.fgUom || "NOS";
                 const weightKg = dc.outwardWeight != null ? Number(dc.outwardWeight) : null;
+                const matTypeDisplay =
+                  dc.materialType === "PRODUCTION"
+                    ? "Production"
+                    : dc.materialType === "CONVERSION"
+                    ? "Conversion"
+                    : dc.materialCategory === "CONTINUOUS_CASTING"
+                    ? "Continuous Casting"
+                    : dc.materialCategory === "CONVERSION"
+                    ? "Conversion"
+                    : "—";
+
                 return (
                   <tr key={dc.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-2.5">
@@ -192,7 +480,7 @@ export default async function DcsPage({
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{dc.process?.name ?? "—"}</td>
                     <td className="px-4 py-2.5 text-slate-600">
-                      {dc.materialType === "PRODUCTION" ? "Production" : dc.materialType === "CONVERSION" ? "Conversion" : "—"}
+                      {matTypeDisplay}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{formatQuantity(rmQty, rmUom)}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{formatQuantity(expFg, fgUom)}</td>
