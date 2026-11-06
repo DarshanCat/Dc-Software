@@ -19,6 +19,7 @@ interface DcRowLike {
   partNumber: string | null;
   rmQuantity: unknown;
   returnFgQuantity: unknown;
+  returnGatingQty?: unknown;
   rmUom: string | null;
   fgUom: string | null;
   outwardWeight: unknown;
@@ -85,6 +86,7 @@ export interface DcPdfData {
   partNumber: string;
   rmQuantity: string;
   returnFgQuantity: string;
+  returnGatingQty?: string | null;
   weightKg: string;
   dimensions?: string | null;
   heatNumber: string;
@@ -180,6 +182,7 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
     partNumber: dc.partNumber || "—",
     rmQuantity: dc.rmQuantity != null ? `${Number(dc.rmQuantity).toFixed(3)} ${dc.rmUom || "NOS"}` : "—",
     returnFgQuantity: dc.returnFgQuantity != null ? `${Number(dc.returnFgQuantity).toFixed(3)} ${dc.fgUom || "NOS"}` : "—",
+    returnGatingQty: dc.returnGatingQty != null ? `${Number(dc.returnGatingQty)} NOS` : null,
     weightKg: dc.outwardWeight != null ? `${Number(dc.outwardWeight).toFixed(3)} KG` : "—",
     dimensions:
       dc.length != null && dc.width != null && dc.height != null
@@ -191,7 +194,14 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
     pricingBasis: dc.pricingBasis ? (dc.pricingBasis === "RM" ? "Price Based On: RM Quantity" : "Price Based On: FG Quantity") : "—",
     ratePerQuantity: dc.ratePerQuantity != null ? Number(dc.ratePerQuantity).toFixed(2) : "—",
     expectedAmount: dc.expectedAmount != null ? Number(dc.expectedAmount).toFixed(2) : "—",
-    remarks: dc.remarks || null,
+    remarks: (() => {
+      let r = dc.remarks?.trim() || "";
+      if (dc.returnGatingQty != null && !r.toUpperCase().includes("GATTING")) {
+        const gatting = `${Number(dc.returnGatingQty)}-GATTINGS`;
+        r = r ? `${gatting} | ${r}` : gatting;
+      }
+      return r || null;
+    })(),
     vehicleNumber: dc.vehicleNumber || "—",
     transporter: dc.transporter || "—",
     ewayBillNumber: dc.ewayBillNumber || "—",

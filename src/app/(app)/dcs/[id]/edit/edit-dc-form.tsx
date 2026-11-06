@@ -48,6 +48,7 @@ interface DcData {
   materialType: string | null;
   outwardQtyRw: number | null;
   returningFgQuantity: number | null;
+  returnGatingQty: number | null;
   outwardWeight: number | null;
   outwardGatingWeight: number | null;
   outwardBoringWeight: number | null;
@@ -89,6 +90,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
 
   const [outwardQtyRw, setOutwardQtyRw] = useState(dc.outwardQtyRw ? String(dc.outwardQtyRw) : "");
   const [returningFgQuantity, setReturningFgQuantity] = useState(dc.returningFgQuantity ? String(dc.returningFgQuantity) : "");
+  const [returnGatingQty, setReturnGatingQty] = useState(dc.returnGatingQty != null ? String(dc.returnGatingQty) : "");
 
   const [outwardWeight, setOutwardWeight] = useState(dc.outwardWeight ? String(dc.outwardWeight) : "");
   const [outwardGatingWeight, setOutwardGatingWeight] = useState(dc.outwardGatingWeight ? String(dc.outwardGatingWeight) : "");
@@ -170,6 +172,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
       outwardGatingWeight: outwardGatingWeight ? parseFloat(outwardGatingWeight) : undefined,
       outwardQtyRw: outwardQtyRw ? parseFloat(outwardQtyRw) : undefined,
       returningFgQuantity: returningFgQuantity ? parseFloat(returningFgQuantity) : undefined,
+      returnGatingQty: returnGatingQty !== "" ? parseFloat(returnGatingQty) : undefined,
       outwardBoringWeight: outwardBoringWeight ? parseFloat(outwardBoringWeight) : undefined,
       remarks: remarks.trim() || undefined,
       submitForApproval,
@@ -389,7 +392,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
             Section 3: Outward Quantity
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Outward Qty RW *</label>
               <input
@@ -417,6 +420,20 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
                 placeholder="Finished goods expected back (NOS)"
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Return Gattings (NOS)</label>
+              <input
+                type="number"
+                step="1"
+                min="0"
+                data-tally-id="returnGatingQty"
+                value={returnGatingQty}
+                onChange={(e) => setReturnGatingQty(e.target.value)}
+                placeholder="e.g. 0 or 6"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
               />
             </div>
           </div>

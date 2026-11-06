@@ -465,6 +465,12 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
                   {formatQuantity(dc.returnFgQuantity, dc.fgUom)}
                 </span>
               </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Return Gattings</span>
+                <span className="font-mono font-bold text-blue-900 text-base">
+                  {dc.returnGatingQty != null ? `${Number(dc.returnGatingQty)} NOS` : "—"}
+                </span>
+              </div>
             </div>
           </div>
 

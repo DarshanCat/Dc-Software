@@ -110,6 +110,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
   const [materialType, setMaterialType] = useState<"PRODUCTION" | "CONVERSION" | "">("");
   const [outwardQtyRw, setOutwardQtyRw] = useState("");
   const [returningFgQuantity, setReturningFgQuantity] = useState("");
+  const [returnGatingQty, setReturnGatingQty] = useState("");
   const [outwardWeight, setOutwardWeight] = useState("");
   const [length, setLength] = useState("");
   const [width, setWidth] = useState("");
@@ -295,6 +296,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       partNumber: movementType === "MATERIAL" ? partNum : undefined,
       rmQuantity: movementType === "MATERIAL" && outwardQtyRw ? parseFloat(outwardQtyRw) : undefined,
       returnFgQuantity: movementType === "MATERIAL" && returningFgQuantity ? parseFloat(returningFgQuantity) : undefined,
+      returnGatingQty: movementType === "MATERIAL" && returnGatingQty !== "" ? parseFloat(returnGatingQty) : undefined,
       outwardWeight: movementType === "MATERIAL" && outwardWeight ? parseFloat(outwardWeight) : undefined,
       length: movementType === "MATERIAL" && length ? parseFloat(length) : undefined,
       width: movementType === "MATERIAL" && width ? parseFloat(width) : undefined,
@@ -688,7 +690,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Outward Qty RM (NOS) *</label>
                 <input
@@ -714,6 +716,19 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   placeholder="Finished goods expected back"
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Return Gattings (NOS)</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={returnGatingQty}
+                  onChange={(e) => setReturnGatingQty(e.target.value)}
+                  placeholder="e.g. 0 or 6"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 />
               </div>
 

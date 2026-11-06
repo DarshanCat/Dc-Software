@@ -67,6 +67,7 @@ export interface CreateOutwardDcInput {
   outwardGatingWeight?: number;
   outwardQtyRw?: number;
   returningFgQuantity?: number;
+  returnGatingQty?: number;
   rmUom?: string;
   fgUom?: string;
   dimensionUom?: string;
@@ -180,6 +181,7 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         partNumber: partNum || null,
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
+        returnGatingQty: input.returnGatingQty != null ? new Prisma.Decimal(input.returnGatingQty) : null,
         materialGrade: input.materialGrade ? input.materialGrade.trim() : null,
         materialType: input.materialType || null,
         length: input.length ? new Prisma.Decimal(input.length) : null,
@@ -336,6 +338,7 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
         partNumber: partNum || null,
         rmQuantity: input.outwardQtyRw ? new Prisma.Decimal(input.outwardQtyRw) : null,
         returnFgQuantity: input.returningFgQuantity ? new Prisma.Decimal(input.returningFgQuantity) : null,
+        returnGatingQty: input.returnGatingQty != null ? new Prisma.Decimal(input.returnGatingQty) : null,
         materialGrade: input.materialGrade ? input.materialGrade.trim() : null,
         materialType: input.materialType || null,
         vendorId: input.vendorId,

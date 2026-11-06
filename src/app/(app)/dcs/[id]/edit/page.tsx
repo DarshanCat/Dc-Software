@@ -100,6 +100,7 @@ export default async function EditDcPage({
     materialType: dc.materialType,
     outwardQtyRw: dc.outwardQtyRw ? Number(dc.outwardQtyRw.toString()) : null,
     returningFgQuantity: dc.returnFgQuantity ? Number(dc.returnFgQuantity.toString()) : null,
+    returnGatingQty: dc.returnGatingQty ? Number(dc.returnGatingQty.toString()) : null,
     outwardWeight: dc.outwardWeight ? Number(dc.outwardWeight.toString()) : null,
     outwardGatingWeight: dc.outwardGatingWeight ? Number(dc.outwardGatingWeight.toString()) : null,
     outwardBoringWeight: dc.outwardBoringWeight ? Number(dc.outwardBoringWeight.toString()) : null,

@@ -26,6 +26,7 @@ export interface DcOption {
   outwardQtyRw: number;
   rmUom: string;
   returningFgQuantity: number;
+  returnGatingQty?: number | null;
   fgUom: string;
   outwardWeight: number;
   outwardGatingWeight: number;
@@ -255,6 +256,12 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Returning FG Qty</span>
               <span className="font-mono font-bold text-blue-900 text-sm">{formatQuantity(selectedDc.returningFgQuantity, selectedDc.fgUom)}</span>
             </div>
+            {selectedDc.returnGatingQty != null && (
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Return Gattings</span>
+                <span className="font-mono font-bold text-blue-900 text-sm">{selectedDc.returnGatingQty} NOS</span>
+              </div>
+            )}
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Weight (KG)</span>
               <span className="font-mono text-slate-800">{selectedDc.outwardWeight} KG</span>

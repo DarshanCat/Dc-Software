@@ -59,6 +59,7 @@ export default async function ManagerApprovalPage({
     outwardQtyRw: Number(dc.outwardQtyRw ?? dc.rmQuantity ?? 0),
     rmUom: dc.rmUom || "NOS",
     returningFgQuantity: Number(dc.returnFgQuantity ?? 0),
+    returnGatingQty: dc.returnGatingQty != null ? Number(dc.returnGatingQty) : null,
     fgUom: dc.fgUom || "NOS",
     outwardWeight: Number(dc.outwardWeight ?? 0),
     outwardGatingWeight: Number(dc.outwardGatingWeight ?? 0),

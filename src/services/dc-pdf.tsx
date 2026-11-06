@@ -27,6 +27,7 @@ export interface DcPdfData {
   partNumber: string;
   rmQuantity: string;
   returnFgQuantity: string;
+  returnGatingQty?: string | null;
   weightKg: string;
   dimensions?: string | null;
   heatNumber: string;
@@ -768,7 +769,11 @@ export async function renderDcPdf(data: DcPdfData): Promise<Buffer> {
   y = transportBoxTop - transportBoxHeight - 14;
 
   // ================= 6. REMARKS SECTION =================
-  const remarksText = data.remarks?.trim() || "";
+  let remarksText = data.remarks?.trim() || "";
+  if (data.returnGatingQty && !remarksText.toUpperCase().includes("GATTING")) {
+    const gattingText = `${data.returnGatingQty.replace(/\s*NOS$/i, "")}-GATTINGS`;
+    remarksText = remarksText ? `${gattingText} | ${remarksText}` : gattingText;
+  }
   const remarksLines = wrapCellText(remarksText, font, 8.5, CONTENT_WIDTH - 16);
   const remarksBoxHeight = Math.max(36, 18 + (remarksLines.length > 0 ? remarksLines.length * 10 : 10));
 

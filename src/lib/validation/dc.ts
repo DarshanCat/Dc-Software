@@ -155,6 +155,7 @@ export const outwardDcSchema = z.object({
     (n) => n === undefined || n === null || n > 0,
     { message: "Returning FG Qty must be greater than zero when Price Based On is Returning FG Quantity." },
   ),
+  returnGatingQty: optionalFiniteNumber("Return Gattings must be a valid number."),
   rmUom: optionalText("RM UOM is invalid.", 20),
   fgUom: optionalText("FG UOM is invalid.", 20),
   dimensionUom: optionalText("Dimension UOM is invalid.", 20),
@@ -236,6 +237,11 @@ export const createDcSchema = z.object({
   partNumber: z.string().trim().max(60).optional(),
   rmQuantity: z.coerce.number().optional(),
   returnFgQuantity: z.coerce.number().optional(),
+  returnGatingQty: z.coerce
+    .number({ invalid_type_error: "Return Gattings must be a valid number." })
+    .finite("Return Gattings must be a valid, finite number.")
+    .min(0, "Return Gattings must be greater than or equal to 0.")
+    .optional(),
   outwardWeight: z.coerce
     .number({ invalid_type_error: "Weight (KG) must be a valid number." })
     .finite("Weight (KG) must be a valid, finite number.")
