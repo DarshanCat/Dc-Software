@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createDc, CreateDcInput } from "@/server/dcs/actions";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, AlertCircle, Plus, Trash2 } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Plus, Trash2, Download, FileSpreadsheet } from "lucide-react";
 import { useTallyNavigation } from "@/hooks/use-tally-navigation";
 import { formatVendorFullAddress } from "@/lib/vendor-address";
+import { parseExcelOrCsvFile, downloadToolItemsTemplate } from "@/lib/tool-excel";
 
 interface VendorOption {
   id: string;
@@ -126,6 +127,11 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
     { itemCode: "", itemDescription: "", quantity: "1", uom: "NOS", conditionIn: "GOOD" },
   ]);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -231,6 +237,57 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
     const updated = [...lineItems];
     updated[index] = { ...updated[index], [field]: value };
     setLineItems(updated);
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingFile(true);
+    setUploadNotice(null);
+    setUploadError(null);
+
+    try {
+      const result = await parseExcelOrCsvFile(file);
+      if (!result.rows || result.rows.length === 0) {
+        setUploadError("No valid tool items found in the file. Ensure the Excel or CSV has 'Item Code' or 'Description' columns.");
+        return;
+      }
+
+      // Check if current lineItems is empty or has only a single blank row
+      const isCurrentBlank =
+        lineItems.length === 0 ||
+        (lineItems.length === 1 && !lineItems[0].itemCode.trim() && !lineItems[0].itemDescription.trim());
+
+      const mappedItems: LineItemState[] = result.rows.map((row) => {
+        const matchedTool = tools.find((t) => t.toolCode.toLowerCase() === row.itemCode.toLowerCase());
+        return {
+          itemCode: row.itemCode,
+          itemDescription:
+            row.itemDescription ||
+            (matchedTool ? `${matchedTool.toolName}${matchedTool.specification ? ` - ${matchedTool.specification}` : ""}` : ""),
+          quantity: row.quantity || "1",
+          uom: row.uom || (matchedTool?.uom || "NOS"),
+          conditionIn: row.conditionIn || "GOOD",
+          toolInstanceId: undefined,
+        };
+      });
+
+      if (isCurrentBlank) {
+        setLineItems(mappedItems);
+      } else {
+        setLineItems([...lineItems, ...mappedItems]);
+      }
+
+      setUploadNotice(`Successfully imported ${result.totalParsed} tool item${result.totalParsed === 1 ? "" : "s"} from "${result.filename}". You can review or adjust them below.`);
+    } catch (err: any) {
+      setUploadError(err.message || "Failed to process uploaded spreadsheet file.");
+    } finally {
+      setIsUploadingFile(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   }
 
   const activePricingQty = pricingBasis === "RM" ? Number(outwardQtyRw || 0) : Number(returningFgQuantity || 0);
@@ -800,14 +857,103 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
         {/* SECTION 2B: LINE ITEMS (FOR OTHER DCs: COMPANY PROPERTY & TOOLS) */}
         {movementType !== "MATERIAL" && (
           <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b pb-2">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700">
-                Section 2: {movementType === "COMPANY_PROPERTY" ? "Company Property Items" : "Tool Items"}
-              </h2>
-              <Button type="button" variant="secondary" onClick={addLineItem} className="text-xs flex items-center gap-1">
-                <Plus className="h-3.5 w-3.5" /> Add Item Row
-              </Button>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700">
+                    Section 2: {movementType === "COMPANY_PROPERTY" ? "Company Property Items" : "Tool Items"}
+                  </h2>
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 border border-slate-200">
+                    {lineItems.length} {lineItems.length === 1 ? "Item" : "Items"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Add items manually or upload an Excel / CSV sheet for bulk tool transfers (subcontracting, regrinding, calibration).
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Hidden File Input for Excel/CSV */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => downloadToolItemsTemplate()}
+                  className="text-xs flex items-center gap-1.5 h-8 px-2.5 text-slate-700 hover:text-slate-900 border-slate-300"
+                  title="Download sample Excel template (.xlsx)"
+                >
+                  <Download className="h-3.5 w-3.5 text-slate-500" />
+                  <span>Download Template</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingFile}
+                  className="text-xs flex items-center gap-1.5 h-8 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300 font-medium"
+                  title="Upload tool list from Excel (.xlsx/.xls) or CSV"
+                >
+                  {isUploadingFile ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+                  )}
+                  <span>Upload Excel / CSV</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={addLineItem}
+                  className="text-xs flex items-center gap-1 h-8 px-2.5"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Row
+                </Button>
+              </div>
             </div>
+
+            {/* Upload notifications */}
+            {uploadNotice && (
+              <div className="flex items-start justify-between rounded-md bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>{uploadNotice}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUploadNotice(null)}
+                  className="text-emerald-700 hover:text-emerald-900 font-bold ml-2 text-sm leading-none"
+                  title="Dismiss notification"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {uploadError && (
+              <div className="flex items-start justify-between rounded-md bg-red-50 border border-red-200 p-3 text-xs text-red-800">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                  <span>{uploadError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUploadError(null)}
+                  className="text-red-700 hover:text-red-900 font-bold ml-2 text-sm leading-none"
+                  title="Dismiss error"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
             <div className="space-y-4">
               {lineItems.map((item, idx) => (
