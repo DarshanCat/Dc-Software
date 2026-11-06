@@ -48,6 +48,7 @@ interface SearchParamsProps {
   materialType?: string;
   materialCategory?: string;
   woNumber?: string;
+  partNumber?: string;
   dcDateFrom?: string;
   dcDateTo?: string;
   dateFrom?: string;
@@ -68,6 +69,7 @@ export default async function DcsPage({
     materialType,
     materialCategory,
     woNumber,
+    partNumber,
     q,
   } = params;
 
@@ -148,6 +150,25 @@ export default async function DcsPage({
     where.woNumber = { contains: woNumber.trim(), mode: "insensitive" };
   }
 
+  // Part Number Filter
+  if (partNumber && partNumber.trim()) {
+    const pTerm = partNumber.trim();
+    const partFilter = {
+      OR: [
+        { partNumber: { contains: pTerm, mode: "insensitive" } },
+        { partNumberSnapshot: { contains: pTerm, mode: "insensitive" } },
+      ],
+    };
+    if (where.AND) {
+      where.AND.push(partFilter);
+    } else if (where.OR) {
+      where.AND = [{ OR: where.OR }, partFilter];
+      delete where.OR;
+    } else {
+      where.AND = [partFilter];
+    }
+  }
+
   // General Search Filter
   if (q && q.trim()) {
     const term = q.trim();
@@ -194,6 +215,7 @@ export default async function DcsPage({
   if (dateFrom) exportParams.set("dcDateFrom", dateFrom);
   if (dateTo) exportParams.set("dcDateTo", dateTo);
   if (woNumber) exportParams.set("woNumber", woNumber);
+  if (partNumber) exportParams.set("partNumber", partNumber);
   if (rawMaterialType !== "ALL") exportParams.set("materialType", rawMaterialType);
   if (upperFlow !== "ALL") exportParams.set("flow", upperFlow);
   if (q) exportParams.set("q", q);
@@ -288,7 +310,7 @@ export default async function DcsPage({
 
       {/* Filter and Search Panel */}
       <form method="GET" action="/dcs" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
           {/* 1. Date From */}
           <div>
             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
@@ -325,6 +347,20 @@ export default async function DcsPage({
               name="woNumber"
               defaultValue={woNumber || ""}
               placeholder="e.g. WO-17789"
+              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+            />
+          </div>
+
+          {/* 4. Part Number */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+              Part Number
+            </label>
+            <input
+              type="text"
+              name="partNumber"
+              defaultValue={partNumber || ""}
+              placeholder="e.g. TMI 11"
               className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
             />
           </div>
@@ -430,22 +466,24 @@ export default async function DcsPage({
         <table className="w-full text-sm">
           <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-600 border-b border-slate-200">
             <tr>
-              <th className="px-4 py-2.5 font-bold">DC No</th>
-              <th className="px-4 py-2.5 font-bold">Date</th>
-              <th className="px-4 py-2.5 font-bold">Vendor</th>
-              <th className="px-4 py-2.5 font-bold">Process</th>
-              <th className="px-4 py-2.5 font-bold">Material Type</th>
-              <th className="px-4 py-2.5 font-bold text-right">RM Qty</th>
-              <th className="px-4 py-2.5 font-bold text-right">Exp FG Qty</th>
-              <th className="px-4 py-2.5 font-bold text-right">Weight (KG)</th>
-              <th className="px-4 py-2.5 font-bold">Status</th>
-              <th className="px-4 py-2.5 font-bold">Actions</th>
+              <th className="px-3.5 py-2.5 font-bold">DC No</th>
+              <th className="px-3 py-2.5 font-bold">Date</th>
+              <th className="px-3 py-2.5 font-bold">WO ID</th>
+              <th className="px-3 py-2.5 font-bold">Part Number</th>
+              <th className="px-3.5 py-2.5 font-bold">Vendor</th>
+              <th className="px-3 py-2.5 font-bold">Process</th>
+              <th className="px-3 py-2.5 font-bold">Material Type</th>
+              <th className="px-3 py-2.5 font-bold text-right">RM Qty</th>
+              <th className="px-3 py-2.5 font-bold text-right">Exp FG Qty</th>
+              <th className="px-3 py-2.5 font-bold text-right">Weight (KG)</th>
+              <th className="px-3 py-2.5 font-bold">Status</th>
+              <th className="px-3.5 py-2.5 font-bold">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs">
             {dcs.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-slate-400 italic">
+                <td colSpan={12} className="px-4 py-8 text-center text-slate-400 italic">
                   No Delivery Challans found for your role or requested queue.
                 </td>
               </tr>
@@ -469,13 +507,19 @@ export default async function DcsPage({
 
                 return (
                   <tr key={dc.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-2.5">
-                      <Link href={`/dcs/${dc.id}`} className="font-mono font-bold text-blue-700 hover:underline">
+                    <td className="px-3.5 py-2.5">
+                      <Link href={`/dcs/${dc.id}`} className="font-mono font-bold text-blue-700 hover:underline whitespace-nowrap">
                         {dc.dcNumber}
                       </Link>
                     </td>
-                    <td className="px-4 py-2.5 text-slate-600">{dc.dcDate.toLocaleDateString()}</td>
-                    <td className="px-4 py-2.5 font-semibold text-slate-900">
+                    <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{dc.dcDate.toLocaleDateString()}</td>
+                    <td className="px-3 py-2.5 font-mono font-semibold text-slate-800 whitespace-nowrap">
+                      {dc.woNumber && dc.woNumber !== "N/A" ? dc.woNumber : "—"}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono font-semibold text-slate-900 whitespace-nowrap">
+                      {dc.partNumberSnapshot || dc.partNumber || "—"}
+                    </td>
+                    <td className="px-3.5 py-2.5 font-semibold text-slate-900">
                       {dc.vendor?.vendorName || dc.supplierNameSnapshot || (dc.destinationDepartment ? `${dc.destinationDepartment} (${dc.responsibleCustodian || ''})` : "Internal Custody")}
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{dc.process?.name ?? "—"}</td>

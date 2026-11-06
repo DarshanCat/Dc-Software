@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
   const flowParam = (searchParams.get("flow") || "ALL").toUpperCase();
   const materialTypeParam = (searchParams.get("materialType") || searchParams.get("materialCategory") || "ALL").toUpperCase();
   const woNumberParam = searchParams.get("woNumber")?.trim() || undefined;
+  const partNumberParam = searchParams.get("partNumber")?.trim() || undefined;
   const dateFromParam = (searchParams.get("dateFrom") || searchParams.get("dcDateFrom"))?.trim() || undefined;
   const dateToParam = (searchParams.get("dateTo") || searchParams.get("dcDateTo"))?.trim() || undefined;
   const qParam = searchParams.get("q")?.trim() || undefined;
@@ -106,6 +107,25 @@ export async function GET(req: NextRequest) {
   // WO Number Filter
   if (woNumberParam) {
     where.woNumber = { contains: woNumberParam, mode: "insensitive" };
+  }
+
+  // Part Number Filter
+  if (partNumberParam) {
+    const pTerm = partNumberParam;
+    const partFilter = {
+      OR: [
+        { partNumber: { contains: pTerm, mode: "insensitive" } },
+        { partNumberSnapshot: { contains: pTerm, mode: "insensitive" } },
+      ],
+    };
+    if (where.AND) {
+      where.AND.push(partFilter);
+    } else if (where.OR) {
+      where.AND = [{ OR: where.OR }, partFilter];
+      delete where.OR;
+    } else {
+      where.AND = [partFilter];
+    }
   }
 
   // Date Range Filter
