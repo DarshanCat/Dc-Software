@@ -269,6 +269,7 @@ enum DcMovementType {
 enum DcMaterialType {
   PRODUCTION
   CONVERSION
+  CONTINUOUS_CASTING
 }
 
 enum DcStatus {

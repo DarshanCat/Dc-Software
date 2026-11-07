@@ -181,6 +181,7 @@ export default async function StoreDashboardPage({
               <option value="">All</option>
               <option value="PRODUCTION">Production</option>
               <option value="CONVERSION">Conversion</option>
+              <option value="CONTINUOUS_CASTING">Continuous Casting</option>
             </select>
           </div>
           <div>
@@ -244,7 +245,7 @@ export default async function StoreDashboardPage({
                   <td className="px-4 py-3 font-mono text-slate-800">{dc.woNumber || "—"}</td>
                   <td className="px-4 py-3 font-mono text-slate-800">{dc.partNumberSnapshot || dc.partNumber || "—"}</td>
                   <td className="px-4 py-3 text-slate-800">
-                    {dc.materialType === "PRODUCTION" ? "Production" : dc.materialType === "CONVERSION" ? "Conversion" : "—"}
+                    {dc.materialType === "CONTINUOUS_CASTING" ? "Continuous Casting" : dc.materialType === "PRODUCTION" ? "Production" : dc.materialType === "CONVERSION" ? "Conversion" : "—"}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">
                     {dc.rmQuantity != null ? Number(dc.rmQuantity).toFixed(3) : "0.000"} {dc.rmUom || "NOS"}

@@ -60,7 +60,7 @@ export interface CreateOutwardDcInput {
   partNumber?: string;
   partDescription?: string;
   materialGrade?: string;
-  materialType?: "PRODUCTION" | "CONVERSION";
+  materialType?: "PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING";
   pricingBasis?: "RW" | "FG";
   ratePerQuantity?: number;
   outwardWeight?: number;
@@ -184,6 +184,7 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         returnGatingQty: input.returnGatingQty != null ? new Prisma.Decimal(input.returnGatingQty) : null,
         materialGrade: input.materialGrade ? input.materialGrade.trim() : null,
         materialType: input.materialType || null,
+        materialCategory: input.materialType || "PRODUCTION",
         length: input.length ? new Prisma.Decimal(input.length) : null,
         width: input.width ? new Prisma.Decimal(input.width) : null,
         height: input.height ? new Prisma.Decimal(input.height) : null,

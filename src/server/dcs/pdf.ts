@@ -26,6 +26,7 @@ interface DcRowLike {
   heatNumber: string | null;
   materialGrade: string | null;
   materialType: string | null;
+  materialCategory?: string | null;
   remarks: string | null;
   vehicleNumber: string | null;
   transporter: string | null;
@@ -190,7 +191,7 @@ async function buildPdfData(dc: DcRowLike & { pricingBasis?: string | null; rate
         : null,
     heatNumber: dc.heatNumber || "—",
     materialGrade: dc.materialGrade || "—",
-    materialType: dc.materialType === "PRODUCTION" ? "Production" : dc.materialType === "CONVERSION" ? "Conversion" : "—",
+    materialType: dc.materialType === "CONTINUOUS_CASTING" ? "Continuous Casting" : dc.materialType === "PRODUCTION" ? "Production" : dc.materialType === "CONVERSION" ? "Conversion" : "—",
     pricingBasis: dc.pricingBasis ? (dc.pricingBasis === "RM" ? "Price Based On: RM Quantity" : "Price Based On: FG Quantity") : "—",
     ratePerQuantity: dc.ratePerQuantity != null ? Number(dc.ratePerQuantity).toFixed(2) : "—",
     expectedAmount: dc.expectedAmount != null ? Number(dc.expectedAmount).toFixed(2) : "—",

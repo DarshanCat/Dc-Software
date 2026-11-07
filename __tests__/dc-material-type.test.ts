@@ -78,6 +78,7 @@ describe("validateMaterialType (shared business rule)", () => {
 
   it("accepts CONVERSION for MATERIAL DCs", () => {
     expect(validateMaterialType("MATERIAL", "CONVERSION")).toBeNull();
+    expect(validateMaterialType("MATERIAL", "CONTINUOUS_CASTING")).toBeNull();
   });
 
   it("rejects a blank/missing Material Type for MATERIAL DCs", () => {
@@ -87,7 +88,7 @@ describe("validateMaterialType (shared business rule)", () => {
   });
 
   it("rejects an invalid Material Type value", () => {
-    expect(validateMaterialType("MATERIAL", "SCRAP")).toMatch(/production or conversion/i);
+    expect(validateMaterialType("MATERIAL", "SCRAP")).toMatch(/production.*conversion.*continuous/i);
   });
 
   it("does not require Material Type for TOOL or COMPANY_PROPERTY DCs", () => {
@@ -163,8 +164,8 @@ describe("outwardDcSchema - Material Type on the Outgoing DC creation flow", () 
 });
 
 describe("MATERIAL_TYPES is exactly PRODUCTION/CONVERSION - no reuse of DcMovementType", () => {
-  it("has exactly two values", () => {
-    expect(MATERIAL_TYPES).toEqual(["PRODUCTION", "CONVERSION"]);
+  it("has exactly three values", () => {
+    expect(MATERIAL_TYPES).toEqual(["PRODUCTION", "CONVERSION", "CONTINUOUS_CASTING"]);
   });
 
   it("is disjoint from the existing DcMovementType values", () => {

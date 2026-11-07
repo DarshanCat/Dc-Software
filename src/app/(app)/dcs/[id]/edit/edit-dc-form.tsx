@@ -84,8 +84,8 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
   const [customPartNumber, setCustomPartNumber] = useState(dc.partNumber || "");
   const [partDescription, setPartDescription] = useState(dc.partDescriptionSnapshot || "");
   const [materialGrade, setMaterialGrade] = useState(dc.materialGrade || "");
-  const [materialType, setMaterialType] = useState<"PRODUCTION" | "CONVERSION" | "">(
-    dc.materialType === "PRODUCTION" || dc.materialType === "CONVERSION" ? dc.materialType : ""
+  const [materialType, setMaterialType] = useState<"PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING" | "">(
+    dc.materialType === "PRODUCTION" || dc.materialType === "CONVERSION" || dc.materialType === "CONTINUOUS_CASTING" ? dc.materialType : ""
   );
 
   const [outwardQtyRw, setOutwardQtyRw] = useState(dc.outwardQtyRw ? String(dc.outwardQtyRw) : "");
@@ -375,13 +375,14 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
               <select
                 data-tally-id="materialType"
                 value={materialType}
-                onChange={(e) => setMaterialType(e.target.value as "PRODUCTION" | "CONVERSION" | "")}
+                onChange={(e) => setMaterialType(e.target.value as "PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING" | "")}
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                 required
               >
                 <option value="">-- Select Material Type --</option>
                 <option value="PRODUCTION">Production</option>
                 <option value="CONVERSION">Conversion</option>
+                <option value="CONTINUOUS_CASTING">Continuous Casting</option>
               </select>
             </div>
           </div>

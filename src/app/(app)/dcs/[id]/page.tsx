@@ -450,7 +450,7 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
               <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Material Type</span>
                 <span className="font-mono font-bold text-slate-900 text-sm">
-                  {dc.materialType ? (dc.materialType === "PRODUCTION" ? "Production" : "Conversion") : "N/A"}
+                  {dc.materialType ? (dc.materialType === "CONTINUOUS_CASTING" ? "Continuous Casting" : dc.materialType === "PRODUCTION" ? "Production" : "Conversion") : "N/A"}
                 </span>
               </div>
               <div>

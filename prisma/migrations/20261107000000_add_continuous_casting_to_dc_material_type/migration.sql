@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "DcMaterialType" ADD VALUE 'CONTINUOUS_CASTING';

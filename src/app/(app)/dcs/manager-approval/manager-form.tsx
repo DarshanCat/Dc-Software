@@ -230,7 +230,7 @@ export function ManagerApprovalForm({ preOutwardDcs, paymentDcs }: Props) {
             <div>
               <span className="text-slate-400 block text-[10px] uppercase font-semibold">Material Type</span>
               <span className="font-mono font-bold text-slate-900">
-                {selectedDc.materialType === "PRODUCTION" ? "Production" : selectedDc.materialType === "CONVERSION" ? "Conversion" : "N/A"}
+                {selectedDc.materialType === "CONTINUOUS_CASTING" ? "Continuous Casting" : selectedDc.materialType === "PRODUCTION" ? "Production" : selectedDc.materialType === "CONVERSION" ? "Conversion" : "N/A"}
               </span>
             </div>
             <div className="col-span-2">

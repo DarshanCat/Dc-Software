@@ -136,7 +136,7 @@ export const outwardDcSchema = z.object({
   partNumber: optionalText("Part number is invalid.", 100),
   partDescription: optionalText("Part description is invalid."),
   materialGrade: optionalText("Material Grade is invalid.", 60),
-  materialType: z.enum(["PRODUCTION", "CONVERSION"], { invalid_type_error: "Material Type must be either Production or Conversion." }).nullable().optional(),
+  materialType: z.enum(["PRODUCTION", "CONVERSION", "CONTINUOUS_CASTING"], { invalid_type_error: "Material Type must be Production, Conversion, or Continuous Casting." }).nullable().optional(),
   pricingBasis: z.enum(["RW", "FG"]).nullable().optional(),
   ratePerQuantity: optionalFiniteNumber("Rate Per Quantity must be a valid number.").refine(
     (n) => n === undefined || n === null || n > 0,
@@ -208,7 +208,7 @@ export function validateMaterialGrade(
   return null;
 }
 
-export const MATERIAL_TYPES = ["PRODUCTION", "CONVERSION"] as const;
+export const MATERIAL_TYPES = ["PRODUCTION", "CONVERSION", "CONTINUOUS_CASTING"] as const;
 
 /**
  * Material Type (PRODUCTION / CONVERSION) is a business classification mandatory
@@ -222,7 +222,7 @@ export function validateMaterialType(
   if (movementType !== "MATERIAL") return null;
   if (!materialType) return "Material Type is required for Material DCs.";
   if (!(MATERIAL_TYPES as readonly string[]).includes(materialType)) {
-    return "Material Type must be either Production or Conversion.";
+    return "Material Type must be Production, Conversion, or Continuous Casting.";
   }
   return null;
 }
@@ -253,7 +253,7 @@ export const createDcSchema = z.object({
   dimensionUom: z.string().default("MM"),
   heatNumber: z.string().trim().max(60).optional(),
   materialGrade: z.string().trim().max(MAX_MATERIAL_GRADE_LENGTH, `Material Grade cannot exceed ${MAX_MATERIAL_GRADE_LENGTH} characters.`).optional(),
-  materialType: z.enum(MATERIAL_TYPES, { invalid_type_error: "Material Type must be either Production or Conversion." }).optional(),
+  materialType: z.enum(MATERIAL_TYPES, { invalid_type_error: "Material Type must be Production, Conversion, or Continuous Casting." }).optional(),
   vendorId: z.string().optional(),
   processId: z.string().optional(),
   purpose: z.enum([

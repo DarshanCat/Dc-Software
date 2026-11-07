@@ -18,7 +18,7 @@ export default async function ManagerApprovalPage({
   // showing an unfiltered queue - never fail open on a bad date filter.
   const dcDateCondition = dateRange.error ? { gte: new Date(8640000000000000) } : dateRange.where;
   const materialTypeCondition =
-    materialType === "PRODUCTION" || materialType === "CONVERSION" ? materialType : undefined;
+    materialType === "PRODUCTION" || materialType === "CONVERSION" || materialType === "CONTINUOUS_CASTING" ? materialType : undefined;
 
   const [preOutwardDcsRaw, paymentDcsRaw] = await Promise.all([
     prisma.deliveryChallan.findMany({
@@ -121,6 +121,7 @@ export default async function ManagerApprovalPage({
             <option value="">All</option>
             <option value="PRODUCTION">Production</option>
             <option value="CONVERSION">Conversion</option>
+            <option value="CONTINUOUS_CASTING">Continuous Casting</option>
           </select>
         </div>
         <button type="submit" className="h-9 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white">

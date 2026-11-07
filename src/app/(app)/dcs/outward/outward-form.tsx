@@ -39,7 +39,7 @@ export function OutwardDcForm({ vendors, processes }: Props) {
   const [partNumber, setPartNumber] = useState("");
   const [partDescription, setPartDescription] = useState("");
   const [materialGrade, setMaterialGrade] = useState("");
-  const [materialType, setMaterialType] = useState<"PRODUCTION" | "CONVERSION" | "">("");
+  const [materialType, setMaterialType] = useState<"PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING" | "">("");
   const [pricingBasis, setPricingBasis] = useState<"RW" | "FG">("RW");
   const [ratePerQuantity, setRatePerQuantity] = useState<string>("");
   const [outwardWeight, setOutwardWeight] = useState<string>("");
@@ -270,13 +270,14 @@ export function OutwardDcForm({ vendors, processes }: Props) {
             <select
               data-tally-id="materialType"
               value={materialType}
-              onChange={(e) => setMaterialType(e.target.value as "PRODUCTION" | "CONVERSION" | "")}
+              onChange={(e) => setMaterialType(e.target.value as "PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING" | "")}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
               required
             >
               <option value="">-- Select Material Type --</option>
               <option value="PRODUCTION">Production</option>
               <option value="CONVERSION">Conversion</option>
+                <option value="CONTINUOUS_CASTING">Continuous Casting</option>
             </select>
           </div>
         </div>
