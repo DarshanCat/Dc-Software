@@ -47,6 +47,7 @@ interface SearchParamsProps {
   flow?: string;
   materialType?: string;
   materialCategory?: string;
+  processId?: string;
   woNumber?: string;
   partNumber?: string;
   dcDateFrom?: string;
@@ -68,6 +69,7 @@ export default async function DcsPage({
     flow = "ALL",
     materialType,
     materialCategory,
+    processId,
     woNumber,
     partNumber,
     q,
@@ -145,6 +147,11 @@ export default async function DcsPage({
     where.materialCategory = rawMaterialType;
   }
 
+  // Job Work Standard (Process) Filter
+  if (processId && processId !== "ALL") {
+    where.processId = processId;
+  }
+
   // WO Number Filter
   if (woNumber && woNumber.trim()) {
     where.woNumber = { contains: woNumber.trim(), mode: "insensitive" };
@@ -192,12 +199,19 @@ export default async function DcsPage({
     where.status = { notIn: ["CLOSED", "CANCELLED", "RECONCILED"] };
   }
 
-  const rawDcs = await prisma.deliveryChallan.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    include: { vendor: true, process: true },
-    take: 200,
-  });
+  const [rawDcs, processes] = await Promise.all([
+    prisma.deliveryChallan.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: { vendor: true, process: true },
+      take: 200,
+    }),
+    prisma.process.findMany({
+      where: { active: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   // Role sanitized DCs
   const dcs = rawDcs.map((dc) => filterDcDataForRole(dc, userRole));
@@ -216,6 +230,7 @@ export default async function DcsPage({
   if (dateTo) exportParams.set("dcDateTo", dateTo);
   if (woNumber) exportParams.set("woNumber", woNumber);
   if (partNumber) exportParams.set("partNumber", partNumber);
+  if (processId && processId !== "ALL") exportParams.set("processId", processId);
   if (rawMaterialType !== "ALL") exportParams.set("materialType", rawMaterialType);
   if (upperFlow !== "ALL") exportParams.set("flow", upperFlow);
   if (q) exportParams.set("q", q);
@@ -310,7 +325,7 @@ export default async function DcsPage({
 
       {/* Filter and Search Panel */}
       <form method="GET" action="/dcs" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {/* 1. Date From */}
           <div>
             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
@@ -365,7 +380,7 @@ export default async function DcsPage({
             />
           </div>
 
-          {/* 4. Material Type / Category */}
+          {/* 5. Material Type / Category */}
           <div>
             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
               Material Type
@@ -382,7 +397,26 @@ export default async function DcsPage({
             </select>
           </div>
 
-          {/* 5. Material Movement Flow */}
+          {/* 6. Job Work Standard (Process) */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
+              Job Work Standard
+            </label>
+            <select
+              name="processId"
+              defaultValue={processId || "ALL"}
+              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+            >
+              <option value="ALL">All Job Works</option>
+              {processes.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 7. Material Movement Flow */}
           <div>
             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
               Movement Flow
@@ -398,7 +432,7 @@ export default async function DcsPage({
             </select>
           </div>
 
-          {/* 6. Status */}
+          {/* 8. Status */}
           <div>
             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
               Status
@@ -421,7 +455,7 @@ export default async function DcsPage({
             </select>
           </div>
 
-          {/* 7. Keyword Search */}
+          {/* 9. Keyword Search */}
           <div>
             <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wide mb-1">
               Search DC / Vendor

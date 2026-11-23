@@ -17,7 +17,7 @@ export default async function NewDcPage() {
     );
   }
 
-  const [vendors, items, departments, assets, tools] = await Promise.all([
+  const [vendors, items, departments, assets, tools, processes] = await Promise.all([
     prisma.vendor.findMany({
       where: { active: true },
       select: {
@@ -89,6 +89,15 @@ export default async function NewDcPage() {
       },
       orderBy: { toolCode: "asc" },
     }),
+    prisma.process.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+      },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const formattedItems = items.map((i) => ({
@@ -96,8 +105,7 @@ export default async function NewDcPage() {
     itemCode: i.partNumber,
     itemName: i.partDescription,
     description: i.partDescription,
-    pricingBasis: i.pricingBasis as "RW" | "FG",
-    rate: i.ratePerQuantity ? Number(i.ratePerQuantity) : null,
+    rate: i.ratePerQuantity ? Number(i.ratePerQuantity.toString()) : null,
     uom: i.uom,
   }));
 
@@ -146,6 +154,7 @@ export default async function NewDcPage() {
         departments={formattedDepts}
         assets={formattedAssets}
         tools={formattedTools}
+        processes={processes}
       />
     </div>
   );

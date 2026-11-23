@@ -50,6 +50,7 @@ const reviewActionSchema = z.enum(["APPROVE", "REJECT", "SEND_BACK", "HOLD"]);
 // ---------------- 1. OUTWARD DC CREATION ----------------
 
 export interface CreateOutwardDcInput {
+  processId?: string;
   movementType?: "MATERIAL" | "TOOL" | "COMPANY_PROPERTY";
   isCommercialService?: boolean;
   destinationDepartment?: string;
@@ -192,6 +193,7 @@ export async function createOutwardDc(input: CreateOutwardDcInput) {
         vendorId: input.vendorId,
         department: input.department ? input.department.trim() : null,
         purpose: input.purpose || "JOB_WORK",
+        processId: input.processId || null,
 
         // Master Snapshot (Authoritative)
         supplierNameSnapshot: vendor.vendorName,
@@ -345,6 +347,7 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
         vendorId: input.vendorId,
         department: input.department.trim(),
         purpose: input.purpose || "JOB_WORK",
+        processId: input.processId !== undefined ? (input.processId || null) : undefined,
 
         // Master Snapshots
         supplierNameSnapshot: vendor.vendorName,

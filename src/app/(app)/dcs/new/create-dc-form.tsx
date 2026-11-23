@@ -61,12 +61,19 @@ interface ToolOption {
   }>;
 }
 
+interface ProcessOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
 interface Props {
   vendors: VendorOption[];
   items?: ItemOption[];
   departments?: DepartmentOption[];
   assets?: AssetOption[];
   tools?: ToolOption[];
+  processes?: ProcessOption[];
 }
 
 interface LineItemState {
@@ -79,7 +86,7 @@ interface LineItemState {
   assetMasterId?: string;
 }
 
-export function CreateDcForm({ vendors, items = [], departments = [], assets = [], tools = [] }: Props) {
+export function CreateDcForm({ vendors, items = [], departments = [], assets = [], tools = [], processes = [] }: Props) {
   const router = useRouter();
   const { containerRef, handleKeyDown } = useTallyNavigation({
     onValidationError: (_el, msg) => setError(msg),
@@ -102,6 +109,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
   const [preparedByName, setPreparedByName] = useState("");
 
   // Material fields
+  const [selectedProcessId, setSelectedProcessId] = useState("");
   const [woNumber, setWoNumber] = useState("");
   const [selectedPartId, setSelectedPartId] = useState("");
   const [customPartNumber, setCustomPartNumber] = useState("");
@@ -351,6 +359,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       vendorId: (movementType === "MATERIAL" || isCommercialService) ? selectedVendorId : undefined,
       woNumber: movementType === "MATERIAL" ? woNumber.trim() : undefined,
       partNumber: movementType === "MATERIAL" ? partNum : undefined,
+      processId: selectedProcessId || undefined,
       rmQuantity: movementType === "MATERIAL" && outwardQtyRw ? parseFloat(outwardQtyRw) : undefined,
       returnFgQuantity: movementType === "MATERIAL" && returningFgQuantity ? parseFloat(returningFgQuantity) : undefined,
       returnGatingQty: movementType === "MATERIAL" && returnGatingQty !== "" ? parseFloat(returnGatingQty) : undefined,
@@ -662,7 +671,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
               Section 2: Material &amp; Work Order Specification
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">WO ID (Work Order Number) *</label>
                 <input
@@ -703,6 +712,23 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                     required
                   />
                 )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Job Work Standard *</label>
+                <select
+                  data-tally-id="processId"
+                  value={selectedProcessId}
+                  onChange={(e) => setSelectedProcessId(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                >
+                  <option value="">-- Select Job Work --</option>
+                  {processes.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>

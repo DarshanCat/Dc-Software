@@ -440,6 +440,10 @@ export default async function DcDetailPage({ params }: { params: Promise<{ id: s
                 <span className="font-mono font-bold text-slate-900 text-sm">{dc.partNumberSnapshot || dc.partNumber || "N/A"}</span>
               </div>
               <div>
+                <span className="text-slate-500 block text-[10px] uppercase font-semibold">Job Work Standard</span>
+                <span className="font-semibold text-slate-900 text-sm">{dc.process?.name || "—"}</span>
+              </div>
+              <div>
                 <span className="text-slate-500 block text-[10px] uppercase font-semibold">Heat Number</span>
                 <span className="font-mono font-bold text-slate-900 text-sm">{dc.heatNumber || "N/A"}</span>
               </div>

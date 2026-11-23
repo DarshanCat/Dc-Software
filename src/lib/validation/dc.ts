@@ -136,6 +136,7 @@ export const outwardDcSchema = z.object({
   partNumber: optionalText("Part number is invalid.", 100),
   partDescription: optionalText("Part description is invalid."),
   materialGrade: optionalText("Material Grade is invalid.", 60),
+  processId: optionalText("Process ID is invalid.", 50),
   materialType: z.enum(["PRODUCTION", "CONVERSION", "CONTINUOUS_CASTING"], { invalid_type_error: "Material Type must be Production, Conversion, or Continuous Casting." }).nullable().optional(),
   pricingBasis: z.enum(["RW", "FG"]).nullable().optional(),
   ratePerQuantity: optionalFiniteNumber("Rate Per Quantity must be a valid number.").refine(

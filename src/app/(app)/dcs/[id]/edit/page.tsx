@@ -40,7 +40,8 @@ export default async function EditDcPage({
     );
   }
 
-  const vendors = await prisma.vendor.findMany({
+  const [vendors, processes] = await Promise.all([
+    prisma.vendor.findMany({
     where: { active: true },
     select: {
       id: true,
@@ -56,7 +57,13 @@ export default async function EditDcPage({
       country: true,
     },
     orderBy: { vendorName: "asc" },
-  });
+  }),
+  prisma.process.findMany({
+    where: { active: true },
+    select: { id: true, code: true, name: true },
+    orderBy: { name: "asc" },
+  }),
+]);
 
   const rawItems = await prisma.itemMaster.findMany({
     where: { active: true },
@@ -111,6 +118,7 @@ export default async function EditDcPage({
     ratePerQuantity: dc.ratePerQuantity ? Number(dc.ratePerQuantity.toString()) : null,
     remarks: dc.remarks,
     status: dc.status,
+    processId: dc.processId,
   };
 
   return (
@@ -127,6 +135,7 @@ export default async function EditDcPage({
         vendors={vendors}
         items={items}
         departments={rawDepartments}
+        processes={processes}
       />
     </div>
   );

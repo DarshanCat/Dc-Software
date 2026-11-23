@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
   const statusParam = searchParams.get("status") || undefined;
   const flowParam = (searchParams.get("flow") || "ALL").toUpperCase();
   const materialTypeParam = (searchParams.get("materialType") || searchParams.get("materialCategory") || "ALL").toUpperCase();
+  const processIdParam = searchParams.get("processId")?.trim() || undefined;
   const woNumberParam = searchParams.get("woNumber")?.trim() || undefined;
   const partNumberParam = searchParams.get("partNumber")?.trim() || undefined;
   const dateFromParam = (searchParams.get("dateFrom") || searchParams.get("dcDateFrom"))?.trim() || undefined;
@@ -102,6 +103,11 @@ export async function GET(req: NextRequest) {
     ];
   } else if (materialTypeParam === "CONTINUOUS_CASTING") {
     where.materialCategory = materialTypeParam;
+  }
+
+  // Job Work Standard (Process) Filter
+  if (processIdParam && processIdParam !== "ALL") {
+    where.processId = processIdParam;
   }
 
   // WO Number Filter

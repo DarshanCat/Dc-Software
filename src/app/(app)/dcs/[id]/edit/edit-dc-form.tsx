@@ -36,7 +36,14 @@ interface DepartmentOption {
   name: string;
 }
 
+interface ProcessOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
 interface DcData {
+  processId?: string | null;
   id: string;
   dcNumber: string;
   vendorId: string | null;
@@ -66,9 +73,10 @@ interface Props {
   vendors: VendorOption[];
   items?: ItemOption[];
   departments?: DepartmentOption[];
+  processes?: ProcessOption[];
 }
 
-export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props) {
+export function EditDcForm({ dc, vendors, items = [], departments = [], processes = [] }: Props) {
   const router = useRouter();
   const { containerRef, handleKeyDown } = useTallyNavigation({
     onValidationError: (_el, msg) => setError(msg),
@@ -79,6 +87,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
   const [selectedVendorId, setSelectedVendorId] = useState(dc.vendorId || "");
   const [department, setDepartment] = useState(dc.department || "PRODUCTION");
 
+  const [selectedProcessId, setSelectedProcessId] = useState(dc.processId || "");
   const [woNumber, setWoNumber] = useState(dc.woNumber || "");
   const [selectedPartId, setSelectedPartId] = useState(matchingItem ? matchingItem.id : "");
   const [customPartNumber, setCustomPartNumber] = useState(dc.partNumber || "");
@@ -166,6 +175,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [] }: Props)
       partDescription: partDescription.trim() || undefined,
       materialGrade: materialGrade.trim(),
       materialType: materialType || undefined,
+      processId: selectedProcessId || undefined,
       pricingBasis,
       ratePerQuantity: rateVal,
       outwardWeight: outwardWeight ? parseFloat(outwardWeight) : undefined,

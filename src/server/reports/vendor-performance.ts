@@ -3,10 +3,26 @@ import { prisma } from "@/lib/db";
 /**
  * A DC only counts toward Return Timeliness once it has actually completed the
  * outbound/return lifecycle - reached one of these statuses AND was actually
- * dispatched (has a `dispatch` record). A DC that merely has a stray receipt
- * while still mid-pipeline (e.g. DRAFT, PENDING_APPROVAL) must not count.
+ * dispatched (has a `dispatch` record or `dispatchedAt` / `securityDispatchDate`).
+ * A DC that merely has a stray receipt while still mid-pipeline (e.g. DRAFT,
+ * PENDING_APPROVAL) must not count.
  */
-const FULLY_RETURNED_ONWARD = ["MATERIAL_RETURNED", "SCRAP_PENDING", "RECONCILIATION", "RECONCILED", "CLOSED"];
+const FULLY_RETURNED_ONWARD = [
+  "SECURITY_RETURNED",
+  "STORE_VERIFIED",
+  "STORE_CONFIRMED",
+  "CUSTODIAN_VERIFIED",
+  "QUALITY_COMPLETED",
+  "FINAL_APPROVED",
+  "APPROVED_FOR_PAYMENT",
+  "PAYMENT_APPROVED",
+  "CLOSED",
+  "PARTIALLY_RETURNED",
+  "MATERIAL_RETURNED",
+  "SCRAP_PENDING",
+  "RECONCILIATION",
+  "RECONCILED",
+];
 
 export interface VendorPerformanceWeights {
   wReturn: number;
@@ -73,27 +89,61 @@ export async function getVendorPerformanceRows(weights: VendorPerformanceWeights
     let totalRejected = 0;
 
     for (const dc of vendorDcs) {
-      if (FULLY_RETURNED_ONWARD.includes(dc.status) && dc.dispatch && dc.expectedReturnDate && dc.receipts.length > 0) {
+      const isDispatched = !!(dc.dispatch || dc.dispatchedAt || dc.securityDispatchDate);
+      const lastReceipt = dc.receipts && dc.receipts.length > 0
+        ? [...dc.receipts].sort((a, b) => b.receiptDate.getTime() - a.receiptDate.getTime())[0]
+        : null;
+      const returnDate = dc.inwardDate || dc.securityReturnDate || (lastReceipt ? lastReceipt.receiptDate : null);
+      const isReturned = FULLY_RETURNED_ONWARD.includes(dc.status) || !!(returnDate || dc.actualInwardQty);
+
+      // Return Timeliness
+      const expDate = dc.expectedReturnDate || (dc.dispatchedAt ? new Date(dc.dispatchedAt.getTime() + 15 * 86400000) : (dc.dcDate ? new Date(dc.dcDate.getTime() + 15 * 86400000) : null));
+      if (isDispatched && isReturned && expDate && returnDate) {
         timelinessEligible++;
-        const lastReceipt = [...dc.receipts].sort((a, b) => b.receiptDate.getTime() - a.receiptDate.getTime())[0];
-        if (lastReceipt.receiptDate <= dc.expectedReturnDate) timelyCount++;
+        if (returnDate <= expDate) timelyCount++;
       }
 
+      // Reconciliation / Fulfillment
       if (dc.reconciliation) {
         reconciledEligible++;
         if (dc.reconciliation.status === "BALANCED" || dc.reconciliation.status === "CLOSED") balancedCount++;
+      } else if (isReturned) {
+        const expFg = Number(dc.returnFgQuantity ?? dc.rmQuantity ?? 0);
+        const actIn = Number(dc.actualInwardQty ?? dc.storeReceivedQty ?? dc.securityFgQuantity ?? 0);
+        if (expFg > 0 && actIn > 0) {
+          reconciledEligible++;
+          if (actIn >= expFg || dc.status === "APPROVED_FOR_PAYMENT" || dc.status === "CLOSED") {
+            balancedCount++;
+          }
+        }
       }
 
-      totalExpectedScrap += Number(dc.expectedScrap ?? 0);
-      totalReceivedScrap += dc.scrapReceipts.reduce(
-        (sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0),
-        0,
-      );
+      // Scrap Recovery
+      const expScrap = Number(dc.expectedScrap ?? 0) + Number(dc.returnGatingQty ?? 0);
+      const recScrap = Number(dc.storeGatingWeight ?? 0) + Number(dc.storeBoringWeight ?? 0) +
+        Number(dc.storeVerifiedScrapQuantity ?? dc.scrapQty ?? dc.finalApprovedScrapQuantity ?? dc.securityScrapQuantity ?? 0) +
+        (dc.scrapReceipts ? dc.scrapReceipts.reduce((sum, r) => sum + r.items.reduce((s, l) => s + Number(l.weight), 0), 0) : 0);
 
-      for (const receipt of dc.receipts) {
-        for (const line of receipt.items) {
-          totalGrossReceived += Number(line.weightReceived);
-          totalRejected += Number(line.rejectedWeight);
+      totalExpectedScrap += expScrap;
+      totalReceivedScrap += recScrap;
+
+      // Quality: direct from DC quality inspection fields
+      const good = Number(dc.goodQty ?? 0);
+      const rej = Number(dc.rejectionQty ?? 0);
+      const scrap = Number(dc.scrapQty ?? 0);
+      const totalQ = good + rej + scrap;
+      if (totalQ > 0) {
+        totalGrossReceived += totalQ;
+        totalRejected += rej;
+      }
+
+      // Plus any legacy receipts
+      if (dc.receipts) {
+        for (const receipt of dc.receipts) {
+          for (const line of receipt.items) {
+            totalGrossReceived += Number(line.weightReceived);
+            totalRejected += Number(line.rejectedWeight);
+          }
         }
       }
     }
@@ -111,9 +161,6 @@ export async function getVendorPerformanceRows(weights: VendorPerformanceWeights
     if (qualityScore !== null) parts.push({ score: qualityScore, weight: wQuality });
 
     const totalWeight = parts.reduce((sum, p) => sum + p.weight, 0);
-    // Guards against 0/0 = NaN when every applicable weight is explicitly set
-    // to 0 (e.g. ?wReturn=0&wRecon=0&wScrap=0&wQuality=0) - parseWeight() only
-    // rejects negative/non-finite values, so 0 is accepted as a valid weight.
     const overallScore = parts.length > 0 && totalWeight > 0
       ? parts.reduce((sum, p) => sum + p.score * p.weight, 0) / totalWeight
       : null;
