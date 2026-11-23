@@ -516,7 +516,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
             Section 1: Delivery Challan Information
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Origin Department *</label>
               <select
@@ -671,7 +671,9 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
               Section 2: Material &amp; Work Order Specification
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+
+            {/* Row 1: Identification & Process (3 columns) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">WO ID (Work Order Number) *</label>
                 <input
@@ -680,7 +682,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   value={woNumber}
                   onChange={(e) => setWoNumber(e.target.value)}
                   placeholder="e.g. WO-2026-001"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   required
                 />
               </div>
@@ -708,7 +710,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                     value={customPartNumber}
                     onChange={(e) => setCustomPartNumber(e.target.value)}
                     placeholder="e.g. PN-9988"
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                     required
                   />
                 )}
@@ -730,17 +732,24 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   ))}
                 </select>
               </div>
+            </div>
 
+            {/* Row 2: Material & Heat Specifications (3 columns) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Heat Number *</label>
-                <input
-                  type="text"
-                  value={heatNumber}
-                  onChange={(e) => setHeatNumber(e.target.value)}
-                  placeholder="e.g. HT-2026-X"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Material Type *</label>
+                <select
+                  data-tally-id="materialType"
+                  value={materialType}
+                  onChange={(e) => setMaterialType(e.target.value as "PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING" | "")}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                   required
-                />
+                >
+                  <option value="">-- Select Material Type --</option>
+                  <option value="PRODUCTION">Production</option>
+                  <option value="CONVERSION">Conversion</option>
+                  <option value="CONTINUOUS_CASTING">Continuous Casting</option>
+                </select>
               </div>
 
               <div>
@@ -758,23 +767,20 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Material Type *</label>
-                <select
-                  data-tally-id="materialType"
-                  value={materialType}
-                  onChange={(e) => setMaterialType(e.target.value as "PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING" | "")}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Heat Number *</label>
+                <input
+                  type="text"
+                  value={heatNumber}
+                  onChange={(e) => setHeatNumber(e.target.value)}
+                  placeholder="e.g. HT-2026-X"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   required
-                >
-                  <option value="">-- Select Material Type --</option>
-                  <option value="PRODUCTION">Production</option>
-                  <option value="CONVERSION">Conversion</option>
-                  <option value="CONTINUOUS_CASTING">Continuous Casting</option>
-                </select>
+                />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+            {/* Row 3: Quantities in NOS (3 columns) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Outward Qty RM (NOS) *</label>
                 <input
@@ -815,7 +821,10 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 />
               </div>
+            </div>
 
+            {/* Row 4: Weight & Dimensions (4 columns) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-slate-100">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Weight (KG) *</label>
                 <input
@@ -830,9 +839,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   required
                 />
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Length (MM) *</label>
                 <input
@@ -1149,8 +1156,8 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                 <label className="block text-xs font-bold text-slate-900 uppercase tracking-wide">
                   PRICE BASED ON <span className="text-red-600">*</span>
                 </label>
-                <div className="flex flex-col sm:flex-row gap-4 pt-1">
-                  <label className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${pricingBasis === "RM" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  <label className={`flex items-center gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${pricingBasis === "RM" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
                     <input
                       type="radio"
                       name="pricingBasis"
@@ -1165,7 +1172,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                     </div>
                   </label>
 
-                  <label className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${pricingBasis === "FG" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
+                  <label className={`flex items-center gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${pricingBasis === "FG" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
                     <input
                       type="radio"
                       name="pricingBasis"

@@ -233,7 +233,34 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-700 border-b pb-2">
             Section 1: Document Information — {dc.dcNumber}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Department *</label>
+              <select
+                data-tally-id="department"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                required
+              >
+                {departments.length > 0 ? (
+                  departments.map((d) => (
+                    <option key={d.id} value={d.name}>
+                      {d.name} ({d.code})
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="PRODUCTION">PRODUCTION</option>
+                    <option value="STORES">STORES</option>
+                    <option value="FOUNDRY">FOUNDRY</option>
+                    <option value="QUALITY">QUALITY</option>
+                    <option value="MACHINING">MACHINING</option>
+                  </>
+                )}
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Supplier Name *</label>
               <select
@@ -272,35 +299,6 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
                 value={selectedVendor ? selectedVendor.gstNumber || "N/A" : ""}
                 className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 focus:outline-none"
               />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Department *</label>
-              <select
-                data-tally-id="department"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                required
-              >
-                {departments.length > 0 ? (
-                  departments.map((d) => (
-                    <option key={d.id} value={d.name}>
-                      {d.name} ({d.code})
-                    </option>
-                  ))
-                ) : (
-                  <>
-                    <option value="PRODUCTION">PRODUCTION</option>
-                    <option value="STORES">STORES</option>
-                    <option value="FOUNDRY">FOUNDRY</option>
-                    <option value="QUALITY">QUALITY</option>
-                    <option value="MACHINING">MACHINING</option>
-                  </>
-                )}
-              </select>
             </div>
           </div>
         </div>
@@ -354,16 +352,36 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">Part Description (Auto-filled)</label>
-              <input
-                type="text"
-                readOnly
-                disabled
-                data-tally-skip="true"
-                value={partDescription}
-                placeholder="Auto-filled from Part Master"
-                className="w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-700 focus:outline-none cursor-not-allowed font-medium"
-              />
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Job Work Standard *</label>
+              <select
+                data-tally-id="processId"
+                value={selectedProcessId}
+                onChange={(e) => setSelectedProcessId(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              >
+                <option value="">-- Select Job Work --</option>
+                {processes.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Material Type *</label>
+              <select
+                data-tally-id="materialType"
+                value={materialType}
+                onChange={(e) => setMaterialType(e.target.value as "PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING" | "")}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                required
+              >
+                <option value="">-- Select Material Type --</option>
+                <option value="PRODUCTION">Production</option>
+                <option value="CONVERSION">Conversion</option>
+                <option value="CONTINUOUS_CASTING">Continuous Casting</option>
+              </select>
             </div>
 
             <div>
@@ -381,19 +399,16 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Material Type *</label>
-              <select
-                data-tally-id="materialType"
-                value={materialType}
-                onChange={(e) => setMaterialType(e.target.value as "PRODUCTION" | "CONVERSION" | "CONTINUOUS_CASTING" | "")}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                required
-              >
-                <option value="">-- Select Material Type --</option>
-                <option value="PRODUCTION">Production</option>
-                <option value="CONVERSION">Conversion</option>
-                <option value="CONTINUOUS_CASTING">Continuous Casting</option>
-              </select>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Part Description (Auto-filled)</label>
+              <input
+                type="text"
+                readOnly
+                disabled
+                data-tally-skip="true"
+                value={partDescription}
+                placeholder="Auto-filled from Part Master"
+                className="w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-700 focus:outline-none cursor-not-allowed font-medium"
+              />
             </div>
           </div>
         </div>
@@ -515,8 +530,8 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
             <label className="block text-xs font-bold text-slate-900 uppercase tracking-wide">
               PRICE BASED ON <span className="text-red-600">*</span>
             </label>
-            <div className="flex flex-col sm:flex-row gap-4 pt-1">
-              <label className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${pricingBasis === "RW" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <label className={`flex items-center gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${pricingBasis === "RW" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
                 <input
                   type="radio"
                   name="pricingBasis"
@@ -532,7 +547,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
                 </div>
               </label>
 
-              <label className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${pricingBasis === "FG" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
+              <label className={`flex items-center gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${pricingBasis === "FG" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
                 <input
                   type="radio"
                   name="pricingBasis"
