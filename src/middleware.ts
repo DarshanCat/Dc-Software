@@ -14,6 +14,9 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password") ||
     pathname.startsWith("/api/auth") ||
+    // Server-to-server integrations authenticate with their own shared-secret header
+    // inside the route handler (e.g. /api/integrations/oms/dcs), not a user session.
+    pathname.startsWith("/api/integrations/") ||
     pathname.startsWith("/public") ||
     pathname.startsWith("/qr") ||
     pathname.startsWith("/_next") ||
