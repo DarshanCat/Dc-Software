@@ -59,6 +59,7 @@ export type OmsDcRow = {
   storeVerifiedFgQuantity: DecimalLike | null;
   closedAt: Date | null;
   createdAt: Date;
+  expectedReturnDate: Date | null;
   vendor: { vendorName: string; defaultReturnDays: number | null } | null;
   items: { quantity: DecimalLike; uom: string | null }[];
 };
@@ -102,6 +103,7 @@ export const OMS_DC_SELECT = {
   storeVerifiedFgQuantity: true,
   closedAt: true,
   createdAt: true,
+  expectedReturnDate: true,
   vendor: { select: { vendorName: true, defaultReturnDays: true } },
   items: { select: { quantity: true, uom: true } },
 } satisfies Prisma.DeliveryChallanSelect;
@@ -227,7 +229,10 @@ export function mapDcForOms(dc: OmsDcRow): OmsDc {
     quantitySent,
     unit,
     sentAt: sentAtDate ? sentAtDate.toISOString() : null,
-    expectedReturnDate: computeExpectedReturnDate(sentAtDate, dc.vendor?.defaultReturnDays),
+    // Prefer the return date entered on the DC; otherwise sentAt + vendor return days.
+    expectedReturnDate: dc.expectedReturnDate
+      ? toIstDateString(dc.expectedReturnDate)
+      : computeExpectedReturnDate(sentAtDate, dc.vendor?.defaultReturnDays),
     quantityReturned,
     closed: (OMS_FINISHED_STATUSES as readonly string[]).includes(status) || dc.closedAt != null,
   };

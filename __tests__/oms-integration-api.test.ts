@@ -60,6 +60,7 @@ function row(overrides: Partial<OmsDcRow> = {}): OmsDcRow {
     storeVerifiedFgQuantity: null,
     closedAt: null,
     createdAt: new Date("2026-11-19T10:00:00.000Z"),
+    expectedReturnDate: null,
     vendor: { vendorName: "Acme Machining", defaultReturnDays: 7 },
     items: [],
     ...overrides,
@@ -226,6 +227,12 @@ describe("GET /api/integrations/oms/dcs - query and response", () => {
 });
 
 describe("OMS mapping - expectedReturnDate", () => {
+  it("prefers the return date entered on the DC over the vendor default", () => {
+    // 2026-12-01 20:00 UTC = 2026-12-02 01:30 IST
+    const m = mapDcForOms(row({ expectedReturnDate: new Date("2026-12-01T20:00:00.000Z") }));
+    expect(m.expectedReturnDate).toBe("2026-12-02");
+  });
+
   it("adds vendor.defaultReturnDays to the IST calendar day of sentAt", () => {
     // 2026-11-20 20:00 UTC is already 2026-11-21 in IST
     expect(computeExpectedReturnDate(new Date("2026-11-20T20:00:00Z"), 7)).toBe("2026-11-28");
