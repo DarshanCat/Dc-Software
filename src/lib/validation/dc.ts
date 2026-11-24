@@ -262,6 +262,7 @@ export const createDcSchema = z.object({
     "REPAIR", "SAMPLE", "TRIAL", "SUBCONTRACTING", "OTHER",
   ]),
   pricingBasis: z.enum(["RM", "FG"]).optional(),
+  pricingUom: z.string().optional(),
   ratePerQuantity: z.coerce.number().optional(),
   preparedByName: z.string().trim().min(1, "Prepared By Name is required.").max(100, "Prepared By Name cannot exceed 100 characters."),
   expectedReturnDate: z.string().optional(),

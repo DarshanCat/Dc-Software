@@ -26,8 +26,10 @@ export default async function ProcessesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-slate-900">Process Master</h1>
-        <p className="text-sm text-slate-500">{processes.length} process(es) registered</p>
+        <h1 className="text-lg font-semibold text-slate-900">Job Work Standards</h1>
+        <p className="text-sm text-slate-500">
+          Maintain standard job work processes for Delivery Challans and Subcontracting ({processes.length} registered)
+        </p>
       </div>
       <ProcessMasterClient processes={formattedProcesses} canCreate={canCreate} canEdit={canEdit} />
     </div>

@@ -40,7 +40,7 @@ export default async function EditDcPage({
     );
   }
 
-  const [vendors, processes] = await Promise.all([
+  const [vendors, processes, jobWorkPricings] = await Promise.all([
     prisma.vendor.findMany({
     where: { active: true },
     select: {
@@ -62,6 +62,10 @@ export default async function EditDcPage({
     where: { active: true },
     select: { id: true, code: true, name: true },
     orderBy: { name: "asc" },
+  }),
+  prisma.jobWorkPricing.findMany({
+    where: { active: true },
+    select: { id: true, vendorId: true, processId: true, partNumber: true, uom: true, rate: true },
   }),
 ]);
 
@@ -119,7 +123,17 @@ export default async function EditDcPage({
     remarks: dc.remarks,
     status: dc.status,
     processId: dc.processId,
+    rmUom: dc.rmUom,
   };
+
+  const formattedPricings = jobWorkPricings.map((p) => ({
+    id: p.id,
+    vendorId: p.vendorId,
+    processId: p.processId,
+    partNumber: p.partNumber,
+    uom: p.uom,
+    rate: Number(p.rate),
+  }));
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -136,6 +150,7 @@ export default async function EditDcPage({
         items={items}
         departments={rawDepartments}
         processes={processes}
+        jobWorkPricings={formattedPricings}
       />
     </div>
   );

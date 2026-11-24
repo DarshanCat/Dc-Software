@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateOutwardDc, UpdateOutwardDcInput } from "@/server/dcs/extended-actions";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Sparkles } from "lucide-react";
 import { useTallyNavigation } from "@/hooks/use-tally-navigation";
 import { formatVendorFullAddress } from "@/lib/vendor-address";
 
@@ -42,8 +42,18 @@ interface ProcessOption {
   name: string;
 }
 
+interface JobWorkPricingOption {
+  id: string;
+  vendorId: string | null;
+  processId: string;
+  partNumber: string;
+  uom: string;
+  rate: number;
+}
+
 interface DcData {
   processId?: string | null;
+  rmUom?: string | null;
   id: string;
   dcNumber: string;
   vendorId: string | null;
@@ -74,9 +84,10 @@ interface Props {
   items?: ItemOption[];
   departments?: DepartmentOption[];
   processes?: ProcessOption[];
+  jobWorkPricings?: JobWorkPricingOption[];
 }
 
-export function EditDcForm({ dc, vendors, items = [], departments = [], processes = [] }: Props) {
+export function EditDcForm({ dc, vendors, items = [], departments = [], processes = [], jobWorkPricings = [] }: Props) {
   const router = useRouter();
   const { containerRef, handleKeyDown } = useTallyNavigation({
     onValidationError: (_el, msg) => setError(msg),
@@ -106,6 +117,8 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
   const [outwardBoringWeight, setOutwardBoringWeight] = useState(dc.outwardBoringWeight ? String(dc.outwardBoringWeight) : "");
 
   const [pricingBasis, setPricingBasis] = useState<"RW" | "FG">(dc.pricingBasis === "FG" ? "FG" : "RW");
+  const [pricingUom, setPricingUom] = useState<"NOS" | "KG">(dc.rmUom === "KG" || dc.rmUom === "KGS" ? "KG" : "NOS");
+  const [autoPricingNotice, setAutoPricingNotice] = useState<string | null>(null);
   const [ratePerQuantity, setRatePerQuantity] = useState(dc.ratePerQuantity ? String(dc.ratePerQuantity) : "");
   const [remarks, setRemarks] = useState(dc.remarks || "");
 
@@ -115,8 +128,54 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
 
   const selectedVendor = vendors.find((v) => v.id === selectedVendorId);
 
+  function checkAndApplyAutoPricing(
+    vendorId: string,
+    processId: string,
+    partId: string,
+    typedPart: string
+  ) {
+    if (!vendorId || !processId) {
+      setAutoPricingNotice(null);
+      return;
+    }
+    const partNum = (typedPart || items.find((i) => i.id === partId)?.itemCode || "").trim().toUpperCase();
+
+    // 1. Exact match on partNumber
+    let match = jobWorkPricings.find(
+      (p) =>
+        p.vendorId === vendorId &&
+        p.processId === processId &&
+        partNum &&
+        p.partNumber.trim().toUpperCase() === partNum
+    );
+
+    // 2. Wildcard match (e.g. ALL PARTS / ALL)
+    if (!match) {
+      match = jobWorkPricings.find(
+        (p) =>
+          p.vendorId === vendorId &&
+          p.processId === processId &&
+          p.partNumber.toUpperCase().includes("ALL")
+      );
+    }
+
+    if (match) {
+      setRatePerQuantity(String(match.rate));
+      const uomMode = match.uom === "KG" || match.uom === "KGS" ? "KG" : "NOS";
+      setPricingUom(uomMode);
+      const vName = vendors.find((v) => v.id === vendorId)?.vendorName || "Vendor";
+      const pName = processes.find((p) => p.id === processId)?.name || "Standard";
+      setAutoPricingNotice(
+        `✨ Auto-applied job work rate: ₹${match.rate.toFixed(2)} / ${match.uom} (${vName} • ${pName} • ${match.partNumber})`
+      );
+    } else {
+      setAutoPricingNotice(null);
+    }
+  }
+
   function handleVendorChange(vendorId: string) {
     setSelectedVendorId(vendorId);
+    checkAndApplyAutoPricing(vendorId, selectedProcessId, selectedPartId, customPartNumber);
   }
 
   function handlePartChange(partId: string) {
@@ -124,17 +183,25 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
     if (!partId) {
       setPartDescription("");
       setRatePerQuantity("");
+      setAutoPricingNotice(null);
       return;
     }
     const foundItem = items.find((i) => i.id === partId);
+    const itemCode = foundItem ? foundItem.itemCode : "";
     if (foundItem) {
-      setCustomPartNumber(foundItem.itemCode);
+      setCustomPartNumber(itemCode);
       setPartDescription(foundItem.description || foundItem.itemName || "");
       if (foundItem.rate) setRatePerQuantity(String(foundItem.rate));
     }
+    checkAndApplyAutoPricing(selectedVendorId, selectedProcessId, partId, itemCode);
   }
 
-  const activePricingQty = pricingBasis === "RW" ? Number(outwardQtyRw || 0) : Number(returningFgQuantity || 0);
+  const isKg = pricingUom === "KG";
+  const activePricingQty = isKg
+    ? Number(outwardWeight || 0)
+    : pricingBasis === "RW"
+    ? Number(outwardQtyRw || 0)
+    : Number(returningFgQuantity || 0);
   const calculatedAmount = (activePricingQty * Number(ratePerQuantity || 0)).toFixed(2);
 
   async function handleSubmit(submitForApproval: boolean) {
@@ -185,6 +252,7 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
       returnGatingQty: returnGatingQty !== "" ? parseFloat(returnGatingQty) : undefined,
       outwardBoringWeight: outwardBoringWeight ? parseFloat(outwardBoringWeight) : undefined,
       remarks: remarks.trim() || undefined,
+      rmUom: pricingUom,
       submitForApproval,
     };
 
@@ -343,7 +411,11 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
                   type="text"
                   data-tally-id="partNumber"
                   value={customPartNumber}
-                  onChange={(e) => setCustomPartNumber(e.target.value)}
+                  onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomPartNumber(val);
+                      checkAndApplyAutoPricing(selectedVendorId, selectedProcessId, selectedPartId, val);
+                    }}
                   placeholder="e.g. PN-9988"
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
@@ -356,7 +428,11 @@ export function EditDcForm({ dc, vendors, items = [], departments = [], processe
               <select
                 data-tally-id="processId"
                 value={selectedProcessId}
-                onChange={(e) => setSelectedProcessId(e.target.value)}
+                onChange={(e) => {
+                  const newProc = e.target.value;
+                  setSelectedProcessId(newProc);
+                  checkAndApplyAutoPricing(selectedVendorId, newProc, selectedPartId, customPartNumber);
+                }}
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
               >
                 <option value="">-- Select Job Work --</option>

@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createDc, CreateDcInput } from "@/server/dcs/actions";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, AlertCircle, Plus, Trash2, Download, FileSpreadsheet } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Plus, Trash2, Download, FileSpreadsheet, Sparkles } from "lucide-react";
 import { useTallyNavigation } from "@/hooks/use-tally-navigation";
 import { formatVendorFullAddress } from "@/lib/vendor-address";
 import { parseExcelOrCsvFile, downloadToolItemsTemplate } from "@/lib/tool-excel";
@@ -67,6 +67,15 @@ interface ProcessOption {
   name: string;
 }
 
+interface JobWorkPricingOption {
+  id: string;
+  vendorId: string | null;
+  processId: string;
+  partNumber: string;
+  uom: string;
+  rate: number;
+}
+
 interface Props {
   vendors: VendorOption[];
   items?: ItemOption[];
@@ -74,6 +83,7 @@ interface Props {
   assets?: AssetOption[];
   tools?: ToolOption[];
   processes?: ProcessOption[];
+  jobWorkPricings?: JobWorkPricingOption[];
 }
 
 interface LineItemState {
@@ -86,7 +96,7 @@ interface LineItemState {
   assetMasterId?: string;
 }
 
-export function CreateDcForm({ vendors, items = [], departments = [], assets = [], tools = [], processes = [] }: Props) {
+export function CreateDcForm({ vendors, items = [], departments = [], assets = [], tools = [], processes = [], jobWorkPricings = [] }: Props) {
   const router = useRouter();
   const { containerRef, handleKeyDown } = useTallyNavigation({
     onValidationError: (_el, msg) => setError(msg),
@@ -127,6 +137,8 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
 
   // Pricing fields
   const [pricingBasis, setPricingBasis] = useState<"RM" | "FG">("RM");
+  const [pricingUom, setPricingUom] = useState<"NOS" | "KG">("NOS");
+  const [autoPricingNotice, setAutoPricingNotice] = useState<string | null>(null);
   const [ratePerQuantity, setRatePerQuantity] = useState("");
   const [remarks, setRemarks] = useState("");
 
@@ -161,8 +173,55 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
     }
   }
 
+  function checkAndApplyAutoPricing(
+    vendorId: string,
+    processId: string,
+    partId: string,
+    typedPart: string
+  ) {
+    if (movementType !== "MATERIAL") return;
+    if (!vendorId || !processId) {
+      setAutoPricingNotice(null);
+      return;
+    }
+    const partNum = (typedPart || items.find((i) => i.id === partId)?.itemCode || "").trim().toUpperCase();
+
+    // 1. Exact match on partNumber
+    let match = jobWorkPricings.find(
+      (p) =>
+        p.vendorId === vendorId &&
+        p.processId === processId &&
+        partNum &&
+        p.partNumber.trim().toUpperCase() === partNum
+    );
+
+    // 2. Wildcard match (e.g. ALL PARTS / ALL)
+    if (!match) {
+      match = jobWorkPricings.find(
+        (p) =>
+          p.vendorId === vendorId &&
+          p.processId === processId &&
+          p.partNumber.toUpperCase().includes("ALL")
+      );
+    }
+
+    if (match) {
+      setRatePerQuantity(String(match.rate));
+      const uomMode = match.uom === "KG" || match.uom === "KGS" ? "KG" : "NOS";
+      setPricingUom(uomMode);
+      const vName = vendors.find((v) => v.id === vendorId)?.vendorName || "Vendor";
+      const pName = processes.find((p) => p.id === processId)?.name || "Standard";
+      setAutoPricingNotice(
+        `✨ Auto-applied job work rate: ₹${match.rate.toFixed(2)} / ${match.uom} (${vName} • ${pName} • ${match.partNumber})`
+      );
+    } else {
+      setAutoPricingNotice(null);
+    }
+  }
+
   function handleVendorChange(vendorId: string) {
     setSelectedVendorId(vendorId);
+    checkAndApplyAutoPricing(vendorId, selectedProcessId, selectedPartId, customPartNumber);
   }
 
   function handlePartChange(partId: string) {
@@ -170,14 +229,17 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
     if (!partId) {
       setPartDescription("");
       setRatePerQuantity("");
+      setAutoPricingNotice(null);
       return;
     }
     const foundItem = items.find((i) => i.id === partId);
+    const itemCode = foundItem ? foundItem.itemCode : "";
     if (foundItem) {
-      setCustomPartNumber(foundItem.itemCode);
+      setCustomPartNumber(itemCode);
       setPartDescription(foundItem.description || foundItem.itemName || "");
       if (foundItem.rate) setRatePerQuantity(String(foundItem.rate));
     }
+    checkAndApplyAutoPricing(selectedVendorId, selectedProcessId, partId, itemCode);
   }
 
   function handleAssetSelect(index: number, assetId: string) {
@@ -298,7 +360,12 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
     }
   }
 
-  const activePricingQty = pricingBasis === "RM" ? Number(outwardQtyRw || 0) : Number(returningFgQuantity || 0);
+  const isKg = pricingUom === "KG";
+  const activePricingQty = isKg
+    ? Number(outwardWeight || 0)
+    : pricingBasis === "RM"
+    ? Number(outwardQtyRw || 0)
+    : Number(returningFgQuantity || 0);
   const calculatedAmount = (activePricingQty * Number(ratePerQuantity || 0)).toFixed(2);
 
   async function handleSubmit(submitForApproval: boolean) {
@@ -372,6 +439,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
       materialGrade: movementType === "MATERIAL" ? materialGrade.trim() : undefined,
       materialType: movementType === "MATERIAL" ? (materialType || undefined) : undefined,
       pricingBasis: movementType === "MATERIAL" ? pricingBasis : undefined,
+      pricingUom,
       ratePerQuantity: (movementType === "MATERIAL" || isCommercialService) && ratePerQuantity ? parseFloat(ratePerQuantity) : undefined,
       department: department.trim(),
       preparedByName: preparedByName.trim(),
@@ -708,7 +776,11 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                     type="text"
                     data-tally-id="partNumber"
                     value={customPartNumber}
-                    onChange={(e) => setCustomPartNumber(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomPartNumber(val);
+                      checkAndApplyAutoPricing(selectedVendorId, selectedProcessId, selectedPartId, val);
+                    }}
                     placeholder="e.g. PN-9988"
                     className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                     required
@@ -721,7 +793,11 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                 <select
                   data-tally-id="processId"
                   value={selectedProcessId}
-                  onChange={(e) => setSelectedProcessId(e.target.value)}
+                  onChange={(e) => {
+                  const newProc = e.target.value;
+                  setSelectedProcessId(newProc);
+                  checkAndApplyAutoPricing(selectedVendorId, newProc, selectedPartId, customPartNumber);
+                }}
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                 >
                   <option value="">-- Select Job Work --</option>
@@ -1151,49 +1227,98 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
               Section 6: Pricing &amp; Commercial Terms
             </h2>
 
-            {movementType === "MATERIAL" && (
-              <div className="space-y-3">
-                <label className="block text-xs font-bold text-slate-900 uppercase tracking-wide">
-                  PRICE BASED ON <span className="text-red-600">*</span>
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                  <label className={`flex items-center gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${pricingBasis === "RM" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
-                    <input
-                      type="radio"
-                      name="pricingBasis"
-                      value="RM"
-                      checked={pricingBasis === "RM"}
-                      onChange={() => setPricingBasis("RM")}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div className="text-xs">
-                      <span className="block font-semibold">RM QUANTITY</span>
-                      <span className="text-[11px] opacity-80">Calculated using Outward Qty RM ({outwardQtyRw || 0} NOS)</span>
-                    </div>
-                  </label>
+            {/* Auto-pricing indicator */}
+            {autoPricingNotice && (
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-300 p-3 text-xs text-emerald-900 font-medium shadow-sm">
+                <Sparkles className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                <span>{autoPricingNotice}</span>
+              </div>
+            )}
 
-                  <label className={`flex items-center gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${pricingBasis === "FG" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
-                    <input
-                      type="radio"
-                      name="pricingBasis"
-                      value="FG"
-                      checked={pricingBasis === "FG"}
-                      onChange={() => setPricingBasis("FG")}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                    />
-                    <div className="text-xs">
-                      <span className="block font-semibold">RETURNING FG QUANTITY</span>
-                      <span className="text-[11px] opacity-80">Calculated using Returning FG Qty ({returningFgQuantity || 0} NOS)</span>
-                    </div>
+            {movementType === "MATERIAL" && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-900 uppercase tracking-wide mb-1.5">
+                    PRICING RATE UNIT / BASIS <span className="text-red-600">*</span>
                   </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <label className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${pricingUom === "NOS" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
+                      <input
+                        type="radio"
+                        name="pricingUom"
+                        value="NOS"
+                        checked={pricingUom === "NOS"}
+                        onChange={() => setPricingUom("NOS")}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="text-xs">
+                        <span className="block font-semibold">PER PIECE (NOS / NO)</span>
+                        <span className="text-[11px] opacity-80">Rate applies per piece based on Outward or FG Qty</span>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${pricingUom === "KG" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
+                      <input
+                        type="radio"
+                        name="pricingUom"
+                        value="KG"
+                        checked={pricingUom === "KG"}
+                        onChange={() => setPricingUom("KG")}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="text-xs">
+                        <span className="block font-semibold">PER KILOGRAM (₹ / KG)</span>
+                        <span className="text-[11px] opacity-80">Rate applies per KG based on Material Weight ({outwardWeight || 0} KG)</span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
+
+                {pricingUom === "NOS" && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-900 uppercase tracking-wide mb-1.5">
+                      PIECE QUANTITY BASIS <span className="text-red-600">*</span>
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <label className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${pricingBasis === "RM" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
+                        <input
+                          type="radio"
+                          name="pricingBasis"
+                          value="RM"
+                          checked={pricingBasis === "RM"}
+                          onChange={() => setPricingBasis("RM")}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div className="text-xs">
+                          <span className="block font-semibold">RM QUANTITY</span>
+                          <span className="text-[11px] opacity-80">Calculated using Outward Qty RM ({outwardQtyRw || 0} NOS)</span>
+                        </div>
+                      </label>
+
+                      <label className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${pricingBasis === "FG" ? "bg-blue-100/70 border-blue-600 text-blue-950 font-bold" : "bg-white border-slate-300 text-slate-700"}`}>
+                        <input
+                          type="radio"
+                          name="pricingBasis"
+                          value="FG"
+                          checked={pricingBasis === "FG"}
+                          onChange={() => setPricingBasis("FG")}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div className="text-xs">
+                          <span className="block font-semibold">RETURNING FG QUANTITY</span>
+                          <span className="text-[11px] opacity-80">Calculated using Returning FG Qty ({returningFgQuantity || 0} NOS)</span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Rate Per Quantity (₹) <span className="text-red-600">*</span>
+                  Rate Per {pricingUom === "KG" ? "KG" : "Quantity"} (₹) <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="number"
@@ -1201,7 +1326,7 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   min="0"
                   value={ratePerQuantity}
                   onChange={(e) => setRatePerQuantity(e.target.value)}
-                  placeholder="Rate per unit"
+                  placeholder={`Rate in ₹ per ${pricingUom}`}
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   required
                 />
@@ -1212,10 +1337,13 @@ export function CreateDcForm({ vendors, items = [], departments = [], assets = [
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">Calculated Commercial Output</span>
                   <div className="text-xs space-y-0.5 font-sans">
                     <p className="text-slate-600">
-                      Pricing Basis: <span className="font-bold text-slate-900">{pricingBasis === "RM" ? "RM Quantity" : "Returning FG Quantity"}</span>
+                      Pricing Unit: <span className="font-bold text-slate-900">{pricingUom === "KG" ? "Weight (KG)" : (pricingBasis === "RM" ? "RM Quantity" : "Returning FG Quantity")}</span>
                     </p>
                     <p className="text-slate-600">
-                      Quantity Used: <span className="font-mono font-bold text-slate-900">{activePricingQty} NOS</span>
+                      Applied Basis:{" "}
+                      <span className="font-mono font-bold text-slate-900">
+                        {pricingUom === "KG" ? `${outwardWeight || "0"} KG` : `${activePricingQty} NOS`}
+                      </span>
                       {" × "}
                       Rate: <span className="font-mono font-bold text-slate-900">₹{ratePerQuantity || "0.00"}</span>
                     </p>

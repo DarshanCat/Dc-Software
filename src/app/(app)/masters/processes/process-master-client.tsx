@@ -101,7 +101,7 @@ export function ProcessMasterClient({
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2">
           <Input
-            placeholder="Search processes by code, name..."
+            placeholder="Search standards by name or code..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-64"
@@ -117,27 +117,40 @@ export function ProcessMasterClient({
           </select>
         </div>
         {canCreate && !showAdd && !editingProcess && (
-          <Button onClick={openAdd}>+ Add Process</Button>
+          <Button onClick={openAdd}>+ Add Job Work Standard</Button>
         )}
       </div>
 
       {(showAdd || editingProcess) && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
           <h2 className="text-sm font-semibold text-slate-900">
-            {editingProcess ? `Edit Process: ${editingProcess.name}` : "Add New Process"}
+            {editingProcess ? `Edit Job Work Standard: ${editingProcess.name}` : "Add New Job Work Standard"}
           </h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Process Code *</label>
-              <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="e.g. MILLING" />
+              <label className="mb-1 block text-xs font-medium text-slate-700">Standard Name *</label>
+              <Input
+                value={form.name}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const autoCode = val.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+                  setForm({ ...form, name: val, code: !editingProcess ? autoCode : form.code });
+                }}
+                placeholder="e.g. Cutting or For powder coating"
+              />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Process Name *</label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Milling" />
+              <label className="mb-1 block text-xs font-medium text-slate-700">Code (Auto-generated)</label>
+              <Input
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                placeholder="e.g. CUTTING"
+                className="font-mono"
+              />
             </div>
           </div>
           <div className="flex gap-2 pt-2">
-            <Button onClick={handleSave} disabled={loading}>{loading ? "Saving..." : "Save Process"}</Button>
+            <Button onClick={handleSave} disabled={loading}>{loading ? "Saving..." : "Save Standard"}</Button>
             <Button variant="secondary" onClick={closeForm}>Cancel</Button>
           </div>
         </div>

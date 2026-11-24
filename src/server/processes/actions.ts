@@ -9,8 +9,8 @@ import { writeAudit } from "@/server/audit";
 import { z } from "zod";
 
 const processSchema = z.object({
-  code: z.string().trim().min(1, "Process code is required.").max(50),
-  name: z.string().trim().min(1, "Process name is required.").max(100),
+  code: z.string().trim().max(50).optional(),
+  name: z.string().trim().min(1, "Job Work Standard name is required.").max(100),
 });
 
 export type ProcessInput = z.infer<typeof processSchema>;
@@ -25,7 +25,7 @@ export async function createProcess(input: ProcessInput): Promise<ActionResult> 
     await requirePermission(user, PERMISSIONS.PROCESS_CREATE);
   } catch (e) {
     if (e instanceof UnauthenticatedError) return { ok: false, error: "Not signed in." };
-    if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to create processes." };
+    if (e instanceof ForbiddenError) return { ok: false, error: "You do not have permission to create job work standards." };
     throw e;
   }
 
@@ -38,15 +38,17 @@ export async function createProcess(input: ProcessInput): Promise<ActionResult> 
     return { ok: false, error: "Please fix the highlighted fields.", fieldErrors };
   }
   const data = parsed.data;
+  const rawCode = data.code?.trim() || data.name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const code = rawCode || `JW_${Date.now()}`;
 
-  const existing = await prisma.process.findUnique({ where: { code: data.code } });
+  const existing = await prisma.process.findUnique({ where: { code } });
   if (existing) {
-    return { ok: false, error: "Process code already exists.", fieldErrors: { code: "Already in use." } };
+    return { ok: false, error: "Job work standard code already exists.", fieldErrors: { code: "Already in use." } };
   }
 
   await prisma.$transaction(async (tx) => {
     const processRec = await tx.process.create({
-      data: { code: data.code, name: data.name, active: true },
+      data: { code, name: data.name, active: true },
     });
     await writeAudit(tx, {
       userId: user!.id,
@@ -55,11 +57,13 @@ export async function createProcess(input: ProcessInput): Promise<ActionResult> 
       entityType: "Process",
       entityId: processRec.id,
       newValue: { code: processRec.code, name: processRec.name },
-      reason: "Process created",
+      reason: "Job Work Standard created",
     });
   });
 
   revalidatePath("/masters/processes");
+  revalidatePath("/dcs/new");
+  revalidatePath("/dcs");
   return { ok: true };
 }
 

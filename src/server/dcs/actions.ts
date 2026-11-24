@@ -97,9 +97,16 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
   }
 
   let expectedAmount = 0;
-  if (data.movementType === "MATERIAL" && data.pricingBasis && data.ratePerQuantity) {
-    const qty = data.pricingBasis === "RM" ? (data.rmQuantity || 0) : (data.returnFgQuantity || 0);
-    expectedAmount = Number((qty * data.ratePerQuantity).toFixed(2));
+  const isPerKg = data.pricingUom === "KG" || data.pricingUom === "KGS";
+  let pricingQty = 0;
+  if (data.movementType === "MATERIAL" && data.ratePerQuantity) {
+    if (isPerKg) {
+      pricingQty = data.outwardWeight || 0;
+      expectedAmount = Number((pricingQty * data.ratePerQuantity).toFixed(2));
+    } else if (data.pricingBasis) {
+      pricingQty = data.pricingBasis === "RM" ? (data.rmQuantity || 0) : (data.returnFgQuantity || 0);
+      expectedAmount = Number((pricingQty * data.ratePerQuantity).toFixed(2));
+    }
   }
 
   const now = new Date();
@@ -136,6 +143,9 @@ export async function createDc(input: CreateDcInput): Promise<ActionResult> {
         pricingBasis: data.pricingBasis || null,
         ratePerQuantity: data.ratePerQuantity ? new Prisma.Decimal(data.ratePerQuantity) : null,
         expectedAmount: expectedAmount > 0 ? new Prisma.Decimal(expectedAmount) : null,
+        pricingQuantitySnapshot: pricingQty > 0 ? new Prisma.Decimal(pricingQty) : null,
+        pricingSnapshot: expectedAmount > 0 ? new Prisma.Decimal(expectedAmount) : null,
+        rmUom: data.pricingUom || "NOS",
         vendorId: data.vendorId || null,
         supplierNameSnapshot: vendor ? vendor.vendorName : null,
         supplierAddressSnapshot: vendor ? (formatVendorFullAddress(vendor) || null) : null,

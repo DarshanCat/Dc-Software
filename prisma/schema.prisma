@@ -144,6 +144,7 @@ model Vendor {
   deliveryChallans  DeliveryChallan[]
   workOrders        WorkOrder[]
   users             User[]
+  jobWorkPricings   JobWorkPricing[]
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -179,6 +180,7 @@ model Process {
   deliveryChallans DeliveryChallan[]
   workOrders       WorkOrder[]
   jobWorkStandards JobWorkStandard[]
+  jobWorkPricings  JobWorkPricing[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -227,6 +229,27 @@ model Department {
   updatedAt DateTime @updatedAt
 
   @@index([code])
+  @@index([active])
+}
+
+
+model JobWorkPricing {
+  id         String   @id @default(uuid())
+  vendorId   String?
+  vendor     Vendor?  @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  processId  String
+  process    Process  @relation(fields: [processId], references: [id], onDelete: Cascade)
+  partNumber String   @default("ALL")
+  uom        String   @default("KG")
+  rate       Decimal  @db.Decimal(12, 2)
+  notes      String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([vendorId])
+  @@index([processId])
+  @@index([partNumber])
   @@index([active])
 }
 

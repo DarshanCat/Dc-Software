@@ -17,7 +17,7 @@ export default async function NewDcPage() {
     );
   }
 
-  const [vendors, items, departments, assets, tools, processes] = await Promise.all([
+  const [vendors, items, departments, assets, tools, processes, jobWorkPricings] = await Promise.all([
     prisma.vendor.findMany({
       where: { active: true },
       select: {
@@ -98,6 +98,17 @@ export default async function NewDcPage() {
       },
       orderBy: { name: "asc" },
     }),
+    prisma.jobWorkPricing.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        vendorId: true,
+        processId: true,
+        partNumber: true,
+        uom: true,
+        rate: true,
+      },
+    }),
   ]);
 
   const formattedItems = items.map((i) => ({
@@ -139,6 +150,15 @@ export default async function NewDcPage() {
     })),
   }));
 
+  const formattedJobWorkPricings = jobWorkPricings.map((p) => ({
+    id: p.id,
+    vendorId: p.vendorId,
+    processId: p.processId,
+    partNumber: p.partNumber,
+    uom: p.uom,
+    rate: Number(p.rate),
+  }));
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
@@ -155,6 +175,7 @@ export default async function NewDcPage() {
         assets={formattedAssets}
         tools={formattedTools}
         processes={processes}
+        jobWorkPricings={formattedJobWorkPricings}
       />
     </div>
   );

@@ -296,7 +296,10 @@ export async function updateOutwardDc(input: UpdateOutwardDcInput) {
   if (materialTypeError) return { ok: false, error: materialTypeError };
 
   let pricingQty = 0;
-  if (input.pricingBasis === "RW") {
+  const isPerKg = input.rmUom === "KG" || input.rmUom === "KGS";
+  if (isPerKg) {
+    pricingQty = input.outwardWeight || 0;
+  } else if (input.pricingBasis === "RW") {
     if (!input.outwardQtyRw || input.outwardQtyRw <= 0) {
       return { ok: false, error: "Outward Qty RW must be greater than zero when Price Based On is RW Quantity." };
     }
