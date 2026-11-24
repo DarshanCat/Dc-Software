@@ -86,15 +86,20 @@ describe("Role-Based Navigation, Route Security & Matrix", () => {
     expect(items).toContain("Payment History");
   });
 
-  it("PRODUCTION receives Production Portal navigation ONLY", () => {
+  it("PRODUCTION receives Production Operations and Masters navigation", () => {
     const nav = getNavigationForUser(["PRODUCTION"]);
     const labels = nav.map((s) => s.label);
 
-    expect(labels).toEqual(["PRODUCTION OPERATIONS"]);
+    expect(labels).toEqual(["PRODUCTION OPERATIONS", "MASTERS"]);
     const items = nav[0].items.map((i) => i.label);
     expect(items).toContain("Production Dashboard");
     expect(items).toContain("Create DC");
     expect(items).toContain("Authorized DCs");
+
+    const masterItems = nav[1].items.map((i) => i.label);
+    expect(masterItems).toContain("Supplier Master");
+    expect(masterItems).toContain("Part / Item Master");
+    expect(masterItems).toContain("Job Work Standards");
   });
 
   it("evaluates role-based status queue authorization", () => {

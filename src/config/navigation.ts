@@ -179,6 +179,9 @@ export const STORES_NAVIGATION: NavSection[] = [
     items: [
       { label: "Supplier Master", href: "/masters/suppliers" },
       { label: "Part / Item Master", href: "/masters/items" },
+      { label: "Department Master", href: "/masters/departments" },
+      { label: "Job Work Standards", href: "/masters/processes" },
+      { label: "Job Work Pricing", href: "/masters/pricing" },
       { label: "UOM", href: "/masters/uom" },
       { label: "Scrap Types", href: "/masters/scrap-types" },
     ],
@@ -218,6 +221,8 @@ export const MANAGEMENT_NAVIGATION: NavSection[] = [
       { label: "Processes", href: "/masters/processes" },
       { label: "Job Work Standards", href: "/masters/processes" },
       { label: "Job Work Pricing", href: "/masters/pricing" },
+      { label: "UOM", href: "/masters/uom" },
+      { label: "Scrap Types", href: "/masters/scrap-types" },
     ],
   },
 ];
@@ -244,6 +249,18 @@ export const PRODUCTION_NAVIGATION: NavSection[] = [
       { label: "Production Dashboard", href: "/production/dashboard" },
       { label: "Create DC", href: "/dcs/new" },
       { label: "Authorized DCs", href: "/dcs?status=APPROVED" },
+    ],
+  },
+  {
+    label: "MASTERS",
+    items: [
+      { label: "Supplier Master", href: "/masters/suppliers" },
+      { label: "Part / Item Master", href: "/masters/items" },
+      { label: "Department Master", href: "/masters/departments" },
+      { label: "Job Work Standards", href: "/masters/processes" },
+      { label: "Job Work Pricing", href: "/masters/pricing" },
+      { label: "UOM", href: "/masters/uom" },
+      { label: "Scrap Types", href: "/masters/scrap-types" },
     ],
   },
 ];
